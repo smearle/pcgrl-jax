@@ -8,7 +8,7 @@ from typing import Sequence, NamedTuple, Any
 from flax.training.train_state import TrainState
 import distrax
 import gymnax
-from purejaxrl.wrappers import LogWrapper, FlattenObservationWrapper
+from purejaxrl.experimental.s5.wrappers import LogWrapper, FlattenObservationWrapper
 
 
 class ActorCritic(nn.Module):
@@ -275,7 +275,7 @@ if __name__ == "__main__":
         "NUM_ENVS": 4,
         "NUM_STEPS": 128,
         "TOTAL_TIMESTEPS": 5e5,
-        "UPDATE_EPOCHS": 4,
+        "UPDATE_EPOCHS": 10,
         "NUM_MINIBATCHES": 4,
         "GAMMA": 0.99,
         "GAE_LAMBDA": 0.95,
