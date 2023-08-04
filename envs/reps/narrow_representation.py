@@ -3,7 +3,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
-from envs.reps.representation import Representation, RepresentationState
+from envs.reps.representation import Representation, RepresentationState, get_ego_obs
 
 from flax import struct
 
@@ -53,13 +53,5 @@ class NarrowRepresentation(Representation):
         pos = self.agent_coords[0]
         return NarrowRepresentationState(pos=pos, agent_coords=agent_coords, n_valid_agent_coords=n_valid_agent_coords)
         
-    def get_obs(self, env_map: chex.Array, rep_state: NarrowRepresentationState):
-        padded_env_map = jnp.pad(env_map, self.rf_off, mode='constant', constant_values=self.tile_enum.BORDER)
-        rf_obs = jax.lax.dynamic_slice(
-            padded_env_map,
-            rep_state.pos - self.rf_off,
-            self.rf_shape,
-        )
-        # Convert to one-hot encoding
-        rf_obs = jax.nn.one_hot(rf_obs, self.num_tiles)
-        return rf_obs
+    
+    get_obs = get_ego_obs

@@ -19,7 +19,7 @@ from envs.utils import Tiles
 @struct.dataclass
 class EnvState:
     env_map: chex.Array
-    static_tiles: chex.Array
+    static_map: chex.Array
     rep_state: RepresentationState
     prob_state: Optional[ProblemState] = None
     step_idx: int = 0
@@ -90,16 +90,16 @@ class PCGRLEnv(Environment):
     def reset_env(self, rng, env_params) -> Tuple[chex.Array, EnvState]:
         env_map = gen_init_map(rng, self.tile_enum, self.map_shape, self.tile_probs)
         if self.static_tile_prob > 0 or self.n_freezies > 0:
-            static_tiles = gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape)
+            static_map = gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape)
         else:
-            static_tiles = None
+            static_map = None
 
-        rep_state = self.rep.reset(static_tiles)
-        obs = self.rep.get_obs(env_map, rep_state)
+        rep_state = self.rep.reset(static_map)
+        obs = self.rep.get_obs(env_map=env_map, static_map=static_map, rep_state=rep_state)
 
         _, prob_state = self.prob.get_stats(env_map)
-        rep_state = self.rep.reset(static_tiles)
-        env_state = EnvState(env_map=env_map, static_tiles=static_tiles, rep_state=rep_state, prob_state=prob_state, 
+        rep_state = self.rep.reset(static_map)
+        env_state = EnvState(env_map=env_map, static_map=static_map, rep_state=rep_state, prob_state=prob_state, 
                              step_idx=0)
 
         return obs, env_state
@@ -107,17 +107,17 @@ class PCGRLEnv(Environment):
     def step_env(self, rng, env_state: EnvState, action, env_params):
         env_map, map_changed, rep_state = self.rep.step(env_map=env_state.env_map, action=action, 
                                 rep_state=env_state.rep_state, step_idx=env_state.step_idx)
-        env_map = jnp.where(env_state.static_tiles == 1, env_state.env_map, env_map)
+        env_map = jnp.where(env_state.static_map == 1, env_state.env_map, env_map)
         reward, prob_state = jax.lax.cond(
             map_changed, 
             lambda env_map: self.prob.get_stats(env_map, env_state.prob_state),
             lambda _: (0., env_state.prob_state),
             env_map,
         )
-        obs = self.rep.get_obs(env_map, rep_state)
+        obs = self.rep.get_obs(env_map=env_map, static_map=env_state.static_map, rep_state=rep_state)
         done = self.is_terminal(env_state, env_params)
         step_idx = env_state.step_idx + 1
-        env_state = EnvState(env_map=env_map, static_tiles=env_state.static_tiles, rep_state=rep_state, 
+        env_state = EnvState(env_map=env_map, static_map=env_state.static_map, rep_state=rep_state, 
                              prob_state=prob_state, step_idx=step_idx)
 
         return (
@@ -198,7 +198,7 @@ def render_map(env: PCGRLEnv, env_state: EnvState, path_coords: chex.Array):
     x_border = x_border.at[:, :, :].set(clr)
     y_border = y_border.at[:, :, :].set(clr)
     if env.static_tile_prob > 0 or env.n_freezies > 0:
-        static_tiles = env_state.static_tiles
+        static_tiles = env_state.static_map
         static_coords = jnp.argwhere(static_tiles, 
                                      size=(env_map.shape[0]-border_size[0])*(env_map.shape[1]-border_size[1]), 
                                      fill_value=-1)

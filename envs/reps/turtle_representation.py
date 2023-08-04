@@ -4,7 +4,7 @@ import chex
 from gymnax.environments import spaces
 import jax
 import jax.numpy as jnp
-from envs.reps.representation import Representation, RepresentationState
+from envs.reps.representation import Representation, RepresentationState, get_ego_obs
 
 
 @struct.dataclass
@@ -59,24 +59,7 @@ class TurtleRepresentation(Representation):
     def reset(self):
         return TurtleRepresentationState(pos=self.center_position)
         
-    def get_obs(self, env_map: chex.Array, rep_state: TurtleRepresentationState):
-        padded_env_map = jnp.pad(env_map, self.rf_off, mode='constant', constant_values=self.tiles_enum.BORDER)
-        rf_obs = jax.lax.dynamic_slice(
-            padded_env_map,
-            (rep_state.pos[0] - self.rf_off, rep_state.pos[1] - self.rf_off),
-            (self.rf_size, self.rf_size),
-        )
-        # Convert to one-hot encoding
-        rf_obs = jax.nn.one_hot(rf_obs, self.num_tiles)
-        return rf_obs
-        # action_one_hot = jax.nn.one_hot(
-        #     state.last_action, self.num_actions
-        # ).squeeze()
-        # time_rep = jax.lax.select(
-        #     params.normalize_time, time_normalization(state.time), state.time
-        # )
-        # return jnp.hstack([rf_obs, action_one_hot, state.last_reward, time_rep])
-
-
     def action_space(self) -> spaces.Discrete:
         return spaces.Discrete(len(self.tiles_enum) + 4)
+
+    get_obs = get_ego_obs
