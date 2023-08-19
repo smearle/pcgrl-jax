@@ -59,6 +59,7 @@ class TrainConfig(Config):
 class EnjoyConfig(Config):
     random_agent: bool = False
     multiproc: bool = True
+    n_eps: int = 10
 
 
 @dataclass

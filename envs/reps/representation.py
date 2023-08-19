@@ -1,12 +1,12 @@
-
 from abc import ABC
+import math
 from typing import Tuple
+
 import chex
 from flax import struct
+from gymnax.environments import spaces
 import jax
 import jax.numpy as jnp
-
-from gymnax.environments import spaces
 
 from envs.utils import Tiles
 
@@ -20,6 +20,7 @@ class Representation(ABC):
     def __init__(self, tile_enum: Tiles, rf_shape: Tuple[int, int],
                  act_shape: Tuple[int, int]):
         self.tile_enum = tile_enum
+        self.act_shape = act_shape
 
     def observation_shape(self):
         # Always observe static tile channel
@@ -43,7 +44,9 @@ class Representation(ABC):
         )
 
     def action_space(self) -> spaces.Discrete:
-        return spaces.Discrete(len(self.tile_enum) - 1)
+        # return spaces.Discrete(len(self.tile_enum) - 1)
+        return spaces.Discrete((len(self.tile_enum)-1)
+                               * math.prod(self.act_shape))
 
     def get_obs(self) -> chex.Array:
         raise NotImplementedError

@@ -9,9 +9,6 @@ from train import init_checkpointer
 from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
 
 
-N_EPS = 10
-
-
 @hydra.main(version_base=None, config_path='./', config_name='enjoy')
 def enjoy(config: EnjoyConfig):
     config = init_config(config)
@@ -48,13 +45,14 @@ def enjoy(config: EnjoyConfig):
     step_env = jax.jit(step_env)
     print('Scanning episode steps:')
     _, (states, rewards, dones, infos, frames) = jax.lax.scan(
-        step_env, (rng, obs, env_state), None, length=N_EPS*env.rep.max_steps)
+        step_env, (rng, obs, env_state), None,
+        length=config.n_eps*env.rep.max_steps)
 
-    assert len(frames) == N_EPS * env.rep.max_steps, "Not enough frames" + \
-                                                     "collected"
+    assert len(frames) == config.n_eps * env.rep.max_steps, \
+        "Not enough frames collected"
 
     # Save gifs.
-    for ep_is in range(N_EPS):
+    for ep_is in range(config.n_eps):
         # cum_rewards = jnp.cumsum(jnp.array(
         #   rewards[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps]))
         gif_name = f"{exp_dir}/anim_ep-{ep_is}" + \

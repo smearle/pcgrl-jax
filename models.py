@@ -1,6 +1,6 @@
 import math
 from timeit import default_timer as timer
-from typing import Sequence
+from typing import Sequence, Tuple
 
 import chex
 import distrax
@@ -254,11 +254,12 @@ class AutoEncoder(nn.Module):
 class ActorCritic(nn.Module):
     """Transform the action output into a distribution."""
     subnet: nn.Module
+    act_shape: Tuple[int, int]
 
     @nn.compact
     def __call__(self, x: chex.Array):
         act, val = self.subnet(x)
-        # act = act.reshape((x.shape[0], *act_shape, -1))
+        act = act.reshape((x.shape[0], *self.act_shape, -1))
         pi = distrax.Categorical(logits=act)
 
         return pi, val

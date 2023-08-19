@@ -64,7 +64,7 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 action_dim=action_dim,
                 activation=config.activation,
             )
-    network = ActorCritic(network)
+    network = ActorCritic(network, act_shape=config.act_shape)
     return network
 
 

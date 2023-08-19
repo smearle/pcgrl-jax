@@ -223,8 +223,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         # CALCULATE ACTOR LOSS
                         ratio = jnp.exp(log_prob - traj_batch.log_prob)
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
-                        if config.representation == 'nca':
-                            gae = gae[..., None, None]
+                        # if config.representation == 'nca':
+                        gae = gae[..., None, None]
                         loss_actor1 = ratio * gae
                         loss_actor2 = (
                             jnp.clip(
@@ -252,12 +252,14 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     train_state = train_state.apply_gradients(grads=grads)
                     return train_state, total_loss
 
-                train_state, traj_batch, advantages, targets, rng = update_state
+                train_state, traj_batch, advantages, targets, rng = \
+                    update_state
                 rng, _rng = jax.random.split(rng)
                 batch_size = config.MINIBATCH_SIZE * config.NUM_MINIBATCHES
                 assert (
                     batch_size == config.num_steps * config.num_envs
-                ), "batch size must be equal to number of steps * number of envs"
+                ), "batch size must be equal to number of steps * number " + \
+                    "of envs"
                 permutation = jax.random.permutation(_rng, batch_size)
                 batch = (traj_batch, advantages, targets)
                 batch = jax.tree_util.tree_map(

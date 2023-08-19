@@ -1,10 +1,11 @@
 from typing import Tuple
 
 import chex
-import numpy as np
-import jax.numpy as jnp
-
 from flax import struct
+import jax
+import jax.numpy as jnp
+import numpy as np
+
 from envs.utils import Tiles
 from envs.reps.representation import (Representation, RepresentationState,
                                       get_ego_obs)
@@ -32,13 +33,15 @@ class NarrowRepresentation(Representation):
             [tile for tile in tile_enum if tile != tile_enum.BORDER])
         self.agent_coords = jnp.argwhere(env_map != tile_enum.BORDER)
         self.n_valid_agent_coords = np.int32(len(self.agent_coords))
+        self.act_shape = act_shape
 
     def step(self, env_map: chex.Array, action: int,
              rep_state: NarrowRepresentationState, step_idx: int):
         b = self.builds[action]
         pos_idx = step_idx % self.n_valid_agent_coords
         new_pos = self.agent_coords[pos_idx]
-        new_env_map = env_map.at[new_pos[0], new_pos[1]].set(b[0])
+        # new_env_map = env_map.at[new_pos[0], new_pos[1]].set(b[0])
+        new_env_map = jax.lax.dynamic_update_slice(env_map, b[0], new_pos)
 
         map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
         rep_state = NarrowRepresentationState(
