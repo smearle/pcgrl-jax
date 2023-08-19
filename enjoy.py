@@ -9,7 +9,7 @@ from train import init_checkpointer
 from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
 
 
-@hydra.main(version_base=None, config_path='./', config_name='enjoy')
+@hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
 def enjoy(config: EnjoyConfig):
     config = init_config(config)
 

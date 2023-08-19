@@ -8,7 +8,7 @@ from train import Dense
 from utils import get_exp_dir, gymnax_pcgrl_make
 
 
-@hydra.main(version_base=None, config_path='./', config_name='profile')
+@hydra.main(version_base=None, config_path='./', config_name='profile_pcgrl')
 def enjoy(config: ProfileEnvConfig):
 
     exp_dir = get_exp_dir(config)

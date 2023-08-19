@@ -397,7 +397,7 @@ def init_checkpointer(config: Config):
     return checkpoint_manager, restored_ckpt
 
 
-@hydra.main(version_base=None, config_path='./', config_name='train')
+@hydra.main(version_base=None, config_path='./conf', config_name='train')
 def main(config: TrainConfig):
     config = init_config(config)
     rng = jax.random.PRNGKey(config.seed)

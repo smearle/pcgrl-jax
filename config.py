@@ -71,6 +71,6 @@ class ProfileEnvConfig(Config):
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
-cs.store(name="train", node=TrainConfig)
-cs.store(name="enjoy", node=EnjoyConfig)
-cs.store(name="profile", node=ProfileEnvConfig)
+cs.store(name="train_pcgrl", node=TrainConfig)
+cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
+cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
