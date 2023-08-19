@@ -135,6 +135,47 @@ def get_max_path_length(map_shape: Tuple[int]):
 def get_max_n_regions(map_shape: Tuple[int]):
     return np.ceil(np.prod(map_shape) / 2).astype(int)  # Declaring this as static for jax.
 
+    
+def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passable_tiles: chex.Array):
+    """Approximate the diameter of a maze-like tile map."""
+    max_path_length = get_max_path_length(env_map.shape)
+    max_n_regions = get_max_n_regions(env_map.shape)
+
+    # Get array of flattened indices of all tiles in env_map
+    idxs = jnp.arange(math.prod(env_map.shape), dtype=jnp.float32) + 1
+    regions_flood_count = idxs.reshape(env_map.shape)
+
+    # Mask out flood_count where env_map is not empty
+    occupied_map = (env_map[...,None] != passable_tiles).all(-1)
+    # occupied_map = env_map != Tiles.EMPTY
+    init_flood_count = regions_flood_count * (1 - occupied_map)
+
+    # We'll use this for determining region anchors later
+    pre_flood_count = (regions_flood_count + 1) * (1 - occupied_map)
+
+    flood_regions_state = FloodRegionsState(flood_count=init_flood_count[..., None], occupied_map=occupied_map)
+    flood_regions_state, _ = jax.lax.scan(flood_regions_net.flood_step, flood_regions_state, jnp.arange(max_path_length))
+    regions_flood_count = flood_regions_state.flood_count.astype(jnp.int32)
+
+    # FIXME: Sketchily upper-bounding number of regions here since we need a concrete value
+    n_regions = jnp.clip(jnp.unique(regions_flood_count, size=256, fill_value=0), 0, 1).sum()
+
+    return n_regions
+
+
+def calc_path(self, goal, env_map: jnp.ndarray, src: int, trg: int):
+    occupied_map = jnp.logical_or(env_map == Tiles.WALL, env_map == Tiles.BORDER).astype(jnp.float32)
+    # init_flood = jnp.zeros(self.agent_map_shape, dtype=jnp.float32)
+    # init_flood = init_flood.at[goal[0], goal[1]].set(1)
+    init_flood = env_map == Tiles.GOAL
+    init_flood_count = init_flood.copy()
+    # Concatenate init_flood with new_occ_map
+    flood_input = jnp.stack([occupied_map, init_flood], axis=-1)
+    flood_state = FloodPathState(flood_input=flood_input, flood_count=init_flood_count)
+    flood_state, _ = jax.lax.scan(self.flood_step, flood_state, None, self.max_path_length)
+    path_length = jnp.clip(flood_state.flood_count.max() - jnp.where(flood_state.flood_count == 0, 99999, flood_state.flood_count).min(), 0)
+    return path_length, flood_state
+
 
 def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, env_map: chex.Array, passable_tiles: chex.Array):
     """Approximate the diameter of a maze-like tile map."""

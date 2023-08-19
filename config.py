@@ -38,7 +38,7 @@ class Config:
     rf_size: Optional[int] = None
     arf_size: Optional[int] = None
     act_shape: Tuple[int, int] = (1, 1)
-    static_tile_prob: float = 0.0
+    static_tile_prob: Optional[float] = 0.0
     n_freezies: int = 0
 
 
@@ -49,11 +49,10 @@ class TrainConfig(Config):
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e6)
 
-
-    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. #################################################
+    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     NUM_UPDATES: Optional[int] = None
     MINIBATCH_SIZE: Optional[int] = None
-    ####################################################################################################################
+    ###########################################################################
 
 
 @dataclass
@@ -61,7 +60,7 @@ class EnjoyConfig(Config):
     random_agent: bool = False
     multiproc: bool = True
 
-    
+
 @dataclass
 class ProfileEnvConfig(Config):
     N_PROFILE_STEPS: int = 5000

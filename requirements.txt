@@ -6,3 +6,6 @@ distrax
 optax
 flax
 numpy
+pandas
+hydra-core
+imageio

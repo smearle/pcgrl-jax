@@ -1,27 +1,19 @@
-from dataclasses import dataclass
 import os
 import shutil
 import hydra
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
 from flax import struct
-from matplotlib import pyplot as plt
-import numpy as np
 import optax
-import pandas as pd
-from flax.linen.initializers import constant, orthogonal
-from typing import Sequence, NamedTuple, Any
+from typing import NamedTuple
 from flax.training.train_state import TrainState
 from flax.training import orbax_utils
-import distrax
-import gymnax
 import orbax
 
 from config import Config, TrainConfig
-from models import Dense, ConvForward
-from purejaxrl.experimental.s5.wrappers import LogWrapper, FlattenObservationWrapper
-from utils import get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make, init_config
+from purejaxrl.experimental.s5.wrappers import LogWrapper
+from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
+                   init_config)
 
 
 class RunnerState(struct.PyTreeNode):
@@ -94,30 +86,37 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config.num_envs)
         rng_act = reset_rng
-        obsv, env_state = jax.vmap(env.reset, in_axes=(0, None))(reset_rng, env_params)
+        obsv, env_state = jax.vmap(
+            env.reset, in_axes=(0, None))(reset_rng, env_params)
 
         def save_checkpoint(runner_state, info, steps_prev_complete):
             try:
-                timesteps = info["timestep"][info["returned_episode"]] * config.num_envs
+                timesteps = info["timestep"][info["returned_episode"]
+                                             ] * config.num_envs
             except jax.errors.NonConcreteBooleanIndexError:
                 return
             for t in timesteps:
                 if t > 0:
                     latest_ckpt_step = checkpoint_manager.latest_step()
-                    if latest_ckpt_step is None or t - latest_ckpt_step >= config.ckpt_freq:
+                    if (latest_ckpt_step is None or
+                            t - latest_ckpt_step >= config.ckpt_freq):
                         print(f"Saving checkpoint at step {t}")
-                        ckpt = {'runner_state': runner_state, 'config': config, 'step_i': t}
+                        ckpt = {'runner_state': runner_state,
+                                'config': config, 'step_i': t}
                         # ckpt = {'step_i': t}
                         save_args = orbax_utils.save_args_from_target(ckpt)
-                        checkpoint_manager.save(t, ckpt, save_kwargs={'save_args': save_args})
+                        checkpoint_manager.save(t, ckpt, save_kwargs={
+                                                'save_args': save_args})
                     break
 
         rng, _rng = jax.random.split(rng)
-        ep_returns = jnp.full(shape=config.NUM_UPDATES, fill_value=jnp.nan, dtype=jnp.float32)
+        ep_returns = jnp.full(shape=config.NUM_UPDATES,
+                              fill_value=jnp.nan, dtype=jnp.float32)
         steps_prev_complete = 0
-        runner_state = RunnerState(train_state, env_state, obsv, rng_act, ep_returns, _rng)
+        runner_state = RunnerState(
+            train_state, env_state, obsv, rng_act, ep_returns, _rng)
 
-        exp_dir = get_exp_dir(config)
+        # exp_dir = get_exp_dir(config)
         if restored_ckpt is not None:
             # target = {'runner_state': runner_state, 'config': config, 'step_i': 0}
             # raw_restored = checkpoint_manager.restore(checkpoint_manager.latest_step(), items=target)
@@ -127,23 +126,20 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             steps_prev_complete = restored_ckpt['steps_prev_complete']
             runner_state = restored_ckpt['runner_state']
             steps_remaining = config.total_timesteps - steps_prev_complete
-            config.NUM_UPDATES = int(steps_remaining // config.num_steps // config.num_envs)
+            config.NUM_UPDATES = int(
+                steps_remaining // config.num_steps // config.num_envs)
 
-            # except jax.errors.ConcretizationTypeError:
-            #     pass
-
-            # finally :
-            #     jax.debug.breakpoint()
-            # runner_state = RunnerState(**runner_state)
-            # config = raw_restored['config']
             # TODO: Overwrite certain config values
 
         # TRAIN LOOP
         def _update_step(runner_state, unused):
             # COLLECT TRAJECTORIES
             def _env_step(runner_state: RunnerState, unused):
-                train_state, env_state, last_obs, ep_returns, rng = runner_state.train_state, \
-                    runner_state.env_state, runner_state.last_obs, runner_state.ep_returns, runner_state.rng
+                train_state, env_state, last_obs, ep_returns, rng = (
+                    runner_state.train_state, runner_state.env_state,
+                    runner_state.last_obs, runner_state.ep_returns,
+                    runner_state.rng
+                )
 
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
@@ -157,11 +153,13 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 rng_step = jax.random.split(_rng, config.num_envs)
                 obsv, env_state, reward, done, info = jax.vmap(
                     env.step, in_axes=(0, 0, 0, None)
-                )(rng_step, env_state, action[...,None], env_params)
+                )(rng_step, env_state, action[..., None], env_params)
                 transition = Transition(
-                    done, action, value, reward, log_prob, last_obs, info, rng_act
+                    done, action, value, reward, log_prob, last_obs, info,
+                    rng_act
                 )
-                runner_state = RunnerState(train_state, env_state, obsv, rng_act, ep_returns, rng)
+                runner_state = RunnerState(
+                    train_state, env_state, obsv, rng_act, ep_returns, rng)
                 return runner_state, transition
 
             runner_state, traj_batch = jax.lax.scan(
@@ -181,7 +179,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         transition.value,
                         transition.reward,
                     )
-                    delta = reward + config.GAMMA * next_value * (1 - done) - value
+                    delta = reward + config.GAMMA * \
+                        next_value * (1 - done) - value
                     gae = (
                         delta
                         + config.GAMMA * config.GAE_LAMBDA * (1 - done) * gae
@@ -214,15 +213,17 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                             value - traj_batch.value
                         ).clip(-config.CLIP_EPS, config.CLIP_EPS)
                         value_losses = jnp.square(value - targets)
-                        value_losses_clipped = jnp.square(value_pred_clipped - targets)
+                        value_losses_clipped = jnp.square(
+                            value_pred_clipped - targets)
                         value_loss = (
-                            0.5 * jnp.maximum(value_losses, value_losses_clipped).mean()
+                            0.5 * jnp.maximum(value_losses,
+                                              value_losses_clipped).mean()
                         )
 
                         # CALCULATE ACTOR LOSS
                         ratio = jnp.exp(log_prob - traj_batch.log_prob)
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
-                        if config.model == 'nca':
+                        if config.representation == 'nca':
                             gae = gae[..., None, None]
                         loss_actor1 = ratio * gae
                         loss_actor2 = (
@@ -274,7 +275,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 train_state, total_loss = jax.lax.scan(
                     _update_minbatch, train_state, minibatches
                 )
-                update_state = (train_state, traj_batch, advantages, targets, rng)
+                update_state = (train_state, traj_batch,
+                                advantages, targets, rng)
                 return update_state, total_loss
 
             update_state = (train_state, traj_batch, advantages, targets, rng)
@@ -287,27 +289,34 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             if config.DEBUG:
                 def callback(info, steps_prev_complete):
                     return_values = info["returned_episode_returns"][info["returned_episode"]]
-                    timesteps = info["timestep"][info["returned_episode"]] * config.num_envs
+                    timesteps = info["timestep"][info["returned_episode"]
+                                                 ] * config.num_envs
                     for t in range(len(timesteps)):
-                        print(f"global step={timesteps[t]}, episodic return={return_values[t]}")
+                        print(
+                            f"global step={timesteps[t]}, episodic return={return_values[t]}")
                 jax.debug.callback(callback, metric, steps_prev_complete)
 
-            jax.debug.callback(save_checkpoint, runner_state, metric, steps_prev_complete)
+            jax.debug.callback(save_checkpoint, runner_state,
+                               metric, steps_prev_complete)
 
             def log_callback(metric, steps_prev_complete, ep_returns):
-                timesteps = metric["timestep"][metric["returned_episode"]] * config.num_envs
+                timesteps = metric["timestep"][metric["returned_episode"]
+                                               ] * config.num_envs
                 if len(timesteps) > 0:
                     t = timesteps[0]
-                    ep_return = metric["returned_episode_returns"][metric["returned_episode"]].mean()
+                    ep_return = metric["returned_episode_returns"][metric["returned_episode"]].mean(
+                    )
                     # ep_returns = ep_returns.at[t].set(ep_return)
 
                     # Add a row to csv with ep_return
                     with open(os.path.join(get_exp_dir(config), "progress.csv"), "a") as f:
                         f.write(f"{t},{ep_return}\n")
 
-            jax.debug.callback(log_callback, metric, steps_prev_complete, ep_returns)
+            jax.debug.callback(log_callback, metric,
+                               steps_prev_complete, ep_returns)
 
-            runner_state = RunnerState(train_state, env_state, last_obs, rng_act, ep_returns, rng)
+            runner_state = RunnerState(
+                train_state, env_state, last_obs, rng_act, ep_returns, rng)
 
             return runner_state, metric
 
@@ -315,13 +324,14 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             _update_step, runner_state, None, config.NUM_UPDATES
         )
 
-        jax.debug.callback(save_checkpoint, runner_state, metric, steps_prev_complete)
+        jax.debug.callback(save_checkpoint, runner_state,
+                           metric, steps_prev_complete)
 
         return {"runner_state": runner_state, "metrics": metric}
 
     return lambda rng: train(rng, config)
 
-    
+
 # def plot_ep_returns(ep_returns, config):
 #     plt.plot(ep_returns)
 #     plt.xlabel("Timesteps")
@@ -329,12 +339,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 #     plt.title(f"Episodic Return vs. Timesteps ({config.ENV_NAME})")
 #     plt.savefig(os.path.join(get_exp_dir(config), "ep_returns.png"))
 
-    
+
 def init_checkpointer(config: Config):
     rng = jax.random.PRNGKey(30)
     # Set up checkpointing
     ckpt_dir = get_ckpt_dir(config)
-    
+
     # Create a dummy checkpoint so we can restore it to the correct dataclasses
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     # env = FlattenObservationWrapper(env)
@@ -356,19 +366,22 @@ def init_checkpointer(config: Config):
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config.num_envs)
     rng_act = reset_rng
-    obsv, env_state = jax.vmap(env.reset, in_axes=(0, None))(reset_rng, env_params)
-    runner_state = RunnerState(train_state=train_state, env_state=env_state, last_obs=obsv, rng_act=rng_act, \
-        ep_returns=jnp.full(config.num_envs, jnp.nan), rng=rng)
+    obsv, env_state = jax.vmap(
+        env.reset, in_axes=(0, None))(reset_rng, env_params)
+    runner_state = RunnerState(train_state=train_state, env_state=env_state, last_obs=obsv, rng_act=rng_act,
+                               ep_returns=jnp.full(config.num_envs, jnp.nan), rng=rng)
     target = {'runner_state': runner_state, 'step_i': 0}
-    options = orbax.checkpoint.CheckpointManagerOptions(max_to_keep=2, create=True)
+    options = orbax.checkpoint.CheckpointManagerOptions(
+        max_to_keep=2, create=True)
     checkpoint_manager = orbax.checkpoint.CheckpointManager(
         ckpt_dir, orbax.checkpoint.PyTreeCheckpointer(), options)
-    
+
     if checkpoint_manager.latest_step() is None:
         restored_ckpt = None
     else:
         steps_prev_complete = checkpoint_manager.latest_step()
-        restored_ckpt = checkpoint_manager.restore(steps_prev_complete, items=target)
+        restored_ckpt = checkpoint_manager.restore(
+            steps_prev_complete, items=target)
         restored_ckpt['steps_prev_complete'] = steps_prev_complete
 
         # # Load the csv as a dataframe and delete all rows after the last checkpoint
@@ -376,10 +389,8 @@ def init_checkpointer(config: Config):
         # progress_df = pd.read_csv(progress_csv_path, names=["timestep", "ep_return"])
         # # Convert timestep to int
 
-        # breakpoint()
         # progress_df = progress_df[progress_df["timestep"] <= steps_prev_complete]
         # progress_df.to_csv(progress_csv_path, header=False, index=False)
-
 
     return checkpoint_manager, restored_ckpt
 
@@ -404,7 +415,7 @@ def main(config: TrainConfig):
     if restored_ckpt is None:
         progress_csv_path = os.path.join(exp_dir, "progress.csv")
         assert not os.path.exists(progress_csv_path), "Progress csv already exists, but have no checkpoint to restore " +\
-             "from. How can this be?"
+            "from. How can this be?"
         # Create csv for logging progress
         with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
             f.write("timestep,ep_return\n")
@@ -414,6 +425,6 @@ def main(config: TrainConfig):
 
     ep_returns = out["runner_state"].ep_returns
 
+
 if __name__ == "__main__":
     main()
-
