@@ -143,11 +143,14 @@ class PCGRLEnv(Environment):
             env_map,
         )
         obs = self.rep.get_obs(
-            env_map=env_map, static_map=env_state.static_map, rep_state=rep_state)
+            env_map=env_map, static_map=env_state.static_map,
+            rep_state=rep_state)
         done = self.is_terminal(env_state, env_params)
         step_idx = env_state.step_idx + 1
-        env_state = PCGRLEnvState(env_map=env_map, static_map=env_state.static_map, rep_state=rep_state,
-                                  prob_state=prob_state, step_idx=step_idx)
+        env_state = PCGRLEnvState(
+            env_map=env_map, static_map=env_state.static_map,
+            rep_state=rep_state,
+            prob_state=prob_state, step_idx=step_idx)
 
         return (
             jax.lax.stop_gradient(obs),

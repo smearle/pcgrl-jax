@@ -57,13 +57,10 @@ def enjoy(config: EnjoyConfig):
         #   rewards[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps]))
         gif_name = f"{exp_dir}/anim_ep-{ep_is}" + \
             f"{('_randAgent' if config.random_agent else '')}.gif"
-        # imageio.mimsave(
-        #     gif_name,
-        #     frames[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps],
-        #     duration=1/30)
         imageio.v3.imwrite(
             gif_name,
-            frames[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps]
+            frames[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps],
+            duration=config.duration
         )
 
 

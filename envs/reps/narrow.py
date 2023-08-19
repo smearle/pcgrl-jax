@@ -38,9 +38,8 @@ class NarrowRepresentation(Representation):
     def step(self, env_map: chex.Array, action: int,
              rep_state: NarrowRepresentationState, step_idx: int):
         b = self.builds[action]
-        pos_idx = step_idx % self.n_valid_agent_coords
-        new_pos = self.agent_coords[pos_idx]
-        # new_env_map = env_map.at[new_pos[0], new_pos[1]].set(b[0])
+        pos_idx = step_idx % rep_state.n_valid_agent_coords
+        new_pos = rep_state.agent_coords[pos_idx]
         new_env_map = jax.lax.dynamic_update_slice(env_map, b[0], new_pos)
 
         map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
@@ -59,7 +58,8 @@ class NarrowRepresentation(Representation):
         else:
             agent_coords = self.agent_coords
             n_valid_agent_coords = self.n_valid_agent_coords
-        pos = self.agent_coords[0]
+        pos = agent_coords[0]
+
         return NarrowRepresentationState(
             pos=pos,
             agent_coords=agent_coords,

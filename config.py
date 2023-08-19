@@ -58,8 +58,10 @@ class TrainConfig(Config):
 @dataclass
 class EnjoyConfig(Config):
     random_agent: bool = False
-    multiproc: bool = True
+    # How many episodes to render as gifs
     n_eps: int = 10
+    # How many milliseconds to wait between frames of the rendered gifs
+    duration: int = 50
 
 
 @dataclass
