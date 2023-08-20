@@ -12,7 +12,7 @@ def get_exp_dir(config: Config):
     exp_name = os.path.join(
         'saves',
         f'{config.problem}_{config.representation}_{config.model}-' +
-        f'{config.activation}_w-{config.maze_size}_rf-{config.rf_size}_' +
+        f'{config.activation}_w-{config.map_width}_rf-{config.rf_size}_' +
         f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
         # f'fz-{config.n_freezies}_' + \
         f'act-{config.act_shape[0]}x{config.act_shape[1]}_' + \
@@ -22,7 +22,7 @@ def get_exp_dir(config: Config):
 
 
 def init_config(config: Config):
-    config.rf_size = (2 * config.maze_size -
+    config.rf_size = (2 * config.map_width -
                       1 if config.rf_size is None else config.rf_size)
     config.arf_size = config.rf_size if config.arf_size is None \
         else config.arf_size
@@ -77,7 +77,7 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
         return gymnax.make(env_name)
 
     elif env_name == 'PCGRL':
-        map_shape = (config.maze_size, config.maze_size)
+        map_shape = (config.map_width, config.map_width)
         rf_shape = (config.rf_size, config.rf_size)
         env_params = PCGRLEnvParams()
         env = PCGRLEnv(

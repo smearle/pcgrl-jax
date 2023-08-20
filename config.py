@@ -34,7 +34,7 @@ class Config:
     representation: str = "narrow"
     model: str = "conv"
 
-    maze_size: int = 16
+    map_width: int = 16
     rf_size: Optional[int] = None
     arf_size: Optional[int] = None
     act_shape: Tuple[int, int] = (1, 1)
