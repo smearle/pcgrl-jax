@@ -40,7 +40,7 @@ class NarrowRepresentation(Representation):
         b = self.builds[action]
         pos_idx = step_idx % rep_state.n_valid_agent_coords
         new_pos = rep_state.agent_coords[pos_idx]
-        new_env_map = jax.lax.dynamic_update_slice(env_map, b[0], new_pos)
+        new_env_map = jax.lax.dynamic_update_slice(env_map, b, new_pos)
 
         map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
         rep_state = NarrowRepresentationState(
@@ -51,10 +51,10 @@ class NarrowRepresentation(Representation):
 
         return new_env_map, map_changed, rep_state
 
-    def reset(self, static_tiles: chex.Array = None):
-        if static_tiles is not None:
-            agent_coords = jnp.argwhere(static_tiles == 0, size=self.max_steps)
-            n_valid_agent_coords = jnp.sum(static_tiles == 0)
+    def reset(self, frz_map: chex.Array = None, rng: chex.PRNGKey = None):
+        if frz_map is not None:
+            agent_coords = jnp.argwhere(frz_map == 0, size=self.max_steps)
+            n_valid_agent_coords = jnp.sum(frz_map == 0)
         else:
             agent_coords = self.agent_coords
             n_valid_agent_coords = self.n_valid_agent_coords

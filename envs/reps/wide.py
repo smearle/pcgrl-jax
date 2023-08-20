@@ -52,7 +52,7 @@ class WideRepresentation(Representation):
 
         return new_env_map, map_changed, rep_state
 
-    def reset(self, static_tiles: chex.Array = None):
+    def reset(self, static_tiles: chex.Array = None, rng: chex.PRNGKey = None):
         return WideRepresentationState(pos=jnp.array((0, 0)))
 
     get_obs = get_global_obs

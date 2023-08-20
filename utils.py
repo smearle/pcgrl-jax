@@ -16,6 +16,7 @@ def get_exp_dir(config: Config):
         f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
         # f'fz-{config.n_freezies}_' + \
         f'act-{config.act_shape[0]}x{config.act_shape[1]}_' + \
+        f'nag-{config.n_agents}_' + \
         f'{config.seed}_{config.exp_name}')
     return exp_name
 
@@ -33,25 +34,27 @@ def get_ckpt_dir(config: Config):
 
 
 def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
+    # First consider number of possiblt tiles
+    action_dim = env.action_space(env_params).n
+    if config.representation == "wide":
+        action_dim = len(env.tile_enum) - 1
+    action_dim = action_dim * config.n_agents
+
     if config.model == "dense":
         network = Dense(
-            env.action_space(env_params).n, activation=config.activation
+            action_dim, activation=config.activation
         )
     if config.model == "conv":
         network = ConvForward(
-            env.action_space(env_params).n, activation=config.activation,
-            arf_size=config.arf_size,
+            action_dim=action_dim, activation=config.activation,
+            arf_size=config.arf_size, act_shape=config.act_shape,
         )
     if config.model == "seqnca":
         network = SeqNCA(
-            env.action_space(env_params).n, activation=config.activation,
+            action_dim, activation=config.activation,
             arf_size=config.arf_size,
         )
     if config.model in {"nca", "autoencoder"}:
-        if config.representation == "wide":
-            action_dim = len(env.tile_enum) - 1
-        else:
-            action_dim = env.action_space(env_params).n
         if config.model == "nca":
             network = NCA(
                 representation=config.representation,
@@ -64,7 +67,8 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 action_dim=action_dim,
                 activation=config.activation,
             )
-    network = ActorCritic(network, act_shape=config.act_shape)
+    network = ActorCritic(network, act_shape=config.act_shape,
+                          n_agents=config.n_agents)
     return network
 
 
@@ -81,7 +85,7 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
             map_shape=map_shape, rf_shape=rf_shape,
             static_tile_prob=config.static_tile_prob,
             n_freezies=config.n_freezies, env_params=env_params,
-            act_shape=config.act_shape,
+            act_shape=config.act_shape, n_agents=config.n_agents,
         )
 
     elif env_name == 'Binary0':

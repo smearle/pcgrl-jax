@@ -40,6 +40,7 @@ class Config:
     act_shape: Tuple[int, int] = (1, 1)
     static_tile_prob: Optional[float] = 0.0
     n_freezies: int = 0
+    n_agents: int = 1
 
 
 @dataclass

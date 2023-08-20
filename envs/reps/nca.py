@@ -40,7 +40,7 @@ class NCARepresentation(Representation):
 
         return new_env_map, map_changed, rep_state
 
-    def reset(self, static_map):
+    def reset(self, static_map, rng):
         return NCARepresentationState()
 
     get_obs = get_global_obs

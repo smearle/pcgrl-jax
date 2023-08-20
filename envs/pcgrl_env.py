@@ -11,6 +11,7 @@ from envs.pathfinding import get_path_coords
 from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem, ProblemState
 from envs.reps.narrow import NarrowRepresentation
+from envs.reps.turtle import MultiTurtleRepresentation, TurtleRepresentation
 from envs.reps.wide import WideRepresentation
 from envs.reps.nca import NCARepresentation
 from envs.reps.representation import Representation, RepresentationState
@@ -74,11 +75,12 @@ def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
 class PCGRLEnv(Environment):
     def __init__(self, problem: str, representation: str,
                  map_shape: Tuple[int, int], rf_shape: Tuple[int, int],
-                 act_shape: Tuple[int, int],
+                 act_shape: Tuple[int, int], n_agents: int,
                  static_tile_prob, n_freezies, env_params: PCGRLEnvParams):
         self.map_shape = map_shape
         self.static_tile_prob = np.float32(static_tile_prob)
         self.n_freezies = np.int32(n_freezies)
+        self.n_agents = n_agents
 
         self.prob: Problem
         if problem == 'binary':
@@ -105,6 +107,19 @@ class PCGRLEnv(Environment):
             self.rep = WideRepresentation(env_map=env_map, rf_shape=rf_shape,
                                           tile_enum=self.tile_enum,
                                           act_shape=act_shape)
+        elif representation == 'turtle':
+            if n_agents > 1:
+                self.rep = MultiTurtleRepresentation(
+                    env_map=env_map, rf_shape=rf_shape,
+                    tile_enum=self.tile_enum,
+                    act_shape=act_shape,
+                    map_shape=map_shape,
+                    n_agents=n_agents)
+
+            else:
+                self.rep = TurtleRepresentation(env_map=env_map, rf_shape=rf_shape,
+                                                tile_enum=self.tile_enum,
+                                                act_shape=act_shape, map_shape=map_shape)
         else:
             raise Exception(f'Representation {representation} not implemented')
 
@@ -113,29 +128,33 @@ class PCGRLEnv(Environment):
         env_map = gen_init_map(rng, self.tile_enum,
                                self.map_shape, self.tile_probs)
         if self.static_tile_prob is not None or self.n_freezies > 0:
-            static_map = gen_static_tiles(
+            frz_map = gen_static_tiles(
                 rng, self.static_tile_prob, self.n_freezies, self.map_shape)
         else:
-            static_map = None
+            frz_map = None
 
-        rep_state = self.rep.reset(static_map)
+        rep_state = self.rep.reset(frz_map, rng)
         obs = self.rep.get_obs(
-            env_map=env_map, static_map=static_map, rep_state=rep_state)
+            env_map=env_map, static_map=frz_map, rep_state=rep_state)
 
         _, prob_state = self.prob.get_stats(env_map)
-        rep_state = self.rep.reset(static_map)
-        env_state = PCGRLEnvState(env_map=env_map, static_map=static_map,
+        rep_state = self.rep.reset(frz_map, rng=rng)
+        env_state = PCGRLEnvState(env_map=env_map, static_map=frz_map,
                                   rep_state=rep_state, prob_state=prob_state,
                                   step_idx=0)
 
         return obs, env_state
 
     def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
+        if self.n_agents == 1:
+            action = action[0]
         env_map, map_changed, rep_state = self.rep.step(
             env_map=env_state.env_map, action=action,
-            rep_state=env_state.rep_state, step_idx=env_state.step_idx)
+            rep_state=env_state.rep_state, step_idx=env_state.step_idx
+        )
         env_map = jnp.where(env_state.static_map == 1,
-                            env_state.env_map, env_map)
+                            env_state.env_map, env_map
+                            )
         reward, prob_state = jax.lax.cond(
             map_changed,
             lambda env_map: self.prob.get_stats(env_map, env_state.prob_state),
@@ -226,15 +245,25 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState, path_coords: chex.Array)
     x_border = jnp.zeros((tile_size, 2, 4), dtype=jnp.uint8)
     x_border = x_border.at[:, :, :].set(clr)
     if hasattr(env_state.rep_state, 'pos'):
-        y, x = env_state.rep_state.pos
-        y, x = y + border_size[0], x + border_size[1]
-        y, x = y * tile_size, x * tile_size
-        lvl_img = jax.lax.dynamic_update_slice(lvl_img, x_border, (y, x, 0))
-        lvl_img = jax.lax.dynamic_update_slice(
-            lvl_img, x_border, (y, x+tile_size-2, 0))
-        lvl_img = jax.lax.dynamic_update_slice(lvl_img, y_border, (y, x, 0))
-        lvl_img = jax.lax.dynamic_update_slice(
-            lvl_img, y_border, (y+tile_size-2, x, 0))
+
+        def render_pos(a_pos, lvl_img):
+            y, x = a_pos
+            y, x = y + border_size[0], x + border_size[1]
+            y, x = y * tile_size, x * tile_size
+            lvl_img = jax.lax.dynamic_update_slice(lvl_img, x_border, (y, x, 0))
+            lvl_img = jax.lax.dynamic_update_slice(
+                lvl_img, x_border, (y, x+tile_size-2, 0))
+            lvl_img = jax.lax.dynamic_update_slice(lvl_img, y_border, (y, x, 0))
+            lvl_img = jax.lax.dynamic_update_slice(
+                lvl_img, y_border, (y+tile_size-2, x, 0))
+            return lvl_img
+
+        if env_state.rep_state.pos.ndim == 1:
+            a_pos = env_state.rep_state.pos
+            lvl_img = render_pos(a_pos, lvl_img)
+        elif env_state.rep_state.pos.ndim == 2:
+            for a_pos in env_state.rep_state.pos:
+                lvl_img = render_pos(a_pos, lvl_img)
 
     clr = (255, 0, 0, 255)
     x_border = x_border.at[:, :, :].set(clr)

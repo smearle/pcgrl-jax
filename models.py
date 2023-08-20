@@ -51,6 +51,7 @@ class Dense(nn.Module):
 
 class ConvForward(nn.Module):
     action_dim: Sequence[int]
+    act_shape: Tuple[int, int]
     arf_size: int
     activation: str = "relu"
 
@@ -60,6 +61,8 @@ class ConvForward(nn.Module):
             activation = nn.relu
         else:
             activation = nn.tanh
+
+        flat_action_dim = self.action_dim * math.prod(self.act_shape)
 
         # Slice out a square of width `arf_size` from `x`
         mid_x = x.shape[2] // 2
@@ -83,8 +86,9 @@ class ConvForward(nn.Module):
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(act)
         act = activation(act)
+
         act = nn.Dense(
-            self.action_dim, kernel_init=orthogonal(0.01),
+            flat_action_dim, kernel_init=orthogonal(0.01),
             bias_init=constant(0.0)
         )(act)
 
@@ -255,11 +259,12 @@ class ActorCritic(nn.Module):
     """Transform the action output into a distribution."""
     subnet: nn.Module
     act_shape: Tuple[int, int]
+    n_agents: int
 
     @nn.compact
     def __call__(self, x: chex.Array):
         act, val = self.subnet(x)
-        act = act.reshape((x.shape[0], *self.act_shape, -1))
+        act = act.reshape((x.shape[0], self.n_agents, *self.act_shape, -1))
         pi = distrax.Categorical(logits=act)
 
         return pi, val

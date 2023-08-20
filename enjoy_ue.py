@@ -9,7 +9,11 @@ from train import init_checkpointer
 from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
 
 
-@hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
+N_EPS = 1
+a = poo
+
+
+@hydra.main(version_base=None, config_path='./', config_name='enjoy')
 def enjoy(config: EnjoyConfig):
     config = init_config(config)
 
@@ -28,7 +32,7 @@ def enjoy(config: EnjoyConfig):
 
     obs, env_state = env.reset(rng, env_params)
 
-    def step_env(carry, _):
+    def step_env(carry, action):
         rng, obs, env_state = carry
         rng, rng_act, rng_step = jax.random.split(rng, 3)
         if config.random_agent:
@@ -45,22 +49,22 @@ def enjoy(config: EnjoyConfig):
     step_env = jax.jit(step_env)
     print('Scanning episode steps:')
     _, (states, rewards, dones, infos, frames) = jax.lax.scan(
-        step_env, (rng, obs, env_state), None,
-        length=config.n_eps*env.rep.max_steps)
+        step_env, (rng, obs, env_state), None, length=N_EPS*env.rep.max_steps)
 
-    assert len(frames) == config.n_eps * env.rep.max_steps, \
-        "Not enough frames collected"
-
-    # Save gifs.
-    for ep_is in range(config.n_eps):
+    assert len(frames) == N_EPS * env.rep.max_steps, "Not enough frames" + \
+                                                     "collected"
+    for ep_is in range(N_EPS):
         # cum_rewards = jnp.cumsum(jnp.array(
         #   rewards[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps]))
         gif_name = f"{exp_dir}/anim_ep-{ep_is}" + \
             f"{('_randAgent' if config.random_agent else '')}.gif"
+        # imageio.mimsave(
+        #     gif_name,
+        #     frames[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps],
+        #     duration=1/30)
         imageio.v3.imwrite(
             gif_name,
-            frames[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps],
-            duration=config.duration
+            frames[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps]
         )
 
 

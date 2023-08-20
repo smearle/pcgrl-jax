@@ -224,7 +224,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         ratio = jnp.exp(log_prob - traj_batch.log_prob)
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
                         # if config.representation == 'nca':
-                        gae = gae[..., None, None]
+                        gae = gae[..., None, None, None]
                         loss_actor1 = ratio * gae
                         loss_actor2 = (
                             jnp.clip(
@@ -397,7 +397,7 @@ def init_checkpointer(config: Config):
     return checkpoint_manager, restored_ckpt
 
 
-@hydra.main(version_base=None, config_path='./conf', config_name='train')
+@hydra.main(version_base=None, config_path='./', config_name='train_pcgrl')
 def main(config: TrainConfig):
     config = init_config(config)
     rng = jax.random.PRNGKey(config.seed)
