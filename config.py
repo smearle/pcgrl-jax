@@ -70,8 +70,15 @@ class ProfileEnvConfig(Config):
     N_PROFILE_STEPS: int = 5000
 
 
+@dataclass
+class BatchConfig(TrainConfig):
+    mode: str = 'train'
+    slurm: bool = True
+
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
+cs.store(name="batch_pcgrl", node=BatchConfig)

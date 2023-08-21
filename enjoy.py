@@ -10,7 +10,7 @@ from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
 
 
 @hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
-def enjoy(config: EnjoyConfig):
+def main_enjoy(config: EnjoyConfig):
     config = init_config(config)
 
     exp_dir = get_exp_dir(config)
@@ -65,4 +65,4 @@ def enjoy(config: EnjoyConfig):
 
 
 if __name__ == '__main__':
-    enjoy()
+    main_enjoy()
