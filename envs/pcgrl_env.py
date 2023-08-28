@@ -179,7 +179,8 @@ class PCGRLEnv(Environment):
             {"discount": self.discount(env_state, env_params)},
         )
 
-    def is_terminal(self, state: PCGRLEnvState, params: PCGRLEnvParams) -> bool:
+    def is_terminal(self, state: PCGRLEnvState, params: PCGRLEnvParams) \
+            -> bool:
         """Check whether state is terminal."""
         done_steps = state.step_idx >= (self.rep.max_steps - 1)
         return done_steps
@@ -187,7 +188,8 @@ class PCGRLEnv(Environment):
     def render(self, env_state: PCGRLEnvState):
         # TODO: Refactor this into problem
         path_coords = get_path_coords(
-            env_state.prob_state.flood_path_state.flood_count, self.prob.max_path_len)
+            env_state.prob_state.flood_path_state.flood_count,
+            self.prob.max_path_len)
         return render_map(self, env_state, path_coords)
 
     @property
@@ -201,10 +203,9 @@ class PCGRLEnv(Environment):
         return self.rep.observation_space()
 
 
-tile_size = np.int8(16)
-
-
-def render_map(env: PCGRLEnv, env_state: PCGRLEnvState, path_coords: chex.Array):
+def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
+               path_coords: chex.Array):
+    tile_size = env.prob.tile_size
     env_map = env_state.env_map
     border_size = np.array((1, 1))
     env_map = jnp.pad(env_map, border_size, constant_values=Tiles.BORDER)

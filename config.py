@@ -42,6 +42,12 @@ class Config:
     n_freezies: int = 0
     n_agents: int = 1
 
+    # How many milliseconds to wait between frames of the rendered gifs
+    gif_frame_duration: int = 50
+
+    """ DO NOT USE. WILL BE OVERWRITTEN. """
+    exp_dir: Optional[str] = None
+
 
 @dataclass
 class TrainConfig(Config):
@@ -49,6 +55,7 @@ class TrainConfig(Config):
 
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e6)
+    render_freq: int = 100
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     NUM_UPDATES: Optional[int] = None
@@ -61,8 +68,6 @@ class EnjoyConfig(Config):
     random_agent: bool = False
     # How many episodes to render as gifs
     n_eps: int = 10
-    # How many milliseconds to wait between frames of the rendered gifs
-    duration: int = 50
 
 
 @dataclass

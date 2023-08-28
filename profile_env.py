@@ -4,25 +4,23 @@ import jax
 from timeit import default_timer as timer
 
 from config import ProfileEnvConfig
-from train import Dense
-from utils import get_exp_dir, gymnax_pcgrl_make
+from utils import get_exp_dir, gymnax_pcgrl_make, init_config
 
 
 @hydra.main(version_base=None, config_path='./', config_name='profile_pcgrl')
 def enjoy(config: ProfileEnvConfig):
-
+    config = init_config(config)
     exp_dir = get_exp_dir(config)
 
-    env, env_params = gymnax_pcgrl_make(config.env_name)
-    network = Dense(
-        env.action_space(env_params).n, activation=config.activation
-    )
+    env, env_params = gymnax_pcgrl_make(config.env_name, config)
+    # network = Dense(
+    #     env.action_space(env_params).n, activation=config.activation
+    # )
 
     # state_seq, reward_seq = [], []
     rng = jax.random.PRNGKey(42)
     n_steps = 0
 
-    start = timer()
     # INIT ENV
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config.num_envs)
@@ -33,6 +31,7 @@ def enjoy(config: ProfileEnvConfig):
         rng, _rng = jax.random.split(rng)
         rng_act = jax.random.split(_rng, config.num_envs)
         action = jax.vmap(env.action_space(env_params).sample, in_axes=(0))(rng_act,)
+        action = action[..., None, None, None, None]
 
         # STEP ENV
         rng_step = jax.random.split(_rng, config.num_envs)
@@ -42,9 +41,11 @@ def enjoy(config: ProfileEnvConfig):
         carry = (env_state, rng)
         return carry, None
 
+    _env_step_jitted = jax.jit(_env_step)
+    start = timer()
     carry = (env_state, rng)
     carry, _ = jax.lax.scan(
-        _env_step, carry, None, config.N_PROFILE_STEPS
+        _env_step_jitted, carry, None, config.N_PROFILE_STEPS
     )
 
     n_env_steps = config.N_PROFILE_STEPS * config.num_envs

@@ -38,8 +38,8 @@ class BinaryProblem(Problem):
     tile_enum = BinaryTiles
 
     tile_probs = [0.0] * len(tile_enum)
-    tile_probs[BinaryTiles.EMPTY] = 0.5
-    tile_probs[BinaryTiles.WALL] = 0.5
+    tile_probs[BinaryTiles.EMPTY] = 1.0
+    tile_probs[BinaryTiles.WALL] = 0.0
     tile_probs = jnp.array(tile_probs)
 
     stat_weights = {

@@ -16,12 +16,14 @@ from envs.utils import Tiles
 class FloodPathState:
     flood_input: chex.Array
     flood_count: chex.Array
+    done: bool = False
 
 
 @struct.dataclass
 class FloodRegionsState:
     occupied_map: chex.Array
     flood_count: chex.Array
+    done: bool = False
 
 
 class FloodPath(nn.Module):
@@ -46,7 +48,7 @@ class FloodPath(nn.Module):
         flood_kernel = flood_kernel.at[1, 1, 1].set(1)
         self.flood_params['params']['Conv_0']['kernel'] = flood_kernel
 
-    def flood_step(self, flood_state: FloodPathState, unused):
+    def _flood_step(self, flood_state: FloodPathState):
         flood_input, flood_count = flood_state.flood_input, flood_state.flood_count
         flood_params = self.flood_params
         occupied_map = flood_input[..., 0]
@@ -54,8 +56,19 @@ class FloodPath(nn.Module):
         flood_out = jnp.clip(flood_out, a_min=0, a_max=1)
         flood_out = jnp.stack([occupied_map, flood_out[..., -1]], axis=-1)
         flood_count = flood_out[..., -1] + flood_count
-        flood_state = FloodPathState(flood_input=flood_out, flood_count=flood_count)
+        done = jnp.all(flood_input == flood_out)
+        flood_state = FloodPathState(flood_input=flood_out, flood_count=flood_count, done=done)
+        return flood_state
+
+    def flood_step(self, flood_state: FloodPathState, unused):
+        done = flood_state.done
+        flood_state = jax.lax.cond(done, lambda _: flood_state, self._flood_step, flood_state)
+        # flood_state = self._flood_step(flood_state)
         return flood_state, None
+
+    def flood_step_while(self, flood_state: FloodPathState):
+        flood_state, _ = self.flood_step(flood_state=flood_state, unused=None)
+        return flood_state
 
 
 class FloodRegions(nn.Module):
@@ -77,14 +90,26 @@ class FloodRegions(nn.Module):
         flood_kernel = flood_kernel.at[0, 1, 0, 4].set(1)
         self.flood_params['params']['Conv_0']['kernel'] = flood_kernel
 
-    def flood_step(self, flood_regions_state: FloodRegionsState, unused):
+    def _flood_step(self, flood_regions_state: FloodRegionsState):
         occupied_map, flood_count = flood_regions_state.occupied_map, flood_regions_state.flood_count
         flood_params = self.flood_params
         flood_out = self.apply(flood_params, flood_count)
         flood_count = jnp.max(flood_out, -1, keepdims=True)
         flood_count = flood_count * (1 - occupied_map[..., None])
-        flood_regions_state = FloodRegionsState(flood_count=flood_count, occupied_map=occupied_map)
-        return flood_regions_state, None
+        done = jnp.all(flood_count == flood_regions_state.flood_count)
+        flood_regions_state = FloodRegionsState(flood_count=flood_count,
+                                                occupied_map=occupied_map, done=done)
+        return flood_regions_state
+
+    def flood_step(self, flood_state: FloodRegionsState, unused):
+        done = flood_state.done
+        # flood_state = jax.lax.cond(done, lambda _: flood_state, self._flood_step, flood_state)
+        flood_state = self._flood_step(flood_state)
+        return flood_state, None
+
+    def flood_step_while(self, flood_state: FloodRegionsState):
+        flood_state, _ = self.flood_step(flood_state=flood_state, unused=None)
+        return flood_state
 
 
 def get_path_coords(flood_count: chex.Array, max_path_len):
@@ -115,6 +140,7 @@ def get_path_coords(flood_count: chex.Array, max_path_len):
         yx = last_yx + jnp.array([y, x])
         path_coords = path_coords.at[i+1].set(yx)
         return curr_val+1, path_coords, padded_flood_count, i+1
+
     def cond(carry):
         curr_val, _, _, _ = carry
         return curr_val < max_val
@@ -153,7 +179,9 @@ def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passabl
     # We'll use this for determining region anchors later
     pre_flood_count = (regions_flood_count + 1) * (1 - occupied_map)
 
-    flood_regions_state = FloodRegionsState(flood_count=init_flood_count[..., None], occupied_map=occupied_map)
+    flood_regions_state = FloodRegionsState(
+            flood_count=init_flood_count[..., None], 
+            occupied_map=occupied_map, done=False)
     flood_regions_state, _ = jax.lax.scan(flood_regions_net.flood_step, flood_regions_state, jnp.arange(max_path_length))
     regions_flood_count = flood_regions_state.flood_count.astype(jnp.int32)
 
@@ -195,7 +223,11 @@ def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, en
     pre_flood_count = (regions_flood_count + 1) * (1 - occupied_map)
 
     flood_regions_state = FloodRegionsState(flood_count=init_flood_count[..., None], occupied_map=occupied_map)
-    flood_regions_state, _ = jax.lax.scan(flood_regions_net.flood_step, flood_regions_state, jnp.arange(max_path_length))
+    # flood_regions_state, _ = jax.lax.scan(flood_regions_net.flood_step, flood_regions_state, jnp.arange(max_path_length))
+    flood_regions_state = jax.lax.while_loop(
+            lambda frs: jnp.logical_not(frs.done),
+            flood_regions_net.flood_step_while,
+            flood_regions_state)
     regions_flood_count = flood_regions_state.flood_count.astype(jnp.int32)
 
     # FIXME: Sketchily upper-bounding number of regions here since we need a concrete value
@@ -213,7 +245,11 @@ def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, en
     init_flood_count = init_flood
     flood_input = jnp.stack([occupied_map, init_flood], axis=-1)
     flood_path_state = FloodPathState(flood_input=flood_input, flood_count=init_flood_count)
-    flood_path_state, _ = jax.lax.scan(flood_path_net.flood_step, flood_path_state, None, max_path_length)
+    # flood_path_state, _ = jax.lax.scan(flood_path_net.flood_step, flood_path_state, None, max_path_length)
+    flood_path_state = jax.lax.while_loop(
+            lambda fps: jnp.logical_not(fps.done),
+            flood_path_net.flood_step_while,
+            flood_path_state)
 
     # We need to find the max path length in *each region*. So we'll mask out the path lengths of all other regions.
     # Unique (max) region indices
@@ -230,7 +266,11 @@ def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, en
     init_count = init_flood = init_flood.at[region_endpoint_idxs].set(1) * (1 - occupied_map)
     flood_input = jnp.stack([occupied_map, init_flood], axis=-1)
     flood_path_state = FloodPathState(flood_input=flood_input, flood_count=init_count)
-    flood_path_state, _ = jax.lax.scan(flood_path_net.flood_step, flood_path_state, None, max_path_length)
+    # flood_path_state, _ = jax.lax.scan(flood_path_net.flood_step, flood_path_state, None, max_path_length)
+    flood_path_state = jax.lax.while_loop(
+            lambda fps: jnp.logical_not(fps.done),
+            flood_path_net.flood_step_while,
+            flood_path_state)
     path_length = jnp.clip(flood_path_state.flood_count.max() - jnp.where(flood_path_state.flood_count == 0, max_path_length, flood_path_state.flood_count).min(), 0)
 
     return path_length, flood_path_state, n_regions, flood_regions_state

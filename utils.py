@@ -9,7 +9,7 @@ from models import ActorCritic, AutoEncoder, ConvForward, Dense, NCA, SeqNCA
 
 
 def get_exp_dir(config: Config):
-    exp_name = os.path.join(
+    exp_dir = os.path.join(
         'saves',
         f'{config.problem}_{config.representation}_{config.model}-' +
         f'{config.activation}_w-{config.map_width}_rf-{config.rf_size}_' +
@@ -18,7 +18,7 @@ def get_exp_dir(config: Config):
         f'act-{config.act_shape[0]}x{config.act_shape[1]}_' + \
         f'nag-{config.n_agents}_' + \
         f'{config.seed}_{config.exp_name}')
-    return exp_name
+    return exp_dir
 
 
 def init_config(config: Config):
@@ -26,6 +26,7 @@ def init_config(config: Config):
                       1 if config.rf_size is None else config.rf_size)
     config.arf_size = config.rf_size if config.arf_size is None \
         else config.arf_size
+    config.exp_dir = get_exp_dir(config)
     return config
 
 
@@ -34,8 +35,9 @@ def get_ckpt_dir(config: Config):
 
 
 def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
-    # First consider number of possiblt tiles
-    action_dim = env.action_space(env_params).n
+    # First consider number of possible tiles
+    # action_dim = env.action_space(env_params).n
+    action_dim = len(env.tile_enum) - 1
     if config.representation == "wide":
         action_dim = len(env.tile_enum) - 1
     action_dim = action_dim * config.n_agents

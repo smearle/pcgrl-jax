@@ -80,7 +80,8 @@ class DungeonProblem(Problem):
         DungeonMetrics.NEAREST_ENEMY: (2, np.inf),
     }
 
-    passable_tiles = jnp.array([DungeonTiles.EMPTY, DungeonTiles.KEY, DungeonTiles.SCORPION, DungeonTiles.SPIDER, 
+    passable_tiles = jnp.array([DungeonTiles.EMPTY, DungeonTiles.KEY,
+                                DungeonTiles.SCORPION, DungeonTiles.SPIDER,
                                 DungeonTiles.BAT])
 
     def __init__(self, map_shape):
@@ -88,7 +89,7 @@ class DungeonProblem(Problem):
         self.flood_path_net.init_params(map_shape)
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
-    
+
     def init_graphics(self):
         self.graphics = {
             DungeonTiles.EMPTY: Image.open(

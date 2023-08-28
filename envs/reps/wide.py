@@ -26,7 +26,7 @@ class WideRepresentation(Representation):
                          )
         self.rf_shape = np.array(env_map.shape)
         self.rf_off = int(max(np.ceil(self.rf_shape - 1) / 2))
-        self.max_steps = np.int32(env_map.shape[0] * env_map.shape[1])
+        self.max_steps = np.int32(env_map.shape[0] * env_map.shape[1]) * 3
         self.num_tiles = len(tile_enum)
         self.map_shape = (*env_map.shape, self.num_tiles)
         self.builds = jnp.array(
@@ -42,6 +42,7 @@ class WideRepresentation(Representation):
 
     def step(self, env_map: chex.Array, action: chex.Array,
              rep_state: WideRepresentationState, step_idx: int):
+        action = action[0,0]  # The x and y dimensions are ignored
         action = jnp.unravel_index(action, self.map_shape)
         x, y, b = action
         b = self.builds[b]

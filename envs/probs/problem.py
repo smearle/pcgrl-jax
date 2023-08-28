@@ -3,6 +3,7 @@ from enum import IntEnum
 
 import chex
 from flax import struct
+import numpy as np
 
 
 class Stats(IntEnum):
@@ -28,11 +29,13 @@ def get_reward(stats, old_stats, stat_weights, stat_trgs):
             new_loss = min(abs(val - trg[0]), abs(val - trg[1]))
             reward += (old_loss - new_loss) * stat_weights[stat]
         else:
-            reward += (abs(old_val - trg) - abs(val - trg)) * stat_weights[stat]
+            reward += (abs(old_val - trg)
+                       - abs(val - trg)) * stat_weights[stat]
     return reward
 
 
 class Problem:
+    tile_size = np.int8(16)
 
     def get_stats(self, env_map: chex.Array, prob_state: ProblemState):
         raise NotImplementedError

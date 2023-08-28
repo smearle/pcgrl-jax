@@ -27,7 +27,7 @@ class NarrowRepresentation(Representation):
                          )
         self.rf_shape = np.array(rf_shape)
         self.rf_off = int(max(np.ceil(self.rf_shape - 1) / 2))
-        self.max_steps = np.int32(env_map.shape[0] * env_map.shape[1])
+        self.max_steps = np.int32(env_map.shape[0] * env_map.shape[1]) * 3
         self.num_tiles = len(tile_enum)
         self.builds = jnp.array(
             [tile for tile in tile_enum if tile != tile_enum.BORDER])
@@ -37,7 +37,7 @@ class NarrowRepresentation(Representation):
 
     def step(self, env_map: chex.Array, action: int,
              rep_state: NarrowRepresentationState, step_idx: int):
-        action = action[..., 0]
+        action = action[0]
         b = self.builds[action]
         pos_idx = step_idx % rep_state.n_valid_agent_coords
         new_pos = rep_state.agent_coords[pos_idx]
