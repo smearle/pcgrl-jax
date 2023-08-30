@@ -88,7 +88,7 @@ def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
             rc_tris = jnp.stack((r_tri, c_tri))
             maxval = jnp.max(rc_tris)
             minval = jnp.min(rc_tris)
-            rc_cutoff = jax.random.uniform(rng_, shape=(2,), minval=minval, maxval=maxval)
+            rc_cutoff = jax.random.uniform(rng_, shape=(2,), minval=minval*1.5, maxval=maxval)
             r_cut, c_cut = rc_cutoff
             r_tri = jnp.where(r_tri > r_cut, 1, 0)
             c_tri = jnp.where(c_tri > c_cut, 1, 0)

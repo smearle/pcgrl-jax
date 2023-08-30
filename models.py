@@ -263,16 +263,16 @@ class ActorCritic(nn.Module):
 
     @nn.compact
     def __call__(self, x: chex.Array):
-        n_gpu = x.shape[0]
-        n_envs = x.shape[1]
-        x_shape = x.shape[2:]
-        x = x.reshape((n_gpu * n_envs, *x_shape)) 
+        # n_gpu = x.shape[0]
+        # n_envs = x.shape[1]
+        # x_shape = x.shape[2:]
+        # x = x.reshape((n_gpu * n_envs, *x_shape)) 
 
         act, val = self.subnet(x)
 
-        # act = act.reshape((x.shape[0], self.n_agents, *self.act_shape, -1))
-        val = val.reshape((n_gpu, n_envs))
-        act = act.reshape((n_gpu, n_envs, self.n_agents, *self.act_shape, -1))
+        act = act.reshape((x.shape[0], self.n_agents, *self.act_shape, -1))
+        # val = val.reshape((n_gpu, n_envs))
+        # act = act.reshape((n_gpu, n_envs, self.n_agents, *self.act_shape, -1))
 
         pi = distrax.Categorical(logits=act)
 

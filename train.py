@@ -96,22 +96,22 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         #     env.reset, in_axes=(0, None))(reset_rng, env_params)
 
         # Reshape reset_rng and other per-environment states to (n_devices, -1, ...)
-        reset_rng = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
+        # reset_rng = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
 
         # Apply pmap
         vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None))
-        pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-        obsv, env_state = pmap_reset_fn(reset_rng, env_params)  # Replace None with your env_params if any
+        # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
+        obsv, env_state = vmap_reset_fn(reset_rng, env_params)  # Replace None with your env_params if any
 
         # INIT ENV FOR RENDER
         rng_r, _rng_r = jax.random.split(rng)
         reset_rng_r = jax.random.split(_rng_r, config.n_render_eps)
 
         # Apply pmap
-        reset_rng_r = reset_rng_r.reshape((config.n_gpus, -1) + reset_rng_r.shape[1:])
+        # reset_rng_r = reset_rng_r.reshape((config.n_gpus, -1) + reset_rng_r.shape[1:])
         vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None))
-        pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-        obsv_r, env_state_r = pmap_reset_fn(reset_rng_r, env_params)  # Replace None with your env_params if any
+        # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
+        obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params)  # Replace None with your env_params if any
         
         # obsv_r, env_state_r = jax.vmap(
         #     env_r.reset, in_axes=(0, None))(reset_rng_r, env_params)
@@ -154,17 +154,17 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             pi, value = network.apply(network_params, obs_r)
             action_r = pi.sample(seed=rng_r)
 
-            rng_step_r = rng_step_r.reshape((config.n_gpus, -1) + rng_step_r.shape[1:])
+            # rng_step_r = rng_step_r.reshape((config.n_gpus, -1) + rng_step_r.shape[1:])
             vmap_step_fn = jax.vmap(env_r.step, in_axes=(0, 0, 0, None))
-            pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
-            obs_r, env_state_r, reward_r, done_r, info_r = pmap_step_fn(
+            # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
+            obs_r, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
                             rng_step_r, env_state_r, action_r[..., None],
                             env_params)
             vmap_render_fn = jax.vmap(env_r.render, in_axes=(0,))
-            pmap_render_fn = jax.pmap(vmap_render_fn, in_axes=(0,))
-            frames = pmap_render_fn(env_state_r)
+            # pmap_render_fn = jax.pmap(vmap_render_fn, in_axes=(0,))
+            frames = vmap_render_fn(env_state_r)
             # Get rid of the gpu dimension
-            frames = jnp.concatenate(jnp.stack(frames, 1))
+            # frames = jnp.concatenate(jnp.stack(frames, 1))
             return (rng_r, obs_r, env_state_r, network_params),\
                 (env_state_r, reward_r, done_r, info_r, frames)
 
@@ -228,10 +228,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 rng, _rng = jax.random.split(rng)
                 rng_step = jax.random.split(_rng, config.n_envs)
 
-                rng_step = rng_step.reshape((config.n_gpus, -1) + rng_step.shape[1:])
+                # rng_step = rng_step.reshape((config.n_gpus, -1) + rng_step.shape[1:])
                 vmap_step_fn = jax.vmap(env.step, in_axes=(0, 0, 0, None))
-                pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
-                obsv, env_state, reward, done, info = pmap_step_fn(
+                # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
+                obsv, env_state, reward, done, info = vmap_step_fn(
                     rng_step, env_state, action[..., None], env_params
                 )
                 transition = Transition(
@@ -286,10 +286,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
                     def _loss_fn(params, traj_batch, gae, targets):
                         # RERUN NETWORK
-                        obs = traj_batch.obs[None]
-                        pi, value = network.apply(params, obs)
-                        action = traj_batch.action.reshape(pi.logits.shape[:-1])
-                        log_prob = pi.log_prob(action)
+                        # obs = traj_batch.obs[None]
+                        pi, value = network.apply(params, traj_batch.obs)
+                        # action = traj_batch.action.reshape(pi.logits.shape[:-1])
+                        log_prob = pi.log_prob(traj_batch.action)
 
                         # CALCULATE VALUE LOSS
                         value_pred_clipped = traj_batch.value + (
@@ -346,7 +346,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 permutation = jax.random.permutation(_rng, batch_size)
                 batch = (traj_batch, advantages, targets)
                 batch = jax.tree_util.tree_map(
-                    lambda x: x.reshape((batch_size,) + x.shape[3:]), batch
+                    lambda x: x.reshape((batch_size,) + x.shape[2:]), batch
                 )
                 shuffled_batch = jax.tree_util.tree_map(
                     lambda x: jnp.take(x, permutation, axis=0), batch
@@ -470,10 +470,10 @@ def init_checkpointer(config: Config):
     reset_rng = jax.random.split(_rng, config.n_envs)
     rng_act = reset_rng
 
-    reset_rng_r = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
+    # reset_rng_r = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
     vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None))
-    pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-    obsv, env_state = pmap_reset_fn(reset_rng_r, env_params)
+    # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
+    obsv, env_state = vmap_reset_fn(reset_rng, env_params)
     runner_state = RunnerState(train_state=train_state, env_state=env_state, last_obs=obsv,
                                # ep_returns=jnp.full(config.num_envs, jnp.nan), 
                                rng=rng, update_i=0)
