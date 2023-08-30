@@ -12,7 +12,7 @@ from dataclasses import dataclass
 @dataclass
 class Config:
     lr: float = 1.0e-4
-    num_envs: int = 4
+    n_envs: int = 4
     num_steps: int = 128
     total_timesteps: int = int(5e7)
     update_epochs: int = 10
@@ -35,18 +35,26 @@ class Config:
     model: str = "conv"
 
     map_width: int = 16
-    rf_size: Optional[int] = None
-    arf_size: Optional[int] = None
+    # Size of the receptive field to be fed to the action subnetwork.
+    vrf_size: Optional[int] = 31
+    # Size of the receptive field to be fed to the value subnetwork.
+    arf_size: Optional[int] = 31
+    # TODO: actually take arf and vrf into account in models, where possible
+
+    # The shape of the (patch of) edit(s) to be made by the edited by the generator at each step.
     act_shape: Tuple[int, int] = (1, 1)
+
     static_tile_prob: Optional[float] = 0.0
     n_freezies: int = 0
     n_agents: int = 1
+    max_board_scans: float = 3.0
 
     # How many milliseconds to wait between frames of the rendered gifs
     gif_frame_duration: int = 50
 
     """ DO NOT USE. WILL BE OVERWRITTEN. """
     exp_dir: Optional[str] = None
+    n_gpus: int = 1
 
 
 @dataclass
@@ -56,6 +64,7 @@ class TrainConfig(Config):
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e6)
     render_freq: int = 100
+    n_render_eps: int = 10
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     NUM_UPDATES: Optional[int] = None

@@ -22,10 +22,11 @@ class BinaryTiles(IntEnum):
 
 @struct.dataclass
 class BinaryState(ProblemState):
-    flood_path_state: FloodPathState
-    flood_regions_state: FloodRegionsState
+    # flood_path_state: FloodPathState
+    # flood_regions_state: FloodRegionsState
     diameter: int
     n_regions: int
+    flood_count: Optional[chex.Array] = None
 
 
 class BinaryMetrics(IntEnum):
@@ -38,8 +39,8 @@ class BinaryProblem(Problem):
     tile_enum = BinaryTiles
 
     tile_probs = [0.0] * len(tile_enum)
-    tile_probs[BinaryTiles.EMPTY] = 1.0
-    tile_probs[BinaryTiles.WALL] = 0.0
+    tile_probs[BinaryTiles.EMPTY] = 0.5
+    tile_probs[BinaryTiles.WALL] = 0.5
     tile_probs = jnp.array(tile_probs)
 
     stat_weights = {
@@ -77,7 +78,9 @@ class BinaryProblem(Problem):
         self.graphics = jnp.array(self.graphics)
 
     def get_stats(self, env_map: chex.Array, prob_state: Optional[BinaryState] = None):
-        diameter, flood_path_state, n_regions, flood_regions_state = calc_diameter(self.flood_regions_net, self.flood_path_net, env_map, self.passable_tiles)
+        diameter, flood_path_state, n_regions, flood_regions_state = calc_diameter(
+            self.flood_regions_net, self.flood_path_net, env_map, self.passable_tiles
+        )
         stats = {
             BinaryMetrics.DIAMETER: diameter,
             BinaryMetrics.N_REGIONS: n_regions,
@@ -91,4 +94,5 @@ class BinaryProblem(Problem):
             reward = get_reward(stats, old_stats, self.stat_weights, self.stat_trgs)
         else:
             reward = None
-        return reward, BinaryState(flood_path_state, flood_regions_state, diameter, n_regions)
+        # return reward, BinaryState(flood_path_state, flood_regions_state, diameter, n_regions)
+        return reward, BinaryState(diameter, n_regions, flood_count=flood_path_state.flood_count)

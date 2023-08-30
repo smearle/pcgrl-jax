@@ -20,14 +20,14 @@ class NarrowRepresentationState(RepresentationState):
 
 class NarrowRepresentation(Representation):
     def __init__(self, env_map: chex.Array, rf_shape: Tuple[int, int],
-                 act_shape: Tuple[int, int], tile_enum: Tiles
+                 act_shape: Tuple[int, int], tile_enum: Tiles, max_board_scans: int
                  ):
         super().__init__(tile_enum=tile_enum, rf_shape=rf_shape,
                          act_shape=act_shape
                          )
         self.rf_shape = np.array(rf_shape)
         self.rf_off = int(max(np.ceil(self.rf_shape - 1) / 2))
-        self.max_steps = np.int32(env_map.shape[0] * env_map.shape[1]) * 3
+        self.max_steps = np.uint32(env_map.shape[0] * env_map.shape[1] * max_board_scans)
         self.num_tiles = len(tile_enum)
         self.builds = jnp.array(
             [tile for tile in tile_enum if tile != tile_enum.BORDER])

@@ -21,12 +21,13 @@ class TurtleRepresentationState(RepresentationState):
 class TurtleRepresentation(Representation):
     def __init__(self, env_map: chex.Array, rf_shape: Tuple[int, int],
                  tile_enum: Tiles, act_shape: Tuple[int, int], map_shape: Tuple[int, int],
+                 max_board_scans: float = 3.0
                  ):
         super().__init__(tile_enum=tile_enum, rf_shape=rf_shape,
                          act_shape=act_shape)
         self.rf_shape = np.array(rf_shape)
         self.rf_off = int(max(np.ceil(self.rf_shape - 1) / 2))
-        self.max_steps = (env_map.shape[0] * env_map.shape[1]) * 2 * 3
+        self.max_steps = np.uint32((env_map.shape[0] * env_map.shape[1]) * 2 * max_board_scans)
         self.num_tiles = len(tile_enum)
         self.tile_enum = tile_enum
         self.directions = np.array([[0, 0] for _ in range(

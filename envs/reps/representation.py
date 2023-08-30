@@ -21,6 +21,7 @@ class Representation(ABC):
                  act_shape: Tuple[int, int]):
         self.tile_enum = tile_enum
         self.act_shape = act_shape
+        self.max_steps = None
 
     def observation_shape(self):
         # Always observe static tile channel

@@ -39,27 +39,31 @@ def main_enjoy(config: EnjoyConfig):
         obs, env_state, reward, done, info = env.step(
             rng_step, env_state, action, env_params
         )
-        frame = env.render(env_state)
-        return (rng, obs, env_state), (env_state, reward, done, info, frame)
+        frames = info['frames']
+        return (rng, obs, env_state), (env_state, reward, done, info, frames)
 
-    step_env = jax.jit(step_env)
+    # step_env = jax.jit(step_env)
     print('Scanning episode steps:')
-    _, (states, rewards, dones, infos, frames) = jax.lax.scan(
-        step_env, (rng, obs, env_state), None,
-        length=config.n_eps*env.max_steps)
+    # _, (states, rewards, dones, infos, frames) = jax.lax.scan(
+    #     step_env, (rng, obs, env_state), None,
+    #     length=config.n_eps*env.rep.max_steps)
+    for ep_i in range(config.n_eps):
+        ep_frames = []
+        for _ in range(env.max_steps):
+            (rng, obs, env_state), (env_state, reward, done, info, frames) = step_env((rng, obs, env_state), None)
+            print(f"step_env: {reward}")
+            ep_frames.append(frames)
 
-    assert len(frames) == config.n_eps * env.max_steps, \
-        "Not enough frames collected"
+        ep_frames = [env.render]
 
-    # Save gifs.
-    for ep_is in range(config.n_eps):
+        # Save gifs.
         # cum_rewards = jnp.cumsum(jnp.array(
         #   rewards[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps]))
-        gif_name = f"{exp_dir}/anim_ep-{ep_is}" + \
+        gif_name = f"{exp_dir}/anim_ep-{ep_i}" + \
             f"{('_randAgent' if config.random_agent else '')}.gif"
         imageio.v3.imwrite(
             gif_name,
-            frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps],
+            ep_frames,
             duration=config.duration
         )
 

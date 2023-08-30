@@ -11,8 +11,20 @@ import jax
 import jax.numpy as jnp
 
 
+def crop_rf(x, rf_size):
+    mid_x = x.shape[1] // 2
+    mid_y = x.shape[2] // 2
+    return x[:, mid_x-math.floor(rf_size/2):mid_x+math.ceil(rf_size/2),
+             mid_y-math.floor(rf_size/2):mid_y+math.ceil(rf_size/2)]
+
+def crop_arf_vrf(x, arf_size, vrf_size):
+    return crop_rf(x, arf_size), crop_rf(x, vrf_size)
+
+
 class Dense(nn.Module):
     action_dim: Sequence[int]
+    arf_size: int
+    vrf_size: int
     activation: str = "tanh"
 
     @nn.compact
@@ -53,6 +65,7 @@ class ConvForward(nn.Module):
     action_dim: Sequence[int]
     act_shape: Tuple[int, int]
     arf_size: int
+    vrf_size: int
     activation: str = "relu"
 
     @nn.compact
@@ -64,24 +77,17 @@ class ConvForward(nn.Module):
 
         flat_action_dim = self.action_dim * math.prod(self.act_shape)
 
-        # Slice out a square of width `arf_size` from `x`
-        mid_x = x.shape[2] // 2
-        mid_y = x.shape[3] // 2
-        act = x[:, :,
-                mid_x-math.floor(self.arf_size/2):
-                mid_x+math.ceil(self.arf_size/2),
-                mid_y-math.floor(self.arf_size/2):
-                mid_y+math.ceil(self.arf_size/2)]
+        act, critic = crop_arf_vrf(x, self.arf_size, self.vrf_size)
+        act = nn.Conv(
+            features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
+        )(act)
+        act = activation(act)
+        act = nn.Conv(
+            features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
+        )(act)
+        act = activation(act)
+        act = act.reshape((act.shape[0], -1))
 
-        act = nn.Conv(
-            features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
-        )(act)
-        act = activation(act)
-        act = nn.Conv(
-            features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
-        )(act)
-        act = activation(act)
-        act = act.reshape((x.shape[0], -1))
         act = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(act)
@@ -92,7 +98,7 @@ class ConvForward(nn.Module):
             bias_init=constant(0.0)
         )(act)
 
-        critic = x.reshape((x.shape[0], -1))
+        critic = critic.reshape((critic.shape[0], -1))
         critic = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(critic)
@@ -125,14 +131,8 @@ class SeqNCA(nn.Module):
         )(x)
         hid = activation(hid)
 
-        # Slice out a square of width `arf_size` from `x`
-        mid_x = hid.shape[2] // 2
-        mid_y = hid.shape[3] // 2
-        act = hid[:, :,
-                  mid_x-math.floor(self.arf_size/2):
-                      mid_x+math.ceil(self.arf_size/2),
-                  mid_y-math.floor(self.arf_size/2):
-                      mid_y+math.ceil(self.arf_size/2)]
+        act, critic = crop_arf_vrf(hid, self.arf_size, self.arf_size)
+
         act = act.reshape((x.shape[0], -1))
         act = nn.Dense(
             64, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
@@ -142,7 +142,7 @@ class SeqNCA(nn.Module):
             bias_init=constant(0.0)
         )(act)
 
-        critic = hid.reshape((x.shape[0], -1))
+        critic = hid.reshape((critic, -1))
         critic = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(critic)
@@ -263,8 +263,17 @@ class ActorCritic(nn.Module):
 
     @nn.compact
     def __call__(self, x: chex.Array):
+        n_gpu = x.shape[0]
+        n_envs = x.shape[1]
+        x_shape = x.shape[2:]
+        x = x.reshape((n_gpu * n_envs, *x_shape)) 
+
         act, val = self.subnet(x)
-        act = act.reshape((x.shape[0], self.n_agents, *self.act_shape, -1))
+
+        # act = act.reshape((x.shape[0], self.n_agents, *self.act_shape, -1))
+        val = val.reshape((n_gpu, n_envs))
+        act = act.reshape((n_gpu, n_envs, self.n_agents, *self.act_shape, -1))
+
         pi = distrax.Categorical(logits=act)
 
         return pi, val

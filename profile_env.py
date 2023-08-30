@@ -23,18 +23,18 @@ def enjoy(config: ProfileEnvConfig):
 
     # INIT ENV
     rng, _rng = jax.random.split(rng)
-    reset_rng = jax.random.split(_rng, config.num_envs)
+    reset_rng = jax.random.split(_rng, config.n_envs)
     obsv, env_state = jax.vmap(env.reset, in_axes=(0, None))(reset_rng, env_params)
 
     def _env_step(carry, unused):
         env_state, rng = carry
         rng, _rng = jax.random.split(rng)
-        rng_act = jax.random.split(_rng, config.num_envs)
+        rng_act = jax.random.split(_rng, config.n_envs)
         action = jax.vmap(env.action_space(env_params).sample, in_axes=(0))(rng_act,)
         action = action[..., None, None, None, None]
 
         # STEP ENV
-        rng_step = jax.random.split(_rng, config.num_envs)
+        rng_step = jax.random.split(_rng, config.n_envs)
         obsv, env_state, reward, done, info = jax.vmap(
             env.step, in_axes=(0, 0, 0, None)
         )(rng_step, env_state, action, env_params)
@@ -48,7 +48,7 @@ def enjoy(config: ProfileEnvConfig):
         _env_step_jitted, carry, None, config.N_PROFILE_STEPS
     )
 
-    n_env_steps = config.N_PROFILE_STEPS * config.num_envs
+    n_env_steps = config.N_PROFILE_STEPS * config.n_envs
 
     end = timer()
     print(f'Finished {n_env_steps} steps in {end - start} seconds.')
