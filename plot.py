@@ -18,6 +18,7 @@ def main(cfg):
         df = pd.read_csv(f)
         # Save plot
         plot_path = os.path.join(__location__, exp_dir, "progress.png")
+        print(f"Saving plot to {plot_path}")
         # df.plot(x="timestep", y="ep_return", title="Training Progress").get_figure().savefig(plot_path)
         # Plot points instead of a line
         df.plot.scatter(x="timestep", y="ep_return", title="Training Progress").get_figure().savefig(plot_path)

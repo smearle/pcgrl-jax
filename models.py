@@ -10,6 +10,8 @@ import flax.linen as nn
 import jax
 import jax.numpy as jnp
 
+from envs.pcgrl_env import PCGRLObs
+
 
 def crop_rf(x, rf_size):
     mid_x = x.shape[1] // 2
@@ -69,7 +71,7 @@ class ConvForward(nn.Module):
     activation: str = "relu"
 
     @nn.compact
-    def __call__(self, x):
+    def __call__(self, map_obs, ctrl_obs):
         if self.activation == "relu":
             activation = nn.relu
         else:
@@ -77,7 +79,8 @@ class ConvForward(nn.Module):
 
         flat_action_dim = self.action_dim * math.prod(self.act_shape)
 
-        act, critic = crop_arf_vrf(x, self.arf_size, self.vrf_size)
+        act, critic = crop_arf_vrf(map_obs, self.arf_size, self.vrf_size)
+
         act = nn.Conv(
             features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
         )(act)
@@ -86,7 +89,9 @@ class ConvForward(nn.Module):
             features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
         )(act)
         act = activation(act)
+
         act = act.reshape((act.shape[0], -1))
+        act = jnp.concatenate((act, ctrl_obs), axis=-1)
 
         act = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
@@ -99,6 +104,8 @@ class ConvForward(nn.Module):
         )(act)
 
         critic = critic.reshape((critic.shape[0], -1))
+        critic = jnp.concatenate((critic, ctrl_obs), axis=-1)
+
         critic = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(critic)
@@ -117,6 +124,7 @@ class ConvForward(nn.Module):
 class SeqNCA(nn.Module):
     action_dim: Sequence[int]
     arf_size: int
+    vrf_size: int
     activation: str = "relu"
 
     @nn.compact
@@ -131,9 +139,9 @@ class SeqNCA(nn.Module):
         )(x)
         hid = activation(hid)
 
-        act, critic = crop_arf_vrf(hid, self.arf_size, self.arf_size)
+        act, critic = crop_arf_vrf(hid, self.arf_size, self.vrf_size)
 
-        act = act.reshape((x.shape[0], -1))
+        act = act.reshape((act.shape[0], -1))
         act = nn.Dense(
             64, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
         )(act)
@@ -142,7 +150,7 @@ class SeqNCA(nn.Module):
             bias_init=constant(0.0)
         )(act)
 
-        critic = hid.reshape((critic, -1))
+        critic = critic.reshape((critic.shape[0], -1))
         critic = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(critic)
@@ -260,17 +268,25 @@ class ActorCritic(nn.Module):
     subnet: nn.Module
     act_shape: Tuple[int, int]
     n_agents: int
+    n_ctrl_metrics: int
 
     @nn.compact
-    def __call__(self, x: chex.Array):
+    def __call__(self, x: PCGRLObs):
+        map_obs = x.rep_obs
+        ctrl_obs = x.prob_obs   
+
+        # Hack. We had to put dummy ctrl obs's here to placate jax tree map during minibatch creation (FIXME?)
+        # Now we need to remove them :)
+        ctrl_obs = ctrl_obs[:, :self.n_ctrl_metrics]
+
         # n_gpu = x.shape[0]
         # n_envs = x.shape[1]
         # x_shape = x.shape[2:]
         # x = x.reshape((n_gpu * n_envs, *x_shape)) 
 
-        act, val = self.subnet(x)
+        act, val = self.subnet(map_obs, ctrl_obs)
 
-        act = act.reshape((x.shape[0], self.n_agents, *self.act_shape, -1))
+        act = act.reshape((act.shape[0], self.n_agents, *self.act_shape, -1))
         # val = val.reshape((n_gpu, n_envs))
         # act = act.reshape((n_gpu, n_envs, self.n_agents, *self.act_shape, -1))
 

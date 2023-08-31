@@ -53,12 +53,8 @@ class NarrowRepresentation(Representation):
         return new_env_map, map_changed, rep_state
 
     def reset(self, frz_map: chex.Array = None, rng: chex.PRNGKey = None):
-        if frz_map is not None:
-            agent_coords = jnp.argwhere(frz_map == 0, size=self.max_steps)
-            n_valid_agent_coords = jnp.sum(frz_map == 0)
-        else:
-            agent_coords = self.agent_coords
-            n_valid_agent_coords = self.n_valid_agent_coords
+        agent_coords = jnp.argwhere(frz_map == 0, size=self.max_steps)
+        n_valid_agent_coords = jnp.sum(frz_map == 0)
         pos = agent_coords[0]
 
         return NarrowRepresentationState(

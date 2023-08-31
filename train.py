@@ -14,6 +14,7 @@ from flax.training import orbax_utils
 import orbax
 
 from config import Config, TrainConfig
+from envs.pcgrl_env import PCGRLObs, render_stats
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
                    init_config)
@@ -67,9 +68,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         rng, _rng = jax.random.split(rng)
         rng_act = jax.random.split(_rng, config.n_envs)
-        init_x = jnp.zeros((1,1,) + env.observation_space(env_params).shape)
+        init_x = gen_dummy_obs(env, env_params, rng_act)
         network_params = network.init(_rng, init_x)
-        print(network.subnet.tabulate(_rng, init_x))
+        print(network.subnet.tabulate(_rng, init_x.rep_obs, init_x.prob_obs))
 
         # Print number of learnable parameters in the network
         if config.ANNEAL_LR:
@@ -101,7 +102,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # Apply pmap
         vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None))
         # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-        obsv, env_state = vmap_reset_fn(reset_rng, env_params)  # Replace None with your env_params if any
+        obsv, env_state = vmap_reset_fn(reset_rng, env_params)
 
         # INIT ENV FOR RENDER
         rng_r, _rng_r = jax.random.split(rng)
@@ -116,8 +117,28 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # obsv_r, env_state_r = jax.vmap(
         #     env_r.reset, in_axes=(0, None))(reset_rng_r, env_params)
 
+        rng, _rng = jax.random.split(rng)
+#       ep_returns = jnp.full(shape=config.NUM_UPDATES,
+#       ep_returns = jnp.full(shape=1,
+#                             fill_value=jnp.nan, dtype=jnp.float32)
+        steps_prev_complete = 0
+        runner_state = RunnerState(
+            train_state, env_state, obsv, rng,
+            update_i=0)
+
+        # exp_dir = get_exp_dir(config)
+        if restored_ckpt is not None:
+            steps_prev_complete = restored_ckpt['steps_prev_complete']
+            runner_state = restored_ckpt['runner_state']
+            steps_remaining = config.total_timesteps - steps_prev_complete
+            config.NUM_UPDATES = int(
+                steps_remaining // config.num_steps // config.n_envs)
+
+            # TODO: Overwrite certain config values
+
         def render_frames(frames, i, env_states=None):
-            if jnp.all(frames == 0):
+            if i % config.render_freq != 0:
+            # if jnp.all(frames == 0):
                 return
             assert len(frames) == config.n_render_eps * 1 * env.max_steps,\
                 "Not enough frames collected"
@@ -128,12 +149,20 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             # Save gifs.
             for ep_is in range(config.n_render_eps):
-                gif_name = f"{config.exp_dir}/update-{i}_anim_ep-{ep_is}.gif"
+                gif_name = f"{config.exp_dir}/update-{i}_ep-{ep_is}.gif"
+                frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
+
+                # new_frames = []
+                # for i, frame in enumerate(frames):
+                #     state_i = jax.tree_util.tree_map(lambda x: x[i], env_states)
+                #     frame = render_stats(env_r, state_i, frame)
+                #     new_frames.append(frame)
+                # frames = new_frames
+
                 try:
                     imageio.v3.imwrite(
                         gif_name,
-                        frames[ep_is*env.max_steps:
-                               (ep_is+1)*env.max_steps],
+                        frames,
                         duration=config.gif_frame_duration
                     )
                 except jax.errors.TracerArrayConversionError:
@@ -145,20 +174,22 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 None, 1*env.max_steps)
 
             frames = jnp.concatenate(jnp.stack(frames, 1))
-            return frames
+            return frames, states
 
         def step_env_render(carry, _):
             rng_r, obs_r, env_state_r, network_params = carry
-            rng_step_r = jax.random.split(rng_r, config.n_render_eps)
+            rng_r, _rng_r = jax.random.split(rng_r)
 
             pi, value = network.apply(network_params, obs_r)
             action_r = pi.sample(seed=rng_r)
+
+            rng_step = jax.random.split(_rng_r, config.n_render_eps)
 
             # rng_step_r = rng_step_r.reshape((config.n_gpus, -1) + rng_step_r.shape[1:])
             vmap_step_fn = jax.vmap(env_r.step, in_axes=(0, 0, 0, None))
             # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
             obs_r, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
-                            rng_step_r, env_state_r, action_r[..., None],
+                            rng_step, env_state_r, action_r[..., None],
                             env_params)
             vmap_render_fn = jax.vmap(env_r.render, in_axes=(0,))
             # pmap_render_fn = jax.pmap(vmap_render_fn, in_axes=(0,))
@@ -188,24 +219,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                                                 'save_args': save_args})
                     break
 
-        rng, _rng = jax.random.split(rng)
-#       ep_returns = jnp.full(shape=config.NUM_UPDATES,
-#       ep_returns = jnp.full(shape=1,
-#                             fill_value=jnp.nan, dtype=jnp.float32)
-        steps_prev_complete = 0
-        runner_state = RunnerState(
-            train_state, env_state, obsv, rng,
-            update_i=0)
-
-        # exp_dir = get_exp_dir(config)
-        if restored_ckpt is not None:
-            steps_prev_complete = restored_ckpt['steps_prev_complete']
-            runner_state = restored_ckpt['runner_state']
-            steps_remaining = config.total_timesteps - steps_prev_complete
-            config.NUM_UPDATES = int(
-                steps_remaining // config.num_steps // config.n_envs)
-
-            # TODO: Overwrite certain config values
+        frames, states = render_episodes(train_state.params)
+        jax.debug.callback(render_frames, frames, runner_state.update_i, states)
+        old_render_results = (frames, states)
+        # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
         # TRAIN LOOP
         def _update_step(runner_state, unused):
@@ -406,11 +423,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # FIXME: Inside vmap, both conditions are likely to get executed. Any way around this?
             # Currently not vmapping the train loop though, so it's ok.
             # start_time = timer()
-            frames = jax.lax.cond(
+            frames, states = jax.lax.cond(
                 runner_state.update_i % config.render_freq == 0,
                 lambda: render_episodes(train_state.params),
-                lambda: jnp.zeros(frames_shape, dtype=jnp.uint8))
-            jax.debug.callback(render_frames, frames, runner_state.update_i)
+                lambda: old_render_results,)
+            jax.debug.callback(render_frames, frames, runner_state.update_i, states)
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
             jax.debug.callback(log_callback, metric,
@@ -442,6 +459,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 #     plt.savefig(os.path.join(get_exp_dir(config), "ep_returns.png"))
 
 
+def gen_dummy_obs(env, env_params, rng_act):
+    map_x = jnp.zeros((1,) + env.observation_space(env_params).shape)
+    ctrl_x = jnp.zeros((1, len(env_params.ctrl_metrics)))
+    return PCGRLObs(map_x, ctrl_x)
+
+
 def init_checkpointer(config: Config):
     # This will not affect training, just for initializing dummy env etc. to load checkpoint.
     rng = jax.random.PRNGKey(30)
@@ -455,7 +478,7 @@ def init_checkpointer(config: Config):
     rng, _rng = jax.random.split(rng)
     rng_act = jax.random.split(_rng, config.n_envs)
     network = get_network(env, env_params, config)
-    init_x = jnp.zeros((1, 1,) + env.observation_space(env_params).shape)
+    init_x = gen_dummy_obs(env, env_params, rng_act)
     network_params = network.init(_rng, init_x)
     tx = optax.chain(
         optax.clip_by_global_norm(config.MAX_GRAD_NORM),

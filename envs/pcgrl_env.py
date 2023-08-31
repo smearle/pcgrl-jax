@@ -1,16 +1,17 @@
 from enum import IntEnum
 from functools import partial
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import chex
 from flax import struct
+from gymnax import EnvParams, EnvState
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from gymnax.environments.environment import Environment
 from envs.pathfinding import get_path_coords
-from envs.probs.binary import BinaryProblem
+from envs.probs.binary import BinaryMetrics, BinaryProblem
 from envs.probs.problem import Problem, ProblemState
 from envs.reps.narrow import NarrowRepresentation
 from envs.reps.turtle import MultiTurtleRepresentation, TurtleRepresentation
@@ -23,8 +24,7 @@ from sawtooth import triangle_wave
 
 class ProbEnum(IntEnum):
     BINARY = 0
-    DUNEGON = 1
-
+    DUNGEON = 1
 
 class RepEnum(IntEnum):
     NARROW = 0
@@ -42,6 +42,11 @@ class PCGRLEnvState:
     reward: np.float32 = 0.0
     done: bool = False
 
+@struct.dataclass
+class PCGRLObs:
+    rep_obs: chex.Array
+    prob_obs: chex.Array
+
 
 @struct.dataclass
 class PCGRLEnvParams:
@@ -54,6 +59,7 @@ class PCGRLEnvParams:
     n_freezies: int = 0
     n_agents: int = 1
     max_board_scans: float = 3.0
+    ctrl_metrics: Tuple = ()
 
 
 def gen_init_map(rng, tile_enum, map_shape, tile_probs):
@@ -66,7 +72,10 @@ def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
     static_rng, rng = jax.random.split(rng)
     static_tiles = jax.random.bernoulli(
         static_rng, p=static_tile_prob, shape=map_shape)
-    if n_freezies > 0:
+
+
+    # if n_freezies > 0:
+    def gen_freezies(rng):
         def gen_freezie(rng):
             # Randomly select row or column 
             rng, rng_ = jax.random.split(rng)
@@ -81,6 +90,7 @@ def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
             locs = jax.random.uniform(rng_, shape=(2,))
             r_loc, c_loc = locs
 
+            # FIXME: These guys are generally too big
             r_tri = triangle_wave(jnp.arange(map_shape[1]) / map_shape[1], 
                                    x_peak=r_loc, period=2)
             c_tri = triangle_wave(jnp.arange(map_shape[0]) / map_shape[0], 
@@ -103,21 +113,24 @@ def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
         rects = jax.vmap(gen_freezie, in_axes=0)(frz_keys)
 
         rects = jnp.clip(rects.sum(0), 0, 1).astype(bool)
-        static_tiles = rects | static_tiles
+        # static_tiles = rects | static_tiles
+        return rects
 
-        # frz_xy = jax.random.randint(rng, shape=(n_freezies, 2), minval=0, maxval=map_shape)
-        # frz_len = jax.random.randint(rng, shape=(n_freezies, 2), minval=1,
-        #                                 # maxval=(map_shape[0] - frz_xy[:, 0], map_shape[1] - frz_xy[:, 1]))
-        #                                 maxval=map_shape)
-        # frz_len_1 = jnp.ones((n_freezies, 2), dtype=jnp.int32)
-        # # frz_len_1 = np.ones((n_freezies, 2), dtype=jnp.int32)
-        # frz_dirs = jax.random.randint(rng, shape=(n_freezies,), minval=0, maxval=2)
-        # # frz_dirs = np.array(frz_dirs)
-        # frz_len = frz_len_1.at[frz_dirs].set(frz_len[frz_dirs])
-        # # frz_len[frz_dirs] = frz_len_1[frz_dirs]
-        # for xy, len in zip(frz_xy, frz_len):
-        #     static_tiles = jax.lax.dynamic_update_slice(static_tiles, jnp.ones(len), xy)
+    static_tiles = jax.lax.cond(
+        n_freezies > 0,
+        lambda rng: static_tiles | gen_freezies(rng),
+        lambda _: static_tiles,
+        rng,
+    ) 
+
     return static_tiles
+
+
+def get_prob_cls(problem: str):
+    if problem == ProbEnum.BINARY:
+        return BinaryProblem
+    else:
+        raise Exception(f'Problem {problem} not implemented')
 
 
 class PCGRLEnv(Environment):
@@ -132,10 +145,7 @@ class PCGRLEnv(Environment):
         self.n_agents = n_agents
 
         self.prob: Problem
-        if problem == ProbEnum.BINARY:
-            self.prob = BinaryProblem(map_shape=self.map_shape)
-        else:
-            raise Exception(f'Problem {problem} not implemented')
+        self.prob = get_prob_cls(problem=problem)(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics)
 
         self.tile_enum = self.prob.tile_enum
         self.tile_probs = self.prob.tile_probs
@@ -144,6 +154,7 @@ class PCGRLEnv(Environment):
                                self.tile_probs)
 
         self.rep: Representation
+        self.rep = representation
         if representation == RepEnum.NARROW:
             self.rep = NarrowRepresentation(env_map=env_map, rf_shape=rf_shape,
                                             tile_enum=self.tile_enum,
@@ -191,23 +202,67 @@ class PCGRLEnv(Environment):
             -> Tuple[chex.Array, PCGRLEnvState]:
         env_map = gen_init_map(rng, self.tile_enum,
                                self.map_shape, self.tile_probs)
-        if self.static_tile_prob is not None or self.n_freezies > 0:
-            frz_map = gen_static_tiles(
-                rng, self.static_tile_prob, self.n_freezies, self.map_shape)
-        else:
-            frz_map = None
+        # frz_map = jax.lax.cond(
+        #     self.static_tile_prob is not None or self.n_freezies > 0,
+        #     lambda rng: gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape),
+        #     lambda _: None,
+        #     rng,
+        # )
+        frz_map = gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape)
+        # if self.static_tile_prob is not None or self.n_freezies > 0:
+        #     frz_map = gen_static_tiles(
+        #         rng, self.static_tile_prob, self.n_freezies, self.map_shape)
+        # else:
+        #     frz_map = None
 
+        rng, _ = jax.random.split(rng)
         rep_state = self.rep.reset(frz_map, rng)
-        obs = self.rep.get_obs(
-            env_map=env_map, static_map=frz_map, rep_state=rep_state)
 
-        _, prob_state = self.prob.get_stats(env_map)
-        rep_state = self.rep.reset(frz_map, rng=rng)
+        rng, _ = jax.random.split(rng)
+        _, prob_state = self.prob.reset(env_map, rng)
+
+        obs = self.get_obs(
+            env_map=env_map, static_map=frz_map, rep_state=rep_state, prob_state=prob_state)
+
         env_state = PCGRLEnvState(env_map=env_map, static_map=frz_map,
                                   rep_state=rep_state, prob_state=prob_state,
                                   step_idx=0, done=False)
 
         return obs, env_state
+
+    def get_obs(self, env_map, static_map, rep_state, prob_state):
+        rep_obs = self.rep.get_obs(env_map, static_map, rep_state)
+        prob_obs = self.prob.observe_ctrls(prob_state)
+        obs = PCGRLObs(rep_obs=rep_obs, prob_obs=prob_obs)
+        return obs
+
+    @partial(jax.jit, static_argnums=(0,))
+    def step(
+        self,
+        key: chex.PRNGKey,
+        state: EnvState,
+        action: Union[int, float],
+        params: Optional[EnvParams] = None,
+    ) -> Tuple[chex.Array, EnvState, float, bool, dict]:
+        """Performs step transitions in the environment."""
+        # Use default env parameters if no others specified
+        if params is None:
+            params = self.default_params
+        key, key_reset = jax.random.split(key)
+        obs_st, state_st, reward, done, info = self.step_env(
+            key, state, action, params
+        )
+        obs_re, state_re = self.reset_env(key_reset, params)
+        # Auto-reset environment based on termination
+        state = jax.tree_map(
+            lambda x, y: jax.lax.select(done, x, y), state_re, state_st
+        )
+        # obs = jax.lax.select(done, obs_re, obs_st)
+        # Generalizing this to flax dataclass observations
+        obs = jax.tree_map(
+            lambda x, y: jax.lax.select(done, x, y), obs_re, obs_st
+        )
+        return obs, state, reward, done, info
 
     @partial(jax.jit, static_argnums=(0, 4))
     def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
@@ -218,17 +273,17 @@ class PCGRLEnv(Environment):
             rep_state=env_state.rep_state, step_idx=env_state.step_idx
         )
         env_map = jnp.where(env_state.static_map == 1,
-                            env_state.env_map, env_map
-                            )
+                            env_state.env_map, env_map,
+        )
         reward, prob_state = jax.lax.cond(
             map_changed,
-            lambda env_map: self.prob.get_stats(env_map, env_state.prob_state),
+            lambda env_map: self.prob.step(env_map, env_state.prob_state),
             lambda _: (0., env_state.prob_state),
             env_map,
         )
-        obs = self.rep.get_obs(
+        obs = self.get_obs(
             env_map=env_map, static_map=env_state.static_map,
-            rep_state=rep_state)
+            rep_state=rep_state, prob_state=prob_state)
         done = self.is_terminal(env_state, env_params)
         step_idx = env_state.step_idx + 1
         env_state = PCGRLEnvState(
@@ -374,5 +429,121 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
         i = 0
         _, lvl_img, _ = jax.lax.while_loop(
             cond, draw_static_tile, (static_coords, lvl_img, i))
+
+    # Add text below the image displaying the diameter
+    # diam = env_state.prob_state.stats[BinaryMetrics.DIAMETER]
+
+    return lvl_img
+
+def render_stats_jax(env: PCGRLEnv, env_state: PCGRLEnvState, lvl_img: chex.Array):
+    # TODO: jaxify this if possible. PROBLEM: can't get concrete values of stats
+
+    tile_size = env.prob.tile_size
+    env_map = env_state.env_map
+    border_size = np.array((1, 1))
+    env_map = jnp.pad(env_map, border_size, constant_values=Tiles.BORDER)
+    full_height = len(env_map)
+    full_width = len(env_map[0])
+
+    row_height = 20
+    n_rows = len(env_state.prob_state.stats) * 2 + 1
+    lvl_img_text = jnp.zeros((row_height * n_rows, full_width*tile_size, 4), dtype=jnp.uint8)
+    lvl_img_text = lvl_img_text.at[:].set((0, 0, 0, 255))
+
+    metric_names = [m.name for m in BinaryMetrics]
+
+    text_im_rows = []
+
+    for i, s in enumerate(env_state.prob_state.stats):
+        metric_name = metric_names[i]
+        text = f'{metric_name}: {s}'
+        char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
+        text_im = jnp.concatenate(char_arrs, axis=1)
+        text_im = text_im.at[:, :, 3].set(255)
+        text_im_rows.append(text_im)
+        # lvl_img_text = lvl_img_text.at[2*i*row_height:(2*i+1)*row_height, :text_im.shape[1], :].set(text_im)
+
+        trg = env_state.prob_state.ctrl_trgs[i]
+        text = 'trg: ' + ''.join([' ' for _ in range(max(0, len(metric_name) + 2 - 5))]) + f'{trg}'
+        char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
+        text_im = jnp.concatenate(char_arrs, axis=1)
+        text_im = text_im.at[:, :, 3].set(255)
+        text_im_rows.append(text_im)
+        # lvl_img_text = lvl_img_text.at[(2*i+1)*row_height:(2*i+2)*row_height, :text_im.shape[1], :].set(text_im)
+
+    text = f'{env.prob.observe_ctrls(env_state.prob_state)}'
+    char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
+    text_im = jnp.concatenate(char_arrs, axis=1)
+    text_im = text_im.at[:, :, 3].set(255)
+    text_im_rows.append(text_im)
+
+    max_row_width = max(max([r.shape[1] for r in text_im_rows]), lvl_img.shape[1])
+    text_im_rows = [jnp.pad(r, ((0, 0), (0, max_row_width - r.shape[1]), (0, 0))) for r in text_im_rows]
+    lvl_img_text = jnp.concatenate(text_im_rows, axis=0)
+
+    lvl_img = jnp.pad(lvl_img, ((0, 0), (0, max(0, max_row_width - lvl_img.shape[1])), (0, 0)))
+
+    lvl_img = jnp.concatenate((lvl_img, lvl_img_text), axis=0)
+        
+
+    return lvl_img
+
+
+def render_stats(env: PCGRLEnv, env_state: PCGRLEnvState, lvl_img: chex.Array):
+    # TODO just use PIL draw functionality :)
+
+    # jnp = np
+
+    tile_size = env.prob.tile_size
+    env_map = env_state.env_map
+    border_size = np.array((1, 1))
+    env_map = np.pad(env_map, border_size, constant_values=Tiles.BORDER)
+    full_height = len(env_map)
+    full_width = len(env_map[0])
+
+    row_height = 20
+    n_rows = len(env_state.prob_state.stats) * 2 + 1
+
+    metric_names = [m.name for m in BinaryMetrics]
+
+    text_im_rows = []
+
+    for i, s in enumerate(env_state.prob_state.stats):
+        metric_name = metric_names[i]
+        text = f'{metric_name}: {s}'
+        char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
+        text_im = np.concatenate(char_arrs, axis=1)
+        text_im_rows.append(text_im)
+        # lvl_img_text = lvl_img_text.at[2*i*row_height:(2*i+1)*row_height, :text_im.shape[1], :].set(text_im)
+
+        trg = env_state.prob_state.ctrl_trgs[i]
+        text = 'trg: ' + ''.join([' ' for _ in range(max(0, len(metric_name) + 2 - 5))]) + f'{trg}'
+        char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
+        text_im = np.concatenate(char_arrs, axis=1)
+        text_im_rows.append(text_im)
+        # lvl_img_text = lvl_img_text.at[(2*i+1)*row_height:(2*i+2)*row_height, :text_im.shape[1], :].set(text_im)
+
+    text = f'obs: {env.prob.observe_ctrls(env_state.prob_state)}'
+    char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
+    text_im = np.concatenate(char_arrs, axis=1)
+    text_im_rows.append(text_im)
+
+    text = f'rew: {env_state.reward}'
+    char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
+    text_im = np.concatenate(char_arrs, axis=1)
+    text_im_rows.append(text_im)
+
+    max_row_width = max(max([r.shape[1] for r in text_im_rows]), lvl_img.shape[1])
+    text_im_rows = [np.pad(r, ((0, 0), (0, max_row_width - r.shape[1]), (0, 0))) for r in text_im_rows]
+    lvl_img_text = np.concatenate(text_im_rows, axis=0)
+    lvl_img_text[:, :, 3] = 255
+
+    wid_padding = max(0, max_row_width - lvl_img.shape[1])
+    wid_padding_l, wid_padding_r = wid_padding // 2, wid_padding - wid_padding // 2
+    lvl_img = np.pad(lvl_img, ((0, 0), (wid_padding_l, wid_padding_r), (0, 0)))
+    lvl_img[:, :, 3] = 255
+
+    lvl_img = np.concatenate((lvl_img, lvl_img_text), axis=0)
+        
 
     return lvl_img

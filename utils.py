@@ -6,15 +6,18 @@ import jax
 from config import Config
 from envs.binary_0 import Binary0
 from envs.candy import Candy, CandyParams
-from envs.pcgrl_env import PCGRLEnvParams, PCGRLEnv
+from envs.pcgrl_env import PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
+from envs.probs.binary import BinaryProblem
+from envs.probs.problem import Problem
 from models import ActorCritic, AutoEncoder, ConvForward, Dense, NCA, SeqNCA
 
 
 def get_exp_dir(config: Config):
     if config.env_name == 'PCGRL':
+        ctrl_str = '_ctrl_' + '_'.join(config.ctrl_metrics) if len(config.ctrl_metrics) > 0 else '' 
         exp_dir = os.path.join(
             'saves',
-            f'{config.problem}_{config.representation}_{config.model}-' +
+            f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
             f'{config.activation}_w-{config.map_width}_rf-{config.arf_size}_' +
             f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
             f'fz-{config.n_freezies}_' + \
@@ -93,15 +96,23 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 activation=config.activation,
             )
     network = ActorCritic(network, act_shape=config.act_shape,
-                          n_agents=config.n_agents)
+                          n_agents=config.n_agents, n_ctrl_metrics=len(config.ctrl_metrics))
     return network
 
-
+        
 def get_env_params_from_config(config: Config):
     map_shape = (config.map_width, config.map_width)
     rf_size = max(config.arf_size, config.vrf_size)
     rf_shape = (rf_size, rf_size)
+
+    # Convert strings to enum ints
+    problem = int(ProbEnum[config.problem.upper()])
+    prob_cls = get_prob_cls(problem)
+    ctrl_metrics = tuple([int(prob_cls.metrics_enum[c.upper()]) for c in config.ctrl_metrics])
+
     env_params = PCGRLEnvParams(
+        problem=problem,
+        representation=int(RepEnum[config.representation.upper()]),
         map_shape=map_shape,
         rf_shape=rf_shape,
         act_shape=tuple(config.act_shape),
@@ -109,6 +120,7 @@ def get_env_params_from_config(config: Config):
         n_freezies=config.n_freezies,
         n_agents=config.n_agents,
         max_board_scans=config.max_board_scans,
+        ctrl_metrics=ctrl_metrics,
     )
     return env_params
 

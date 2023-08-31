@@ -35,6 +35,8 @@ class Config:
     model: str = "conv"
 
     map_width: int = 16
+    # ctrl_metrics: Tuple[str] = ('diameter', 'n_regions')
+    ctrl_metrics: Tuple[str] = ()
     # Size of the receptive field to be fed to the action subnetwork.
     vrf_size: Optional[int] = 31
     # Size of the receptive field to be fed to the value subnetwork.
@@ -64,7 +66,7 @@ class TrainConfig(Config):
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e6)
     render_freq: int = 100
-    n_render_eps: int = 10
+    n_render_eps: int = 3
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     NUM_UPDATES: Optional[int] = None
