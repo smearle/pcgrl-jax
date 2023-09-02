@@ -1,5 +1,6 @@
 from enum import IntEnum
 from functools import partial
+import math
 from typing import Optional, Tuple, Union
 
 import chex
@@ -8,10 +9,12 @@ from gymnax import EnvParams, EnvState
 import jax
 import jax.numpy as jnp
 import numpy as np
+import PIL
 
 from gymnax.environments.environment import Environment
-from envs.pathfinding import get_path_coords
+from envs.pathfinding import get_path_coords_diam, get_path_coords_diam
 from envs.probs.binary import BinaryMetrics, BinaryProblem
+from envs.probs.maze import MazeProblem
 from envs.probs.problem import Problem, ProblemState
 from envs.reps.narrow import NarrowRepresentation
 from envs.reps.turtle import MultiTurtleRepresentation, TurtleRepresentation
@@ -24,7 +27,8 @@ from sawtooth import triangle_wave
 
 class ProbEnum(IntEnum):
     BINARY = 0
-    DUNGEON = 1
+    MAZE = 1
+    DUNGEON = 2
 
 class RepEnum(IntEnum):
     NARROW = 0
@@ -40,6 +44,7 @@ class PCGRLEnvState:
     prob_state: Optional[ProblemState] = None
     step_idx: int = 0
     reward: np.float32 = 0.0
+    pct_changed: np.float32 = 0.0
     done: bool = False
 
 @struct.dataclass
@@ -60,6 +65,7 @@ class PCGRLEnvParams:
     n_agents: int = 1
     max_board_scans: float = 3.0
     ctrl_metrics: Tuple = ()
+    change_pct: float = -1.0
 
 
 def gen_init_map(rng, tile_enum, map_shape, tile_probs):
@@ -129,6 +135,8 @@ def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
 def get_prob_cls(problem: str):
     if problem == ProbEnum.BINARY:
         return BinaryProblem
+    elif problem == ProbEnum.MAZE:
+        return MazeProblem
     else:
         raise Exception(f'Problem {problem} not implemented')
 
@@ -193,6 +201,14 @@ class PCGRLEnv(Environment):
 
         self.max_steps = self.rep.max_steps
         self.tile_size = self.prob.tile_size
+
+    # def set_ctrl_trgs(self, env_state, ctrl_trgs):
+    #     # Assuming it's already batched
+    #     env_state = PCGRLEnvState(
+    #         env_map=env_state.env_map, static_map=env_state.static_map,
+    #         rep_state=env_state.rep_state, done=env_state.done, reward=env_state.reward,
+    #         prob_state=env_state.prob_state.replace(ctrl_trgs=ctrl_trgs), step_idx=env_state.step_idx)
+    #     return env_state
 
     def init_graphics(self):
         self.prob.init_graphics()
@@ -266,6 +282,7 @@ class PCGRLEnv(Environment):
 
     @partial(jax.jit, static_argnums=(0, 4))
     def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
+        action = action[..., None]
         if self.n_agents == 1:
             action = action[0]
         env_map, map_changed, rep_state = self.rep.step(
@@ -275,6 +292,9 @@ class PCGRLEnv(Environment):
         env_map = jnp.where(env_state.static_map == 1,
                             env_state.env_map, env_map,
         )
+        n_tiles_changed = jnp.sum(jnp.where(env_map != env_state.env_map, 1, 0))
+        pct_changed = n_tiles_changed / math.prod(self.map_shape)
+        pct_changed = env_state.pct_changed + pct_changed
         reward, prob_state = jax.lax.cond(
             map_changed,
             lambda env_map: self.prob.step(env_map, env_state.prob_state),
@@ -289,7 +309,7 @@ class PCGRLEnv(Environment):
         env_state = PCGRLEnvState(
             env_map=env_map, static_map=env_state.static_map,
             rep_state=rep_state, done=done, reward=reward,
-            prob_state=prob_state, step_idx=step_idx)
+            prob_state=prob_state, step_idx=step_idx, pct_changed=pct_changed,)
 
         return (
             jax.lax.stop_gradient(obs),
@@ -302,14 +322,16 @@ class PCGRLEnv(Environment):
     def is_terminal(self, state: PCGRLEnvState, params: PCGRLEnvParams) \
             -> bool:
         """Check whether state is terminal."""
-        done_steps = state.step_idx >= (self.rep.max_steps - 1)
-        return done_steps
+        done = state.step_idx >= (self.rep.max_steps - 1)
+        done = jnp.logical_or(done, jnp.logical_and(
+            params.change_pct > 0, state.pct_changed >= params.change_pct))
+        return done
 
     def render(self, env_state: PCGRLEnvState):
         # TODO: Refactor this into problem
-        path_coords = get_path_coords(
-            env_state.prob_state.flood_count,
-            self.prob.max_path_len)
+        path_coords = self.prob.get_path_coords(
+            env_map=env_state.env_map,
+            prob_state=env_state.prob_state)
         return render_map(self, env_state, path_coords)
 
     @property
@@ -359,8 +381,14 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
     def draw_path_tile(carry):
         path_coords, lvl_img, i = carry
         y, x = path_coords[i]
-        lvl_img = jax.lax.dynamic_update_slice(lvl_img, tile_img,
-                                               ((y + border_size[0]) * tile_size, (x + border_size[1]) * tile_size, 0))
+        tile_type = env_map[y + border_size[0]][x + border_size[1]]
+        empty_tile = int(Tiles.EMPTY)
+        lvl_img = jax.lax.cond(
+            tile_type == empty_tile,
+            lambda: jax.lax.dynamic_update_slice(lvl_img, tile_img,
+                                               ((y + border_size[0]) * tile_size, (x + border_size[1]) * tile_size, 0)),
+            lambda: lvl_img,)
+                            
         return (path_coords, lvl_img, i+1)
 
     def cond(carry):
@@ -430,10 +458,8 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
         _, lvl_img, _ = jax.lax.while_loop(
             cond, draw_static_tile, (static_coords, lvl_img, i))
 
-    # Add text below the image displaying the diameter
-    # diam = env_state.prob_state.stats[BinaryMetrics.DIAMETER]
-
     return lvl_img
+
 
 def render_stats_jax(env: PCGRLEnv, env_state: PCGRLEnvState, lvl_img: chex.Array):
     # TODO: jaxify this if possible. PROBLEM: can't get concrete values of stats
@@ -504,43 +530,39 @@ def render_stats(env: PCGRLEnv, env_state: PCGRLEnvState, lvl_img: chex.Array):
     row_height = 20
     n_rows = len(env_state.prob_state.stats) * 2 + 1
 
-    metric_names = [m.name for m in BinaryMetrics]
+    metric_names = [m.name for m in env.prob.metrics_enum]
 
-    text_im_rows = []
+    text_rows = []
 
     for i, s in enumerate(env_state.prob_state.stats):
         metric_name = metric_names[i]
         text = f'{metric_name}: {s}'
-        char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
-        text_im = np.concatenate(char_arrs, axis=1)
-        text_im_rows.append(text_im)
+        text_rows.append(text)
         # lvl_img_text = lvl_img_text.at[2*i*row_height:(2*i+1)*row_height, :text_im.shape[1], :].set(text_im)
 
         trg = env_state.prob_state.ctrl_trgs[i]
         text = 'trg: ' + ''.join([' ' for _ in range(max(0, len(metric_name) + 2 - 5))]) + f'{trg}'
-        char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
-        text_im = np.concatenate(char_arrs, axis=1)
-        text_im_rows.append(text_im)
+        text_rows.append(text)
         # lvl_img_text = lvl_img_text.at[(2*i+1)*row_height:(2*i+2)*row_height, :text_im.shape[1], :].set(text_im)
 
     text = f'obs: {env.prob.observe_ctrls(env_state.prob_state)}'
-    char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
-    text_im = np.concatenate(char_arrs, axis=1)
-    text_im_rows.append(text_im)
+    text_rows.append(text)
 
     text = f'rew: {env_state.reward}'
-    char_arrs = [env.prob.ascii_chars_to_ims[c] for c in text]
-    text_im = np.concatenate(char_arrs, axis=1)
-    text_im_rows.append(text_im)
+    text_rows.append(text)
 
-    max_row_width = max(max([r.shape[1] for r in text_im_rows]), lvl_img.shape[1])
-    text_im_rows = [np.pad(r, ((0, 0), (0, max_row_width - r.shape[1]), (0, 0))) for r in text_im_rows]
-    lvl_img_text = np.concatenate(text_im_rows, axis=0)
-    lvl_img_text[:, :, 3] = 255
+    max_text_chars = max([len(r) for r in text_rows])
+    text = '\n'.join(text_rows)
 
-    wid_padding = max(0, max_row_width - lvl_img.shape[1])
-    wid_padding_l, wid_padding_r = wid_padding // 2, wid_padding - wid_padding // 2
-    lvl_img = np.pad(lvl_img, ((0, 0), (wid_padding_l, wid_padding_r), (0, 0)))
+    char_height, char_width = env.prob.render_font_shape
+    total_width = max((max_text_chars * char_width, lvl_img.shape[1]))
+    text_height = char_height * len(text_rows)
+    lvl_img_text = PIL.Image.new('RGBA', (total_width, text_height), (0, 0, 0, 255))
+    draw = PIL.ImageDraw.Draw(lvl_img_text)
+    draw.text((0, 0), text, (255, 255, 255, 255))
+
+    wid_padding = max(0, total_width - lvl_img.shape[1])
+    lvl_img = np.pad(lvl_img, ((0, 0), (0, wid_padding), (0, 0)))
     lvl_img[:, :, 3] = 255
 
     lvl_img = np.concatenate((lvl_img, lvl_img_text), axis=0)

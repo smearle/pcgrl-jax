@@ -1,6 +1,7 @@
 import os
 import shutil
 from timeit import default_timer as timer
+from typing import NamedTuple
 
 import hydra
 import jax
@@ -8,10 +9,10 @@ import jax.numpy as jnp
 from flax import struct
 import imageio
 import optax
-from typing import NamedTuple
 from flax.training.train_state import TrainState
 from flax.training import orbax_utils
 import orbax
+from tensorboardX import SummaryWriter
 
 from config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, render_stats
@@ -150,7 +151,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # Save gifs.
             for ep_is in range(config.n_render_eps):
                 gif_name = f"{config.exp_dir}/update-{i}_ep-{ep_is}.gif"
-                frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
+                ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
 
                 # new_frames = []
                 # for i, frame in enumerate(frames):
@@ -162,7 +163,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 try:
                     imageio.v3.imwrite(
                         gif_name,
-                        frames,
+                        ep_frames,
                         duration=config.gif_frame_duration
                     )
                 except jax.errors.TracerArrayConversionError:
@@ -189,7 +190,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             vmap_step_fn = jax.vmap(env_r.step, in_axes=(0, 0, 0, None))
             # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
             obs_r, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
-                            rng_step, env_state_r, action_r[..., None],
+                            rng_step, env_state_r, action_r,
                             env_params)
             vmap_render_fn = jax.vmap(env_r.render, in_axes=(0,))
             # pmap_render_fn = jax.pmap(vmap_render_fn, in_axes=(0,))
@@ -249,7 +250,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 vmap_step_fn = jax.vmap(env.step, in_axes=(0, 0, 0, None))
                 # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
                 obsv, env_state, reward, done, info = vmap_step_fn(
-                    rng_step, env_state, action[..., None], env_params
+                    rng_step, env_state, action, env_params
                 )
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info, rng_step
@@ -323,8 +324,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         # CALCULATE ACTOR LOSS
                         ratio = jnp.exp(log_prob - traj_batch.log_prob)
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
-                        # if config.representation == 'nca':
+
+                        # Some reshaping to accomodate player, x, and y dimensions to action output. (Not used often...)
                         gae = gae[..., None, None, None]
+
                         loss_actor1 = ratio * gae
                         loss_actor2 = (
                             jnp.clip(
@@ -401,6 +404,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             jax.debug.callback(save_checkpoint, runner_state,
                                metric, steps_prev_complete)
 
+            # Create a tensorboard writer
+            writer = SummaryWriter(get_exp_dir(config))
+
             def log_callback(metric, steps_prev_complete):
                 timesteps = metric["timestep"][metric["returned_episode"]
                                                ] * config.n_envs
@@ -414,6 +420,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     with open(os.path.join(get_exp_dir(config),
                                            "progress.csv"), "a") as f:
                         f.write(f"{t},{ep_return}\n")
+
+                    writer.add_scalar("ep_return", ep_return, t)
+                    # for k, v in zip(env.prob.metric_names, env.prob.stats):
+                    #     writer.add_scalar(k, v, t)
 
             # FIXME: shouldn't assume size of render map.
             frames_shape = (config.n_render_eps * 1 * env.max_steps, 

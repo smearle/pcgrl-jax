@@ -19,6 +19,7 @@ def get_exp_dir(config: Config):
             'saves',
             f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
             f'{config.activation}_w-{config.map_width}_rf-{config.arf_size}_' +
+            (f'cp-{config.change_pct}' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
             f'fz-{config.n_freezies}_' + \
             f'act-{config.act_shape[0]}x{config.act_shape[1]}_' + \
@@ -30,6 +31,8 @@ def get_exp_dir(config: Config):
             'candy_' + \
             f'{config.seed}_{config.exp_name}',
         )
+    else:
+        raise ValueError(f'Unknown env_name: {config.env_name}')
     return exp_dir
 
 
@@ -121,6 +124,7 @@ def get_env_params_from_config(config: Config):
         n_agents=config.n_agents,
         max_board_scans=config.max_board_scans,
         ctrl_metrics=ctrl_metrics,
+        change_pct=config.change_pct,
     )
     return env_params
 

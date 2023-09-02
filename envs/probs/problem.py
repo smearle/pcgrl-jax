@@ -1,5 +1,5 @@
-
 from enum import IntEnum
+from typing import Optional
 
 import chex
 from flax import struct
@@ -15,8 +15,8 @@ class Stats(IntEnum):
 
 @struct.dataclass
 class ProblemState:
-    stats: chex.Array
-    ctrl_trgs: chex.Array
+    stats: Optional[chex.Array] = None
+    ctrl_trgs: Optional[chex.Array] = None
 
 
 def get_reward(stats, old_stats, stat_weights, stat_trgs):
@@ -28,63 +28,57 @@ def get_reward(stats, old_stats, stat_weights, stat_trgs):
     return reward
 
 
-def get_reward_old(stats, old_stats, stat_weights, stat_trgs):
-    reward = 0
-    for stat, val in stats.items():
-        old_val = old_stats[stat]
-        trg = stat_trgs[stat]
-        if trg == 'max':
-            reward += (val - old_val) * stat_weights[stat]
-        elif trg == 'min':
-            reward += (old_val - val) * stat_weights[stat]
-        elif isinstance(trg, tuple):
-            old_loss = min(abs(old_val - trg[0]), abs(old_val - trg[1]))
-            new_loss = min(abs(val - trg[0]), abs(val - trg[1]))
-            reward += (old_loss - new_loss) * stat_weights[stat]
-        else:
-            reward += (abs(old_val - trg)
-                       - abs(val - trg)) * stat_weights[stat]
-    return reward
+def gen_ctrl_trgs(metric_bounds, rng):
+    rng, _ = jax.random.split(rng)
+    return jax.random.randint(rng, (len(metric_bounds),), metric_bounds[:, 0], metric_bounds[:, 1])
 
 
 class Problem:
     tile_size = np.int8(16)
+    stat_weights: chex.Array
+    metrics_enum: IntEnum
 
-    def __init__(self):
+    def __init__(self, map_shape, ctrl_metrics):
+        self.metric_bounds = self.get_metric_bounds(map_shape)
+        self.ctrl_metrics = np.array(ctrl_metrics, dtype=int)
+        self.ctrl_metrics_mask = np.array([i in ctrl_metrics for i in range(len(self.stat_trgs))])
+
         # Dummy control observation to placate jax tree map during minibatch creation (FIXME?)
         self.ctrl_metric_obs_idxs = np.array([0]) if len(self.ctrl_metrics) == 0 else self.ctrl_metrics
+
+        self.metric_names = [metric.name for metric in self.metrics_enum]
+
+    def get_metric_bounds(self, map_shape):
+        raise NotImplementedError
 
     def get_stats(self, env_map: chex.Array, prob_state: ProblemState):
         raise NotImplementedError
 
     def init_graphics(self):
         # Load TTF font (Replace 'path/to/font.ttf' with the actual path)
-        font = ImageFont.truetype("./fonts/AcPlus_IBM_VGA_9x16-2x.ttf", 20)
+        self.render_font = font = ImageFont.truetype("./fonts/AcPlus_IBM_VGA_9x16-2x.ttf", 20)
 
         ascii_chars_to_ints = {}
         self.ascii_chars_to_ims = {}
 
+        self.render_font_shape = (16, 9)
+
         # Loop over a range of ASCII characters (here, printable ASCII characters from 32 to 126)
-        for i in range(0, 127):
-            char = chr(i)
+        # for i in range(0, 127):
+        #     char = chr(i)
 
-            # Create a blank RGBA image
-            image = Image.new("RGBA", (20, 20), (0, 0, 0, 0))
+        #     # Create a blank RGBA image
+        #     image = Image.new("RGBA", self.render_font_shape, (0, 0, 0, 0))
 
-            # Get drawing context
-            draw = ImageDraw.Draw(image)
+        #     # Get drawing context
+        #     draw = ImageDraw.Draw(image)
 
-            # Draw text
-            draw.text((0, 0), char, font=font, fill=(255, 255, 255, 255))
+        #     # Draw text
+        #     draw.text((0, 0), char, font=font, fill=(255, 255, 255, 255))
 
-            # Resize image to 16x16
-            # image = image.resize((16, 16), Image.ANTIALIAS)
-
-            # Save image
-            # image.save(f"char_images/{i}.png")
-
-            ascii_chars_to_ints[char] = i
-            self.ascii_chars_to_ims[char] = np.array(image)
+        #     ascii_chars_to_ints[char] = i
+        #     char_im = np.array(image)
+        #     self.ascii_chars_to_ims[char] = char_im
 
     def observe_ctrls(self, prob_state: ProblemState):
         obs = jnp.zeros(len(self.metrics_enum))
@@ -92,3 +86,29 @@ class Problem:
         # Return a vector of only the metrics we're controlling
         obs = obs[self.ctrl_metric_obs_idxs]
         return obs
+
+    def reset(self, env_map: chex.Array, rng):
+        # Randomly sample some control targets
+        ctrl_trgs =  jnp.where(
+            self.ctrl_metrics_mask,
+            gen_ctrl_trgs(self.metric_bounds, rng),
+            self.stat_trgs,
+        )
+
+        state = self.get_curr_stats(env_map)
+        state = state.replace(
+            ctrl_trgs=ctrl_trgs,
+        )
+        reward = None
+        return reward, state
+
+    def step(self, env_map: chex.Array, state: ProblemState):
+        new_state = self.get_curr_stats(env_map)
+        reward = get_reward(new_state.stats, state.stats, self.stat_weights, state.ctrl_trgs)
+        new_state = new_state.replace(
+            ctrl_trgs=state.ctrl_trgs,
+        )
+        return reward, new_state
+
+    def get_curr_stats(self, env_map: chex.Array) -> ProblemState:
+        raise NotImplementedError
