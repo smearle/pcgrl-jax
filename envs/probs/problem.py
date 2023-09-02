@@ -19,8 +19,16 @@ class ProblemState:
     ctrl_trgs: Optional[chex.Array] = None
 
 
-def get_reward(stats, old_stats, stat_weights, stat_trgs):
-    reward = jnp.abs(stat_trgs - old_stats) - jnp.abs(stat_trgs - stats)
+def get_reward(stats, old_stats, stat_weights, stat_trgs, ctrl_threshes):
+    """
+    ctrl_threshes: A vector of thresholds for each metric. If the metric is within
+        an interval of this size centered at its target value, it has 0 loss.
+    """
+    prev_loss = jnp.abs(stat_trgs - old_stats)
+    prev_loss = jnp.clip(prev_loss - ctrl_threshes, 0)
+    loss = jnp.abs(stat_trgs - stats)
+    loss = jnp.clip(loss - ctrl_threshes, 0)
+    reward = prev_loss - loss
     reward = jnp.where(stat_trgs == jnp.inf, stats - old_stats, reward)
     reward = jnp.where(stat_trgs == -jnp.inf, old_stats - stats, reward)
     reward *= stat_weights
@@ -37,11 +45,15 @@ class Problem:
     tile_size = np.int8(16)
     stat_weights: chex.Array
     metrics_enum: IntEnum
+    ctrl_metrics: chex.Array
 
     def __init__(self, map_shape, ctrl_metrics):
         self.metric_bounds = self.get_metric_bounds(map_shape)
         self.ctrl_metrics = np.array(ctrl_metrics, dtype=int)
         self.ctrl_metrics_mask = np.array([i in ctrl_metrics for i in range(len(self.stat_trgs))])
+
+        if self.ctrl_threshes is None:
+            self.ctrl_threshes: np.zeros(len(ctrl_metrics))
 
         # Dummy control observation to placate jax tree map during minibatch creation (FIXME?)
         self.ctrl_metric_obs_idxs = np.array([0]) if len(self.ctrl_metrics) == 0 else self.ctrl_metrics
@@ -55,6 +67,7 @@ class Problem:
         raise NotImplementedError
 
     def init_graphics(self):
+        self.graphics = jnp.array(self.graphics)
         # Load TTF font (Replace 'path/to/font.ttf' with the actual path)
         self.render_font = font = ImageFont.truetype("./fonts/AcPlus_IBM_VGA_9x16-2x.ttf", 20)
 
@@ -104,7 +117,7 @@ class Problem:
 
     def step(self, env_map: chex.Array, state: ProblemState):
         new_state = self.get_curr_stats(env_map)
-        reward = get_reward(new_state.stats, state.stats, self.stat_weights, state.ctrl_trgs)
+        reward = get_reward(new_state.stats, state.stats, self.stat_weights, state.ctrl_trgs, self.ctrl_threshes)
         new_state = new_state.replace(
             ctrl_trgs=state.ctrl_trgs,
         )

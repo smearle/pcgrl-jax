@@ -555,7 +555,7 @@ def main(config: TrainConfig):
     if restored_ckpt is None:
         progress_csv_path = os.path.join(exp_dir, "progress.csv")
         assert not os.path.exists(progress_csv_path), "Progress csv already exists, but have no checkpoint to restore " +\
-            "from. How can this be?"
+            "from. Run with `overwrite=True` to delete the progress csv."
         # Create csv for logging progress
         with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
             f.write("timestep,ep_return\n")

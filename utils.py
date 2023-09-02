@@ -2,11 +2,12 @@ import os
 
 import gymnax
 import jax
+import numpy as np
 
 from config import Config
 from envs.binary_0 import Binary0
 from envs.candy import Candy, CandyParams
-from envs.pcgrl_env import PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
+from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
 from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
 from models import ActorCritic, AutoEncoder, ConvForward, Dense, NCA, SeqNCA
@@ -109,8 +110,8 @@ def get_env_params_from_config(config: Config):
     rf_shape = (rf_size, rf_size)
 
     # Convert strings to enum ints
-    problem = int(ProbEnum[config.problem.upper()])
-    prob_cls = get_prob_cls(problem)
+    problem = ProbEnum[config.problem.upper()]
+    prob_cls = PROB_CLASSES[problem]
     ctrl_metrics = tuple([int(prob_cls.metrics_enum[c.upper()]) for c in config.ctrl_metrics])
 
     env_params = PCGRLEnvParams(

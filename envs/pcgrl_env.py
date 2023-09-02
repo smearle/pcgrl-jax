@@ -14,6 +14,7 @@ import PIL
 from gymnax.environments.environment import Environment
 from envs.pathfinding import get_path_coords_diam, get_path_coords_diam
 from envs.probs.binary import BinaryMetrics, BinaryProblem
+from envs.probs.dungeon import DungeonProblem
 from envs.probs.maze import MazeProblem
 from envs.probs.problem import Problem, ProblemState
 from envs.reps.narrow import NarrowRepresentation
@@ -29,6 +30,12 @@ class ProbEnum(IntEnum):
     BINARY = 0
     MAZE = 1
     DUNGEON = 2
+
+PROB_CLASSES = {
+    ProbEnum.BINARY: BinaryProblem,
+    ProbEnum.MAZE: MazeProblem,
+    ProbEnum.DUNGEON: DungeonProblem,
+}
 
 class RepEnum(IntEnum):
     NARROW = 0
@@ -55,8 +62,8 @@ class PCGRLObs:
 
 @struct.dataclass
 class PCGRLEnvParams:
-    problem: ProbEnum = ProbEnum.BINARY
-    representation: RepEnum = RepEnum.NARROW
+    problem: int = ProbEnum.BINARY
+    representation: int = RepEnum.NARROW
     map_shape: Tuple[int, int] = (16, 16)
     act_shape: Tuple[int, int] = (1, 1)
     rf_shape: Tuple[int, int] = (31, 31)
@@ -133,18 +140,14 @@ def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
 
 
 def get_prob_cls(problem: str):
-    if problem == ProbEnum.BINARY:
-        return BinaryProblem
-    elif problem == ProbEnum.MAZE:
-        return MazeProblem
-    else:
-        raise Exception(f'Problem {problem} not implemented')
+    return PROB_CLASSES[problem]
 
 
 class PCGRLEnv(Environment):
     def __init__(self, env_params: PCGRLEnvParams):
-        map_shape, act_shape, rf_shape, problem, representation, static_tile_prob, n_freezies, n_agents = \
-            env_params.map_shape, env_params.act_shape, env_params.rf_shape, env_params.problem, env_params.representation, env_params.static_tile_prob, env_params.n_freezies, env_params.n_agents
+        map_shape, act_shape, rf_shape, problem, representation, static_tile_prob, n_freezies, n_agents = (
+            env_params.map_shape, env_params.act_shape, env_params.rf_shape, env_params.problem,
+            env_params.representation, env_params.static_tile_prob, env_params.n_freezies, env_params.n_agents)
 
         self.map_shape = map_shape
         self.act_shape = act_shape
@@ -153,7 +156,8 @@ class PCGRLEnv(Environment):
         self.n_agents = n_agents
 
         self.prob: Problem
-        self.prob = get_prob_cls(problem=problem)(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics)
+        prob_cls = PROB_CLASSES[problem]
+        self.prob = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics)
 
         self.tile_enum = self.prob.tile_enum
         self.tile_probs = self.prob.tile_probs
@@ -371,7 +375,7 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
     # Map tiles
     for y in range(len(env_map)):
         for x in range(len(env_map[y])):
-            tile_img = env.prob.graphics[env_map[y][x]]
+            tile_img = env.prob.graphics[env_map[y, x]]
             lvl_img = lvl_img.at[y*tile_size: (y+1)*tile_size,
                                  x*tile_size: (x+1)*tile_size, :].set(tile_img)
 

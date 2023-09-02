@@ -17,7 +17,8 @@ class FloodPathState:
     flood_input: chex.Array
     flood_count: chex.Array
     env_map: Optional[chex.Array] = None
-    trg: Optional[int] = None
+    trg: Optional[chex.Array] = None
+    nearest_trg_xy: Optional[chex.Array] = jnp.zeros(2, dtype=jnp.int32)
     done: bool = False
 
 
@@ -28,8 +29,8 @@ class FloodRegionsState:
     done: bool = False
 
 
-# FIXME: It's probably definitely (?) inefficient to use NNs here. Just use `jax.lax.convolve` directly.
-#   (Also allows us to use ints instead of floats?)
+# FIXME: It's probably definitely (?) inefficient to use NNs here. We should use `jax.lax.convolve` directly.
+#   (Also would allow us to use ints instead of floats?)
 class FloodPath(nn.Module):
 
     @nn.compact
@@ -75,24 +76,17 @@ class FloodPath(nn.Module):
         flood_out = jnp.clip(flood_out, a_min=0, a_max=1)
         flood_out = jnp.stack([occupied_map, flood_out[..., -1]], axis=-1)
         flood_count = flood_out[..., -1] + flood_count
-        done = jnp.logical_or(
-            jnp.all(flood_state.env_map != trg),
-            jnp.logical_or(
-                jnp.any(jnp.where(flood_state.env_map == trg, flood_count, False)),
-                jnp.all(flood_input == flood_out),
-            )
-        )
+        nearest_trg_xy = jnp.argwhere(
+                jnp.where(flood_state.env_map == trg, flood_count, 0) > 0,
+            size=1, fill_value=-1)[0]
+        has_reached_trg = jnp.logical_not(jnp.all(nearest_trg_xy == -1))
+        no_trg = jnp.all(flood_state.env_map != trg)
+        no_change = jnp.all(flood_input == flood_out)
+        done = has_reached_trg | no_trg | no_change
         flood_state = FloodPathState(flood_input=flood_out, flood_count=flood_count, done=done,
-                                     env_map=flood_state.env_map, trg=trg)
+                                     env_map=flood_state.env_map, trg=trg,
+                                     nearest_trg_xy=nearest_trg_xy)
         return flood_state
-
-    # def flood_step_while(self, flood_state: FloodPathState):
-    #     flood_state, _ = self.flood_step(flood_state=flood_state)
-    #     return flood_state
-
-    # def flood_step_while_trg(self, flood_state: FloodPathState):
-    #     flood_state, _ = self.flood_step_trg(flood_state=flood_state)
-    #     return flood_state
 
 
 class FloodRegions(nn.Module):
@@ -220,19 +214,20 @@ def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passabl
     return n_regions
 
 
-def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: jnp.ndarray, src: int, trg: int):
+def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: jnp.ndarray, src: int, trg: chex.Array):
     occupied_map = (env_map[..., None] != passable_tiles).all(-1).astype(jnp.float32)
     init_flood = (env_map == src).astype(jnp.float32)
     init_flood_count = init_flood.copy()
     # Concatenate init_flood with new_occ_map
     flood_input = jnp.stack([occupied_map, init_flood], axis=-1)
-    flood_state = FloodPathState(flood_input=flood_input, flood_count=init_flood_count, env_map=env_map, trg=trg)
+    flood_state = FloodPathState(flood_input=flood_input, flood_count=init_flood_count, env_map=env_map, trg=trg,
+                                 done=False)
     flood_state = jax.lax.while_loop(
             lambda fps: jnp.logical_not(fps.done),
             flood_path_net.flood_step_trg,
             flood_state)
     path_length = jnp.clip(flood_state.flood_count.max() - jnp.where(flood_state.flood_count == 0, 99999, flood_state.flood_count).min(), 0)
-    return path_length, flood_state.flood_count
+    return path_length, flood_state.flood_count, flood_state.nearest_trg_xy
 
 
 def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, env_map: chex.Array, passable_tiles: chex.Array):

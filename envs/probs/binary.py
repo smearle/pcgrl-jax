@@ -24,11 +24,6 @@ class BinaryTiles(IntEnum):
 
 @struct.dataclass
 class BinaryState(ProblemState):
-    # flood_path_state: FloodPathState
-    # flood_regions_state: FloodRegionsState
-    # diameter: int
-    # n_regions: int
-    # ctrl_trgs: Optional[chex.Array] = None
     flood_count: Optional[chex.Array] = None
 
 
@@ -66,10 +61,6 @@ class BinaryProblem(Problem):
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
         self.max_path_len = get_max_path_length(map_shape)
-        # self.metric_bounds = self.get_metric_bounds(map_shape)
-        # self.ctrl_metrics = np.array(ctrl_metrics, dtype=int)
-        # self.ctrl_metrics_mask = np.array([i in ctrl_metrics for i in range(len(self.stat_trgs))])
-        # self.default_ctrl_trgs = [self.stat_trgs[e] for e in self.metrics_enum]
         super().__init__(map_shape=map_shape, ctrl_metrics=ctrl_metrics)
 
     def get_metric_bounds(self, map_shape):
@@ -94,7 +85,6 @@ class BinaryProblem(Problem):
             ).convert('RGBA')
         self.graphics[len(self.tile_enum)] = Image.open(f"{__location__}/tile_ims/path_g.png").convert(
                 'RGBA')
-        self.graphics = jnp.array(self.graphics)
 
         super().init_graphics()
 

@@ -43,6 +43,8 @@ class Config:
     arf_size: Optional[int] = 31
     # TODO: actually take arf and vrf into account in models, where possible
 
+    change_pct: float = -1.0
+
     # The shape of the (patch of) edit(s) to be made by the edited by the generator at each step.
     act_shape: Tuple[int, int] = (1, 1)
 
@@ -52,7 +54,7 @@ class Config:
     max_board_scans: float = 3.0
 
     # How many milliseconds to wait between frames of the rendered gifs
-    gif_frame_duration: int = 50
+    gif_frame_duration: int = 25
 
     """ DO NOT USE. WILL BE OVERWRITTEN. """
     exp_dir: Optional[str] = None
@@ -80,6 +82,14 @@ class EnjoyConfig(Config):
     # How many episodes to render as gifs
     n_eps: int = 10
 
+    
+@dataclass
+class EvalConfig(Config):
+    random_agent: bool = False
+    n_bins: int = 10
+    n_envs: int = 200
+    n_eps: int = 1
+
 
 @dataclass
 class ProfileEnvConfig(Config):
@@ -96,5 +106,6 @@ cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
+cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
 cs.store(name="batch_pcgrl", node=BatchConfig)

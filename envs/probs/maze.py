@@ -79,7 +79,6 @@ class MazeProblem(Problem):
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
         self.max_path_len = get_max_path_length(map_shape)
-        # self.default_ctrl_trgs = [self.stat_trgs[e] for e in self.metrics_enum]
         super().__init__(map_shape, ctrl_metrics)
     
     def init_graphics(self):
@@ -101,8 +100,6 @@ class MazeProblem(Problem):
             ).convert('RGBA')
         self.graphics[len(self.tile_enum)] = Image.open(f"{__location__}/tile_ims/path_g.png").convert(
                 'RGBA')
-        self.graphics = jnp.array(self.graphics)
-
         super().init_graphics()
 
     def get_path_coords(self, env_map: chex.Array, prob_state: MazeState):
