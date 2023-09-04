@@ -46,6 +46,8 @@ class Problem:
     stat_weights: chex.Array
     metrics_enum: IntEnum
     ctrl_metrics: chex.Array
+    stat_trgs: chex.Array
+    ctrl_threshes: chex.Array = None
 
     def __init__(self, map_shape, ctrl_metrics):
         self.metric_bounds = self.get_metric_bounds(map_shape)
@@ -53,7 +55,7 @@ class Problem:
         self.ctrl_metrics_mask = np.array([i in ctrl_metrics for i in range(len(self.stat_trgs))])
 
         if self.ctrl_threshes is None:
-            self.ctrl_threshes: np.zeros(len(ctrl_metrics))
+            self.ctrl_threshes = np.zeros(len(self.stat_trgs))
 
         # Dummy control observation to placate jax tree map during minibatch creation (FIXME?)
         self.ctrl_metric_obs_idxs = np.array([0]) if len(self.ctrl_metrics) == 0 else self.ctrl_metrics

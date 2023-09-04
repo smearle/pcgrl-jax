@@ -39,7 +39,7 @@ class Transition(NamedTuple):
     log_prob: jnp.ndarray
     obs: jnp.ndarray
     info: jnp.ndarray
-    rng_act: jnp.ndarray
+    # rng_act: jnp.ndarray
 
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
@@ -52,7 +52,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     env_r, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     # env = FlattenObservationWrapper(env)
     env = LogWrapper(env_r)
-    # env_r.prob.init_graphics()
     env_r.init_graphics()
 
     def linear_schedule(count):
@@ -68,10 +67,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         network = get_network(env, env_params, config)
 
         rng, _rng = jax.random.split(rng)
-        rng_act = jax.random.split(_rng, config.n_envs)
-        init_x = gen_dummy_obs(env, env_params, rng_act)
+        init_x = env.gen_dummy_obs(env_params)
+        # init_x = env.observation_space(env_params).sample(_rng)[None]
         network_params = network.init(_rng, init_x)
-        print(network.subnet.tabulate(_rng, init_x.rep_obs, init_x.prob_obs))
+        print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
+        # print(network.subnet.tabulate(_rng, init_x, jnp.zeros((init_x.shape[0], 0))))
 
         # Print number of learnable parameters in the network
         if config.ANNEAL_LR:
@@ -93,7 +93,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # INIT ENV FOR TRAIN
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config.n_envs)
-        rng_act = reset_rng
         # obsv, env_state = jax.vmap(
         #     env.reset, in_axes=(0, None))(reset_rng, env_params)
 
@@ -223,6 +222,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         frames, states = render_episodes(train_state.params)
         jax.debug.callback(render_frames, frames, runner_state.update_i, states)
         old_render_results = (frames, states)
+
         # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
         # TRAIN LOOP
@@ -253,7 +253,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     rng_step, env_state, action, env_params
                 )
                 transition = Transition(
-                    done, action, value, reward, log_prob, last_obs, info, rng_step
+                    done, action, value, reward, log_prob, last_obs, info
                 )
                 runner_state = RunnerState(
                     train_state, env_state, obsv, rng,
@@ -415,6 +415,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     ep_return = (metric["returned_episode_returns"]
                                  [metric["returned_episode"]].mean(
                     ))
+                    ep_length = (metric["returned_episode_lengths"]
+                                  [metric["returned_episode"]].mean())
 
                     # Add a row to csv with ep_return
                     with open(os.path.join(get_exp_dir(config),
@@ -422,6 +424,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         f.write(f"{t},{ep_return}\n")
 
                     writer.add_scalar("ep_return", ep_return, t)
+                    writer.add_scalar("ep_length", ep_length, t)
                     # for k, v in zip(env.prob.metric_names, env.prob.stats):
                     #     writer.add_scalar(k, v, t)
 
@@ -469,12 +472,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 #     plt.savefig(os.path.join(get_exp_dir(config), "ep_returns.png"))
 
 
-def gen_dummy_obs(env, env_params, rng_act):
-    map_x = jnp.zeros((1,) + env.observation_space(env_params).shape)
-    ctrl_x = jnp.zeros((1, len(env_params.ctrl_metrics)))
-    return PCGRLObs(map_x, ctrl_x)
-
-
 def init_checkpointer(config: Config):
     # This will not affect training, just for initializing dummy env etc. to load checkpoint.
     rng = jax.random.PRNGKey(30)
@@ -486,9 +483,9 @@ def init_checkpointer(config: Config):
     # env = FlattenObservationWrapper(env)
     env = LogWrapper(env)
     rng, _rng = jax.random.split(rng)
-    rng_act = jax.random.split(_rng, config.n_envs)
     network = get_network(env, env_params, config)
-    init_x = gen_dummy_obs(env, env_params, rng_act)
+    init_x = env.gen_dummy_obs(env_params)
+    # init_x = env.observation_space(env_params).sample(_rng)[None, ]
     network_params = network.init(_rng, init_x)
     tx = optax.chain(
         optax.clip_by_global_norm(config.MAX_GRAD_NORM),
@@ -501,7 +498,6 @@ def init_checkpointer(config: Config):
     )
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config.n_envs)
-    rng_act = reset_rng
 
     # reset_rng_r = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
     vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None))

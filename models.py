@@ -11,6 +11,7 @@ import jax
 import jax.numpy as jnp
 
 from envs.pcgrl_env import PCGRLObs
+from envs.pcgrl_env_play import PlayPCGRLObs
 
 
 def crop_rf(x, rf_size):
@@ -28,19 +29,21 @@ class Dense(nn.Module):
     arf_size: int
     vrf_size: int
     activation: str = "tanh"
+    hidden_dim: int = 700
 
     @nn.compact
-    def __call__(self, x, _):
+    def __call__(self, map_x, flat_x):
         if self.activation == "relu":
             activation = nn.relu
         else:
             activation = nn.tanh
+        x = jnp.concatenate((map_x.reshape((map_x.shape[0], -1)), flat_x), axis=-1)
         act = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+            self.hidden_dim, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(x)
         act = activation(act)
         act = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+            self.hidden_dim, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(act)
         act = activation(act)
         act = nn.Dense(
@@ -49,11 +52,11 @@ class Dense(nn.Module):
         )(act)
 
         critic = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+            self.hidden_dim, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(x)
         critic = activation(critic)
         critic = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+            self.hidden_dim, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(critic)
         critic = activation(critic)
         critic = nn.Dense(
@@ -71,7 +74,7 @@ class ConvForward(nn.Module):
     activation: str = "relu"
 
     @nn.compact
-    def __call__(self, map_obs, ctrl_obs):
+    def __call__(self, map_x, flat_x):
         if self.activation == "relu":
             activation = nn.relu
         else:
@@ -79,7 +82,7 @@ class ConvForward(nn.Module):
 
         flat_action_dim = self.action_dim * math.prod(self.act_shape)
 
-        act, critic = crop_arf_vrf(map_obs, self.arf_size, self.vrf_size)
+        act, critic = crop_arf_vrf(map_x, self.arf_size, self.vrf_size)
 
         act = nn.Conv(
             features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
@@ -91,7 +94,7 @@ class ConvForward(nn.Module):
         act = activation(act)
 
         act = act.reshape((act.shape[0], -1))
-        act = jnp.concatenate((act, ctrl_obs), axis=-1)
+        act = jnp.concatenate((act, flat_x), axis=-1)
 
         act = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
@@ -104,7 +107,7 @@ class ConvForward(nn.Module):
         )(act)
 
         critic = critic.reshape((critic.shape[0], -1))
-        critic = jnp.concatenate((critic, ctrl_obs), axis=-1)
+        critic = jnp.concatenate((critic, flat_x), axis=-1)
 
         critic = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
@@ -128,7 +131,7 @@ class SeqNCA(nn.Module):
     activation: str = "relu"
 
     @nn.compact
-    def __call__(self, x):
+    def __call__(self, map_x, flat_x):
         if self.activation == "relu":
             activation = nn.relu
         else:
@@ -136,12 +139,13 @@ class SeqNCA(nn.Module):
 
         hid = nn.Conv(
             features=64, kernel_size=(3, 3), strides=(1, 1), padding="SAME"
-        )(x)
+        )(map_x)
         hid = activation(hid)
 
         act, critic = crop_arf_vrf(hid, self.arf_size, self.vrf_size)
 
         act = act.reshape((act.shape[0], -1))
+        act = jnp.concatenate((act, flat_x), axis=-1)
         act = nn.Dense(
             64, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
         )(act)
@@ -151,6 +155,7 @@ class SeqNCA(nn.Module):
         )(act)
 
         critic = critic.reshape((critic.shape[0], -1))
+        critic = jnp.concatenate((critic, flat_x), axis=-1)
         critic = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(critic)
@@ -263,8 +268,9 @@ class AutoEncoder(nn.Module):
         return act, jnp.squeeze(critic, axis=-1)
 
 
-class ActorCritic(nn.Module):
-    """Transform the action output into a distribution."""
+class ActorCriticPCGRL(nn.Module):
+    """Transform the action output into a distribution. Do some pre- and post-processing specific to the 
+    PCGRL environments."""
     subnet: nn.Module
     act_shape: Tuple[int, int]
     n_agents: int
@@ -272,8 +278,8 @@ class ActorCritic(nn.Module):
 
     @nn.compact
     def __call__(self, x: PCGRLObs):
-        map_obs = x.rep_obs
-        ctrl_obs = x.prob_obs   
+        map_obs = x.map_obs
+        ctrl_obs = x.flat_obs   
 
         # Hack. We had to put dummy ctrl obs's here to placate jax tree map during minibatch creation (FIXME?)
         # Now we need to remove them :)
@@ -292,6 +298,30 @@ class ActorCritic(nn.Module):
 
         pi = distrax.Categorical(logits=act)
 
+        return pi, val
+
+
+class ActorCriticPlayPCGRL(nn.Module):
+    """Transform the action output into a distribution."""
+    subnet: nn.Module
+
+    @nn.compact
+    def __call__(self, x: PlayPCGRLObs):
+        map_obs = x.map_obs
+        flat_obs = x.flat_obs
+        act, val = self.subnet(map_obs, flat_obs)
+        pi = distrax.Categorical(logits=act)
+        return pi, val
+
+
+class ActorCritic(nn.Module):
+    """Transform the action output into a distribution."""
+    subnet: nn.Module
+
+    @nn.compact
+    def __call__(self, x: PlayPCGRLObs):
+        act, val = self.subnet(x, jnp.zeros((x.shape[0], 0)))
+        pi = distrax.Categorical(logits=act)
         return pi, val
 
 

@@ -11,8 +11,8 @@ import jax.numpy as jnp
 import numpy as np
 import PIL
 
-from gymnax.environments.environment import Environment
-from envs.pathfinding import get_path_coords_diam, get_path_coords_diam
+from gymnax.environments.environment import Environment as GymnaxEnvironment
+from envs.env import Environment
 from envs.probs.binary import BinaryMetrics, BinaryProblem
 from envs.probs.dungeon import DungeonProblem
 from envs.probs.maze import MazeProblem
@@ -56,8 +56,8 @@ class PCGRLEnvState:
 
 @struct.dataclass
 class PCGRLObs:
-    rep_obs: chex.Array
-    prob_obs: chex.Array
+    map_obs: chex.Array
+    flat_obs: chex.Array
 
 
 @struct.dataclass
@@ -253,36 +253,8 @@ class PCGRLEnv(Environment):
     def get_obs(self, env_map, static_map, rep_state, prob_state):
         rep_obs = self.rep.get_obs(env_map, static_map, rep_state)
         prob_obs = self.prob.observe_ctrls(prob_state)
-        obs = PCGRLObs(rep_obs=rep_obs, prob_obs=prob_obs)
+        obs = PCGRLObs(map_obs=rep_obs, flat_obs=prob_obs)
         return obs
-
-    @partial(jax.jit, static_argnums=(0,))
-    def step(
-        self,
-        key: chex.PRNGKey,
-        state: EnvState,
-        action: Union[int, float],
-        params: Optional[EnvParams] = None,
-    ) -> Tuple[chex.Array, EnvState, float, bool, dict]:
-        """Performs step transitions in the environment."""
-        # Use default env parameters if no others specified
-        if params is None:
-            params = self.default_params
-        key, key_reset = jax.random.split(key)
-        obs_st, state_st, reward, done, info = self.step_env(
-            key, state, action, params
-        )
-        obs_re, state_re = self.reset_env(key_reset, params)
-        # Auto-reset environment based on termination
-        state = jax.tree_map(
-            lambda x, y: jax.lax.select(done, x, y), state_re, state_st
-        )
-        # obs = jax.lax.select(done, obs_re, obs_st)
-        # Generalizing this to flax dataclass observations
-        obs = jax.tree_map(
-            lambda x, y: jax.lax.select(done, x, y), obs_re, obs_st
-        )
-        return obs, state, reward, done, info
 
     @partial(jax.jit, static_argnums=(0, 4))
     def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
@@ -322,7 +294,7 @@ class PCGRLEnv(Environment):
             done,
             {"discount": self.discount(env_state, env_params)},
         )
-
+    
     def is_terminal(self, state: PCGRLEnvState, params: PCGRLEnvParams) \
             -> bool:
         """Check whether state is terminal."""
@@ -351,13 +323,18 @@ class PCGRLEnv(Environment):
     def action_shape(self):
         return (self.n_agents, *self.act_shape, len(self.tile_enum) - 1)
 
+    def gen_dummy_obs(self, env_params: PCGRLEnvParams):
+        map_x = jnp.zeros((1,) + self.observation_space(env_params).shape)
+        ctrl_x = jnp.zeros((1, len(env_params.ctrl_metrics)))
+        return PCGRLObs(map_x, ctrl_x)
+
     def sample_action(self, rng):
         action_shape = self.action_shape()
         # Sample an action from the action space
         n_dims = len(action_shape)
         act_window_shape = action_shape[:-1]
-        n_tiles = action_shape[-1]
-        return jax.random.randint(rng, act_window_shape, 0, n_tiles)[None, ...]
+        n_tile_types = action_shape[-1]
+        return jax.random.randint(rng, act_window_shape, 0, n_tile_types)[None, ...]
 
 
 def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,

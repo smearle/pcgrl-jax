@@ -1,6 +1,7 @@
+# NOTE: Install jax manually from online instructions, after installing these requirements
 # jax>=0.2.26
 # jaxlib>=0.1.74
-jax[cuda12_pip] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# jax[cuda12_pip] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 gymnax
 evosax
 distrax
@@ -10,3 +11,4 @@ numpy
 pandas
 hydra-core
 imageio
+tensorboard

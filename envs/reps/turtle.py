@@ -5,6 +5,8 @@ from flax import struct
 import chex
 from gymnax.environments import spaces
 import jax
+
+from jax.experimental import checkify
 import jax.numpy as jnp
 
 import numpy as np
@@ -37,6 +39,10 @@ class TurtleRepresentation(Representation):
         )
         center = jnp.int32((env_map.shape[0] - 1) / 2)
         self.center_position = jnp.array([center, center])
+
+    @property
+    def per_tile_action_dim(self):
+        return len(self.tile_enum) - 1 + 4
 
     def step(self, env_map: chex.Array, action: chex.Array,
              rep_state: TurtleRepresentationState, step_idx: int):

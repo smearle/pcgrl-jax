@@ -17,6 +17,7 @@ class RepresentationState:
 
 
 class Representation(ABC):
+    pre_tile_action_dim: int
     def __init__(self, tile_enum: Tiles, rf_shape: Tuple[int, int],
                  act_shape: Tuple[int, int]):
         self.tile_enum = tile_enum
@@ -30,7 +31,7 @@ class Representation(ABC):
     def observation_space(self) -> spaces.Box:
         """Observation space of the environment."""
         observation_shape = self.observation_shape()
-        low = 1
+        low = 0
         high = 1
 #       low = jnp.zeros(
 #           observation_shape,
@@ -51,6 +52,10 @@ class Representation(ABC):
 
     def get_obs(self) -> chex.Array:
         raise NotImplementedError
+
+    @property
+    def per_tile_action_dim(self):
+        return len(self.tile_enum) - 1
 
 
 def get_ego_obs(self, env_map: chex.Array, static_map: chex.Array,

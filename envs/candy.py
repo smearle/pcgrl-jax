@@ -65,7 +65,7 @@ class Candy():
     def __init__(self, params: CandyParams):
         self.params = params
         self.height, self.width, self.n_candy_types = params.height, params.width, params.n_candy_types
-        self.n_tiles = len(self.tile_enum)
+        self.n_tile_types = len(self.tile_enum)
         self.n_dirs = 2  # Restrict player agent to right or down moves. Sufficient to cover all possible swaps.
         self.max_steps = params.max_steps_in_episode
         self.tile_size = 16
@@ -82,7 +82,7 @@ class Candy():
         return random.randint(rng, (3,), np.zeros(3), np.array(self.action_shape()))
 
     def observation_shape(self):
-        return (self.height, self.width, self.n_tiles)
+        return (self.height, self.width, self.n_tile_types)
 
     def observation_space(self, env_params) -> spaces.Box:
         observation_shape = self.observation_shape()
@@ -117,7 +117,7 @@ class Candy():
 
     def get_observation(self, state: CandyState):
         # Get one-hot encoding of the board
-        obs = jax.nn.one_hot(state.board, self.n_tiles)
+        obs = jax.nn.one_hot(state.board, self.n_tile_types)
         return obs
 
     @partial(jax.jit, static_argnums=(0, 3))
