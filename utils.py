@@ -8,7 +8,7 @@ from config import Config
 from envs.binary_0 import Binary0
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
-from envs.pcgrl_env_play import PlayPCGRLEnv, PlayPCGRLEnvParams
+from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
 from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
 from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, Dense, NCA, SeqNCA
@@ -20,7 +20,7 @@ def get_exp_dir(config: Config):
         exp_dir = os.path.join(
             'saves',
             f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
-            f'{config.activation}_w-{config.map_width}_rf-{config.vrf_size}_' +
+            f'{config.activation}_w-{config.map_width}_vrf-{config.vrf_size}_' +
             (f'cp-{config.change_pct}' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
             f'fz-{config.n_freezies}_' + \
@@ -30,7 +30,7 @@ def get_exp_dir(config: Config):
     elif config.env_name == 'PlayPCGRL':
         exp_dir = os.path.join(
             'saves',
-            f'play_{config.problem}_w-{config.map_width}_' + \
+            f'play_w-{config.map_width}_' + \
             f'{config.model}-{config.activation}_' + \
             f'vrf-{config.vrf_size}_arf-{config.arf_size}_' + \
             f'{config.seed}_{config.exp_name}',
@@ -73,7 +73,7 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         # In the candy-player environment, action space is flat discrete space over all candy-direction combos.
         action_dim = env.action_space(env_params).n
 
-    elif config.env_name == 'PCGRL':
+    elif 'PCGRL' in config.env_name:
         # First consider number of possible tiles
         # action_dim = env.action_space(env_params).n
         action_dim = env.rep.per_tile_action_dim
@@ -111,11 +111,12 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 action_dim=action_dim,
                 activation=config.activation,
             )
-    if config.env_name == 'PCGRL':
+    # if config.env_name == 'PCGRL':
+    if 'PCGRL' in config.env_name:
         network = ActorCriticPCGRL(network, act_shape=config.act_shape,
                             n_agents=config.n_agents, n_ctrl_metrics=len(config.ctrl_metrics))
-    elif config.env_name == 'PlayPCGRL':
-        network = ActorCriticPlayPCGRL(network)
+    # elif config.env_name == 'PlayPCGRL':
+    #     network = ActorCriticPlayPCGRL(network)
     else:
         network = ActorCritic(network)
     return network
@@ -152,11 +153,7 @@ def get_play_env_params_from_config(config: Config):
     rf_size = max(config.arf_size, config.vrf_size)
     rf_shape = (rf_size, rf_size)
 
-    # Convert string to enum ints
-    problem = ProbEnum[config.problem.upper()]
-
-    env_params = PlayPCGRLEnvParams(
-        problem=problem,
+    return PlayPCGRLEnvParams(
         map_shape=map_shape,
         rf_shape=rf_shape,
     )
@@ -170,7 +167,7 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
         env = PCGRLEnv(env_params)
 
     elif env_name == 'PlayPCGRL':
-        env_params = get_env_params_from_config(config)
+        env_params = get_play_env_params_from_config(config)
         env = PlayPCGRLEnv(env_params)
 
     elif env_name == 'Binary0':

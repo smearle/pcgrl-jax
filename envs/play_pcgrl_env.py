@@ -13,6 +13,7 @@ import PIL
 
 from gymnax.environments.environment import Environment as GymnaxEnvironment
 from envs.env import Environment
+from envs.pcgrl_env import PCGRLObs, gen_static_tiles
 from envs.probs.binary import BinaryMetrics, BinaryProblem
 from envs.probs.dungeon import DungeonProblem
 from envs.probs.maze import MazeProblem
@@ -28,26 +29,6 @@ from envs.utils import Tiles
 from sawtooth import triangle_wave
 
 
-class ProbEnum(IntEnum):
-    BINARY = 0
-    MAZE = 1
-    DUNGEON = 2
-    MAZE_PLAY = 3
-
-PROB_CLASSES = {
-    ProbEnum.BINARY: BinaryProblem,
-    ProbEnum.MAZE: MazeProblem,
-    ProbEnum.DUNGEON: DungeonProblem,
-    ProbEnum.MAZE_PLAY: MazePlayProblem,
-}
-
-class RepEnum(IntEnum):
-    NARROW = 0
-    TURTLE = 1
-    WIDE = 2
-    NCA = 3
-    PLAYER = 4
-
 @struct.dataclass
 class PCGRLEnvState:
     env_map: chex.Array
@@ -59,104 +40,37 @@ class PCGRLEnvState:
     pct_changed: np.float32 = 0.0
     done: bool = False
 
-@struct.dataclass
-class PCGRLObs:
-    map_obs: chex.Array
-    flat_obs: chex.Array
-
 
 @struct.dataclass
-class PCGRLEnvParams:
-    problem: int = ProbEnum.BINARY
-    representation: int = RepEnum.NARROW
+class PlayPCGRLEnvParams:
     map_shape: Tuple[int, int] = (16, 16)
-    act_shape: Tuple[int, int] = (1, 1)
     rf_shape: Tuple[int, int] = (31, 31)
-    static_tile_prob: Optional[float] = 0.0
-    n_freezies: int = 0
     n_agents: int = 1
-    max_board_scans: float = 3.0
-    ctrl_metrics: Tuple = ()
-    change_pct: float = -1.0
+    max_board_scans: float = 2.0
+
+    
+def gen_init_maze(rng, map_shape, tile_enum: Tiles):
+    init_map = jnp.full(map_shape, tile_enum.WALL)
+    # Place an empty tile at a random position
+    rng, _ = jax.random.split(rng)
+    y, x = jax.random.randint(rng, (2,), 0, map_shape)
+    init_map = init_map.at[y, x].set(tile_enum.EMPTY)
+
+    # Define a function that recognizes all places where there are two wall tiles in a row, adjacent to an empty tile
+    def is_wall(rng, init_map, y, x):
+        pass
 
 
-def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
-    static_rng, rng = jax.random.split(rng)
-    static_tiles = jax.random.bernoulli(
-        static_rng, p=static_tile_prob, shape=map_shape)
-
-
-    # if n_freezies > 0:
-    def gen_freezies(rng):
-        def gen_freezie(rng):
-            # Randomly select row or column 
-            rng, rng_ = jax.random.split(rng)
-
-            height = map_shape[0]
-            width = map_shape[1]
-            
-            rect = jnp.ones(map_shape, dtype=jnp.float16)
-            row = rect[0]
-            col = rect[1]
-
-            locs = jax.random.uniform(rng_, shape=(2,))
-            r_loc, c_loc = locs
-
-            # FIXME: These guys are generally too big
-            r_tri = triangle_wave(jnp.arange(map_shape[1]) / map_shape[1], 
-                                   x_peak=r_loc, period=2)
-            c_tri = triangle_wave(jnp.arange(map_shape[0]) / map_shape[0], 
-                                   x_peak=c_loc, period=2)
-            rc_tris = jnp.stack((r_tri, c_tri))
-            maxval = jnp.max(rc_tris)
-            minval = jnp.min(rc_tris)
-            rc_cutoff = jax.random.uniform(rng_, shape=(2,), minval=minval*1.5, maxval=maxval)
-            r_cut, c_cut = rc_cutoff
-            r_tri = jnp.where(r_tri > r_cut, 1, 0)
-            c_tri = jnp.where(c_tri > c_cut, 1, 0)
-
-            rect = rect * r_tri * c_tri[..., None]
-            rect = rect.astype(bool)
-
-            return rect
-
-        frz_keys = jax.random.split(rng, n_freezies)
-
-        rects = jax.vmap(gen_freezie, in_axes=0)(frz_keys)
-
-        rects = jnp.clip(rects.sum(0), 0, 1).astype(bool)
-        # static_tiles = rects | static_tiles
-        return rects
-
-    static_tiles = jax.lax.cond(
-        n_freezies > 0,
-        lambda rng: static_tiles | gen_freezies(rng),
-        lambda _: static_tiles,
-        rng,
-    ) 
-
-    return static_tiles
-
-
-def get_prob_cls(problem: str):
-    return PROB_CLASSES[problem]
-
-
-class PCGRLEnv(Environment):
-    def __init__(self, env_params: PCGRLEnvParams):
-        map_shape, act_shape, rf_shape, problem, representation, static_tile_prob, n_freezies, n_agents = (
-            env_params.map_shape, env_params.act_shape, env_params.rf_shape, env_params.problem,
-            env_params.representation, env_params.static_tile_prob, env_params.n_freezies, env_params.n_agents)
+class PlayPCGRLEnv(Environment):
+    def __init__(self, env_params: PlayPCGRLEnvParams):
+        map_shape, rf_shape, n_agents, max_board_scans = \
+            env_params.map_shape, env_params.rf_shape, env_params.n_agents, env_params.max_board_scans
 
         self.map_shape = map_shape
-        self.act_shape = act_shape
-        self.static_tile_prob = np.float32(static_tile_prob)
-        self.n_freezies = np.int32(n_freezies)
         self.n_agents = n_agents
 
         self.prob: Problem
-        prob_cls = PROB_CLASSES[problem]
-        self.prob = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics)
+        self.prob = MazePlayProblem(map_shape=map_shape, ctrl_metrics=[])
 
         self.tile_enum = self.prob.tile_enum
         self.tile_probs = self.prob.tile_probs
@@ -164,83 +78,27 @@ class PCGRLEnv(Environment):
         env_map = self.prob.gen_init_map(rng)
 
         self.rep: Representation
-        self.rep = representation
-        if representation == RepEnum.NARROW:
-            self.rep = NarrowRepresentation(env_map=env_map, rf_shape=rf_shape,
-                                            tile_enum=self.tile_enum,
-                                            act_shape=act_shape,
-                                            max_board_scans=env_params.max_board_scans,
-            )
-        elif representation == RepEnum.NCA:
-            self.rep = NCARepresentation(env_map=env_map, rf_shape=rf_shape,
-                                         tile_enum=self.tile_enum,
-                                         act_shape=act_shape,
-                                         max_board_scans=env_params.max_board_scans,
-            )
-        elif representation == RepEnum.WIDE:
-            self.rep = WideRepresentation(env_map=env_map, rf_shape=rf_shape,
-                                          tile_enum=self.tile_enum,
-                                          act_shape=act_shape,
-                                          max_board_scans=env_params.max_board_scans,
-            )
-        elif representation == RepEnum.TURTLE:
-            if n_agents > 1:
-                self.rep = MultiTurtleRepresentation(
-                    env_map=env_map, rf_shape=rf_shape,
-                    tile_enum=self.tile_enum,
-                    act_shape=act_shape,
-                    map_shape=map_shape,
-                    n_agents=n_agents,
-                    max_board_scans=env_params.max_board_scans,
-                    )
-
-            else:
-                self.rep = TurtleRepresentation(env_map=env_map, rf_shape=rf_shape,
-                                                tile_enum=self.tile_enum,
-                                                act_shape=act_shape, map_shape=map_shape)
-        elif representation == RepEnum.PLAYER:
-            self.rep = PlayerRepresentation(env_map=env_map, rf_shape=rf_shape,
-                                            tile_enum=self.tile_enum,
-                                            act_shape=act_shape, map_shape=map_shape)
-        else:
-            raise Exception(f'Representation {representation} not implemented')
+        self.rep = PlayerRepresentation(env_map=env_map, rf_shape=rf_shape,
+                                    tile_enum=self.tile_enum,
+                                    act_shape=(1,1), map_shape=map_shape)
 
         self.max_steps = self.rep.max_steps
         self.tile_size = self.prob.tile_size
-
-    # def set_ctrl_trgs(self, env_state, ctrl_trgs):
-    #     # Assuming it's already batched
-    #     env_state = PCGRLEnvState(
-    #         env_map=env_state.env_map, static_map=env_state.static_map,
-    #         rep_state=env_state.rep_state, done=env_state.done, reward=env_state.reward,
-    #         prob_state=env_state.prob_state.replace(ctrl_trgs=ctrl_trgs), step_idx=env_state.step_idx)
-    #     return env_state
 
     def init_graphics(self):
         self.prob.init_graphics()
 
     @partial(jax.jit, static_argnums=(0, 2))
-    def reset_env(self, rng, env_params: PCGRLEnvParams) \
+    def reset_env(self, rng, env_params: PlayPCGRLEnvParams) \
             -> Tuple[chex.Array, PCGRLEnvState]:
         env_map = self.prob.gen_init_map(rng)
-        # frz_map = jax.lax.cond(
-        #     self.static_tile_prob is not None or self.n_freezies > 0,
-        #     lambda rng: gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape),
-        #     lambda _: None,
-        #     rng,
-        # )
-        frz_map = gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape)
-        # if self.static_tile_prob is not None or self.n_freezies > 0:
-        #     frz_map = gen_static_tiles(
-        #         rng, self.static_tile_prob, self.n_freezies, self.map_shape)
-        # else:
-        #     frz_map = None
+        frz_map = gen_static_tiles(rng, 0.0, 0, self.map_shape)
 
         rng, _ = jax.random.split(rng)
         rep_state = self.rep.reset(frz_map, rng)
 
         rng, _ = jax.random.split(rng)
-        _, prob_state = self.prob.reset(env_map=env_map, rng=rng)
+        _, prob_state = self.prob.reset(env_map, rep_state.pos, rng)
 
         obs = self.get_obs(
             env_map=env_map, static_map=frz_map, rep_state=rep_state, prob_state=prob_state)
@@ -274,7 +132,7 @@ class PCGRLEnv(Environment):
         pct_changed = env_state.pct_changed + pct_changed
         reward, prob_state = jax.lax.cond(
             map_changed,
-            lambda env_map: self.prob.step(env_map, env_state.prob_state),
+            lambda env_map: self.prob.step(env_map, env_state.prob_state, rep_state.pos),
             lambda _: (0., env_state.prob_state),
             env_map,
         )
@@ -296,12 +154,12 @@ class PCGRLEnv(Environment):
             {"discount": self.discount(env_state, env_params)},
         )
     
-    def is_terminal(self, state: PCGRLEnvState, params: PCGRLEnvParams) \
+    def is_terminal(self, state: PCGRLEnvState, params: PlayPCGRLEnvParams) \
             -> bool:
         """Check whether state is terminal."""
         done = state.step_idx >= (self.rep.max_steps - 1)
-        done = jnp.logical_or(done, jnp.logical_and(
-            params.change_pct > 0, state.pct_changed >= params.change_pct))
+        # done = jnp.logical_or(done, jnp.logical_and(
+        #     params.change_pct > 0, state.pct_changed >= params.change_pct))
         return done
 
     def render(self, env_state: PCGRLEnvState):
@@ -312,21 +170,21 @@ class PCGRLEnv(Environment):
         return render_map(self, env_state, path_coords)
 
     @property
-    def default_params(self) -> PCGRLEnvParams:
-        return PCGRLEnvParams(map_shape=(16, 16))
+    def default_params(self) -> PlayPCGRLEnvParams:
+        return PlayPCGRLEnvParams(map_shape=(16, 16))
 
-    def action_space(self, env_params: PCGRLEnvParams) -> int:
+    def action_space(self, env_params: PlayPCGRLEnvParams) -> int:
         return self.rep.action_space()
 
-    def observation_space(self, env_params: PCGRLEnvParams) -> int:
+    def observation_space(self, env_params: PlayPCGRLEnvParams) -> int:
         return self.rep.observation_space()
 
     def action_shape(self):
         return (self.n_agents, *self.act_shape, len(self.tile_enum) - 1)
 
-    def gen_dummy_obs(self, env_params: PCGRLEnvParams):
+    def gen_dummy_obs(self, env_params: PlayPCGRLEnvParams):
         map_x = jnp.zeros((1,) + self.observation_space(env_params).shape)
-        ctrl_x = jnp.zeros((1, len(env_params.ctrl_metrics)))
+        ctrl_x = jnp.zeros((1, 1))
         return PCGRLObs(map_x, ctrl_x)
 
     def sample_action(self, rng):
@@ -338,7 +196,7 @@ class PCGRLEnv(Environment):
         return jax.random.randint(rng, act_window_shape, 0, n_tile_types)[None, ...]
 
 
-def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
+def render_map(env: PlayPCGRLEnv, env_state: PCGRLEnvState,
                path_coords: chex.Array):
     tile_size = env.prob.tile_size
     env_map = env_state.env_map
@@ -410,40 +268,11 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
     clr = (255, 0, 0, 255)
     x_border = x_border.at[:, :, :].set(clr)
     y_border = y_border.at[:, :, :].set(clr)
-    if env.static_tile_prob is not None or env.n_freezies > 0:
-        static_map = env_state.static_map
-        static_coords = jnp.argwhere(static_map,
-                                     size=(
-                                         env_map.shape[0]-border_size[0])*(env_map.shape[1]-border_size[1]),
-                                     fill_value=-1)
-
-        def draw_static_tile(carry):
-            static_coords, lvl_img, i = carry
-            y, x = static_coords[i]
-            y, x = y + border_size[1], x + border_size[0]
-            y, x = y * tile_size, x * tile_size
-            lvl_img = jax.lax.dynamic_update_slice(
-                lvl_img, x_border, (y, x, 0))
-            lvl_img = jax.lax.dynamic_update_slice(
-                lvl_img, x_border, (y, x+tile_size-2, 0))
-            lvl_img = jax.lax.dynamic_update_slice(
-                lvl_img, y_border, (y, x, 0))
-            lvl_img = jax.lax.dynamic_update_slice(
-                lvl_img, y_border, (y+tile_size-2, x, 0))
-            return (static_coords, lvl_img, i+1)
-
-        def cond(carry):
-            static_coords, _, i = carry
-            return jnp.all(static_coords[i] != jnp.array((-1, -1)))
-
-        i = 0
-        _, lvl_img, _ = jax.lax.while_loop(
-            cond, draw_static_tile, (static_coords, lvl_img, i))
 
     return lvl_img
 
 
-def render_stats_jax(env: PCGRLEnv, env_state: PCGRLEnvState, lvl_img: chex.Array):
+def render_stats_jax(env: PlayPCGRLEnv, env_state: PCGRLEnvState, lvl_img: chex.Array):
     # TODO: jaxify this if possible. PROBLEM: can't get concrete values of stats
 
     tile_size = env.prob.tile_size
@@ -497,7 +326,7 @@ def render_stats_jax(env: PCGRLEnv, env_state: PCGRLEnvState, lvl_img: chex.Arra
     return lvl_img
 
 
-def render_stats(env: PCGRLEnv, env_state: PCGRLEnvState, lvl_img: chex.Array):
+def render_stats(env: PlayPCGRLEnv, env_state: PCGRLEnvState, lvl_img: chex.Array):
     # TODO just use PIL draw functionality :)
 
     # jnp = np

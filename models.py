@@ -11,7 +11,6 @@ import jax
 import jax.numpy as jnp
 
 from envs.pcgrl_env import PCGRLObs
-from envs.pcgrl_env_play import PlayPCGRLObs
 
 
 def crop_rf(x, rf_size):
@@ -306,7 +305,7 @@ class ActorCriticPlayPCGRL(nn.Module):
     subnet: nn.Module
 
     @nn.compact
-    def __call__(self, x: PlayPCGRLObs):
+    def __call__(self, x: PCGRLObs):
         map_obs = x.map_obs
         flat_obs = x.flat_obs
         act, val = self.subnet(map_obs, flat_obs)
@@ -319,7 +318,7 @@ class ActorCritic(nn.Module):
     subnet: nn.Module
 
     @nn.compact
-    def __call__(self, x: PlayPCGRLObs):
+    def __call__(self, x: PCGRLObs):
         act, val = self.subnet(x, jnp.zeros((x.shape[0], 0)))
         pi = distrax.Categorical(logits=act)
         return pi, val

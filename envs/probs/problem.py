@@ -41,6 +41,12 @@ def gen_ctrl_trgs(metric_bounds, rng):
     return jax.random.randint(rng, (len(metric_bounds),), metric_bounds[:, 0], metric_bounds[:, 1])
 
 
+def gen_init_map(rng, tile_enum, map_shape, tile_probs):
+    init_map = jax.random.choice(
+        rng, len(tile_enum), shape=map_shape, p=tile_probs)
+    return init_map
+
+
 class Problem:
     tile_size = np.int8(16)
     stat_weights: chex.Array
@@ -50,6 +56,7 @@ class Problem:
     ctrl_threshes: chex.Array = None
 
     def __init__(self, map_shape, ctrl_metrics):
+        self.map_shape = map_shape
         self.metric_bounds = self.get_metric_bounds(map_shape)
         self.ctrl_metrics = np.array(ctrl_metrics, dtype=int)
         self.ctrl_metrics_mask = np.array([i in ctrl_metrics for i in range(len(self.stat_trgs))])
@@ -61,6 +68,10 @@ class Problem:
         self.ctrl_metric_obs_idxs = np.array([0]) if len(self.ctrl_metrics) == 0 else self.ctrl_metrics
 
         self.metric_names = [metric.name for metric in self.metrics_enum]
+
+    def gen_init_map(self, rng):
+        return gen_init_map(rng, self.tile_enum, self.map_shape,
+                               self.tile_probs)
 
     def get_metric_bounds(self, map_shape):
         raise NotImplementedError
@@ -118,7 +129,7 @@ class Problem:
         return reward, state
 
     def step(self, env_map: chex.Array, state: ProblemState):
-        new_state = self.get_curr_stats(env_map)
+        new_state = self.get_curr_stats(env_map=env_map)
         reward = get_reward(new_state.stats, state.stats, self.stat_weights, state.ctrl_trgs, self.ctrl_threshes)
         new_state = new_state.replace(
             ctrl_trgs=state.ctrl_trgs,

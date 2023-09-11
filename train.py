@@ -140,6 +140,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             if i % config.render_freq != 0:
             # if jnp.all(frames == 0):
                 return
+            print(f"Rendering episode gifs at update {i}")
             assert len(frames) == config.n_render_eps * 1 * env.max_steps,\
                 "Not enough frames collected"
 
@@ -166,7 +167,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         duration=config.gif_frame_duration
                     )
                 except jax.errors.TracerArrayConversionError:
+                    print("Failed to save gif. Skipping...")
                     return
+            print(f"Done rendering episode gifs at update {i}")
 
         def render_episodes(network_params):
             _, (states, rewards, dones, infos, frames) = jax.lax.scan(
