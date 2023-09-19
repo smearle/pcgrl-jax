@@ -1,5 +1,7 @@
 # PureJaxRL (End-to-End RL Training in Pure Jax)
 
+Note: use python 3.10 instead of 3.11; cuda 12 is fine
+
 [<img src="https://img.shields.io/badge/license-Apache2.0-blue.svg">](https://github.com/luchris429/purejaxrl/LICENSE)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/luchris429/purejaxrl/blob/main/examples/walkthrough.ipynb)

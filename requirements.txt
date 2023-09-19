@@ -12,3 +12,4 @@ pandas
 hydra-core
 imageio
 tensorboard
+tensorboardX

@@ -9,29 +9,73 @@ from plot import main as main_plot
 from train import main as main_train
 
 
-# (2) sweeping over action observation window (formerly "patch width")
-hypers = {
-    'ctrl_metrics': [['diameter']],
-    'arf_size': [3, 5, 8, 16, 32],
-    'seed': [0, 1, 2],
-    'model': ['conv', 'seqnca'],
-}
+############ baseline experiments (?) ############
+# # (-3) sweeping over action observation window without control
+# hypers = {
+#     'arf_size': [3, 5, 8, 16, 32],
+#     'seed': [0, 1, 2],
+#     'model': ['conv', 'seqnca'],
+#     'n_envs': [600],
+#     'total_timesteps': [200_000_000],
+# }
 
-# (1) woops, this is actually what we meant at (0)
+# # (-2) sweeping over value branch observation window without control
+# hypers = {
+#     'vrf_size': [3, 5, 8, 16, 32],
+#     'seed': [0, 1, 2],
+#     'model': ['conv', 'seqnca'],
+#     'n_envs': [600],
+#     'total_timesteps': [200_000_000],
+# }
+
+# (-1) sweeping over observation window without control
+# hypers = {
+#     'obs_size': [3, 5, 8, 16],
+#     'seed': [0, 1, 2],
+#     'model': ['conv', 'seqnca'],
+#     'n_envs': [600],
+#     'total_timesteps': [200_000_000],
+# }
+
+############ experiments for controllability of different rf sizes ############
+# # (2) sweeping over action observation window (formerly "patch width")
+# hypers = {
+#     'ctrl_metrics': [['diameter']],
+#     'arf_size': [3, 5, 8, 16, 32],
+#     'seed': [0, 1, 2],
+#     'model': ['conv', 'seqnca'],
+#     'n_envs': [600],
+#     'total_timesteps': [200_000_000],
+# }
+
+# # (1) woops, this is actually what we meant at (0)
 # hypers = {
 #     'ctrl_metrics': [['diameter']],
 #     'obs_size': [3, 5, 8, 16],
 #     'seed': [0, 1, 2],
 #     'model': ['conv', 'seqnca'],
+#     'n_envs': [600],
+#     'total_timesteps': [200_000_000],
 # }
 
-# (0) first sweep for ICLR
+# # (0) first sweep for ICLR
 # hypers = {
 #     'ctrl_metrics': [['diameter']],
 #     'vrf_size': [3, 5, 8, 16, 32],
 #     'seed': [0, 1, 2],
 #     'model': ['conv', 'seqnca'],
+#     'n_envs': [600],
+#     'total_timesteps': [200_000_000],
 # }
+
+hypers = {
+    'ctrl_metrics': [['diameter']],
+    'vrf_size': [3],
+    'seed': [0],
+    'model': ['seqnca'],
+    'n_envs': [600],
+    'total_timesteps': [200_000_000],
+}
 
 
 def get_sweep_cfgs(default_config, **kwargs):
