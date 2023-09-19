@@ -9,19 +9,34 @@ from plot import main as main_plot
 from train import main as main_train
 
 
+# (2) sweeping over action observation window (formerly "patch width")
+hypers = {
+    'ctrl_metrics': [['diameter']],
+    'arf_size': [3, 5, 8, 16, 32],
+    'seed': [0, 1, 2],
+    'model': ['conv', 'seqnca'],
+}
+
+# (1) woops, this is actually what we meant at (0)
 # hypers = {
-#     'static_tile_prob': [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
+#     'ctrl_metrics': [['diameter']],
+#     'obs_size': [3, 5, 8, 16],
+#     'seed': [0, 1, 2],
+#     'model': ['conv', 'seqnca'],
 # }
 
-
-hypers = {
-    'representation': ['turtle'],
-    'n_agents': [1, 2, 3, 4, 5],
-}
+# (0) first sweep for ICLR
+# hypers = {
+#     'ctrl_metrics': [['diameter']],
+#     'vrf_size': [3, 5, 8, 16, 32],
+#     'seed': [0, 1, 2],
+#     'model': ['conv', 'seqnca'],
+# }
 
 
 def get_sweep_cfgs(default_config, **kwargs):
     subconfigs = [default_config]
+    # Name of hyper, list of values
     for k, v in kwargs.items():
         if hasattr(default_config, k):
             assert isinstance(v, list)
@@ -35,6 +50,20 @@ def get_sweep_cfgs(default_config, **kwargs):
                     setattr(nsc, k, vi)
                     new_subconfigs.append(nsc)
             subconfigs = new_subconfigs
+
+        elif k == 'obs_size':
+            # Break this down into `arf_size` and `vrf_size` with the same value
+            assert isinstance(v, list)
+            new_subconfigs = []
+            for vi in v:
+                assert isinstance(vi, int)
+                for sc in subconfigs:
+                    nsc = copy.deepcopy(sc)
+                    setattr(nsc, 'arf_size', vi)
+                    setattr(nsc, 'vrf_size', vi)
+                    new_subconfigs.append(nsc)
+            subconfigs = new_subconfigs
+
         else:
             raise Exception
     return subconfigs
@@ -75,18 +104,19 @@ def sweep_main(cfg):
             )
         return executor.submit(seq_main, main_enjoy, sweep_configs)
 
-    if cfg.slurm:
+    if cfg.mode == 'train':
         executor = submitit.AutoExecutor(folder='submitit_logs')
         executor.update_parameters(
                 mem_gb=30,
                 tasks_per_node=1,
                 cpus_per_task=1,
-                gpus_per_node=1,
+                # gpus_per_node=1,
                 timeout_min=1440,
+                slurm_gres='gpu:rtx8000:1',
                 # partition='rtx8000',
             )
         executor.map_array(main_fn, sweep_configs)
-    else:
+    elif cfg.mode == 'plot':
         [main_fn(sc) for sc in sweep_configs]
 
 

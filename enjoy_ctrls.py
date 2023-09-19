@@ -1,8 +1,5 @@
-import json
 import os
 
-import chex
-from flax import struct
 import hydra
 import imageio
 import jax
@@ -16,15 +13,8 @@ from train import init_checkpointer
 from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
 
 
-@struct.dataclass
-class EvalData:
-    ctrl_trgs: chex.Array
-    cell_losses: chex.Array
-    cell_progs: chex.Array
-    cell_rewards: chex.Array
-
-@hydra.main(version_base=None, config_path='./', config_name='eval_pcgrl')
-def main_eval_ctrls(config: EvalConfig):
+@hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
+def main_enjoy_ctrls(config: EvalConfig):
     config = init_config(config)
 
     exp_dir = get_exp_dir(config)
@@ -64,10 +54,10 @@ def main_eval_ctrls(config: EvalConfig):
             obs, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
                 rng_step, env_state, action, env_params
             )
-            # frame = env.render(env_state)
+            frame = env.render(env_state)
             # Can't concretize these values inside jitted function (?)
             # So we add the stats on cpu later (below)
-            # frame = render_stats(env, env_state, frame)
+            frame = render_stats(env, env_state, frame)
             return (rng, obs, env_state), (env_state, reward, done, info)
 
         print('Scanning episode steps:')
@@ -98,60 +88,24 @@ def main_eval_ctrls(config: EvalConfig):
         im_shape += (1,)
 
     # for i, ctrl_trgs in enumerate(ctrl_trg_pairs):
-    def _eval_ctrls(ctrl_trg):
-        _, (states, reward, dones, infos) = eval_ctrls(ctrl_trg)
-        ep_rewards = reward.sum(axis=0)
-        cell_reward = jnp.mean(ep_rewards)
+    def _eval_ctrls(ctrl_trgs):
+        _, (states, reward, dones, infos) = eval_ctrls(ctrl_trgs)
 
         cell_stats = states.prob_state.stats
-        init_stats = cell_stats[0]
-        final_stats = cell_stats[-1]
-        cell_loss = jnp.mean(jnp.abs(final_stats[:, ctrl_metrics] - ctrl_trg))
-
-        # Compute relative progress toward target from initial metric values
-        cell_progs = 1 - jnp.abs(final_stats[:, ctrl_metrics] - ctrl_trg) / jnp.abs(init_stats[:, ctrl_metrics] - ctrl_trg)
-        cell_prog = jnp.mean(cell_progs)
-
-        eval_data = EvalData(
-            ctrl_trgs=ctrl_trg,
-            cell_losses=cell_loss,
-            cell_rewards=cell_reward,
-            cell_progs = cell_prog,
-        )
+        cell_loss = jnp.sum(jnp.abs(cell_stats[ctrl_metrics] - ctrl_trgs))
         
-        return eval_data
-
-    json_path = os.path.join(exp_dir, 'ctrl_stats.json')
+        # print(f'Cell loss: {cell_loss}')
+        return cell_loss
     
-    if config.reevaluate:
-        stats = jax.vmap(_eval_ctrls)(ctrl_trg_pairs)
+    cell_losses = jax.vmap(_eval_ctrls)(ctrl_trg_pairs)
 
-        with open(json_path, 'w') as f:
-            json_stats = {k: v.tolist() for k, v in stats.__dict__.items()}
-            json.dump(json_stats, f, indent=4)
-    else:
-        with open(json_path, 'r') as f:
-            stats = json.load(f)
-            stats = EvalData(**stats)
+    cell_losses = cell_losses.reshape(im_shape)
+    plt.imshow(cell_losses)
+    plt.colorbar()
+    plt.title('Control target success')
 
-    cell_progs = np.array(stats.cell_progs)
-    cell_progs = cell_progs.reshape(im_shape)
-
-    fig, ax = plt.subplots()
-    ax.imshow(cell_progs)
-    if len(im_shape) == 1:
-        ax.set_xticks([])
-    elif len(im_shape) == 2:
-        ax.set_xticks(np.arange(len(ctrl_trgs[0])))
-        ax.set_xticklabels(ctrl_trgs[0])
-    ax.set_yticks(np.arange(len(ctrl_trgs))) 
-    ax.set_yticklabels(ctrl_trgs[:, 0])
-    fig.colorbar()
-    # plt.imshow(cell_progs)
-    # plt.colorbar()
-    # plt.title('Control target success')
-
+    
     plt.savefig(os.path.join(exp_dir, 'ctrl_loss.png'))
 
 if __name__ == '__main__':
-    main_eval_ctrls()
+    main_enjoy_ctrls()

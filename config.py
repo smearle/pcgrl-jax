@@ -70,6 +70,10 @@ class TrainConfig(Config):
     render_freq: int = 100
     n_render_eps: int = 3
 
+    evo_freq: int = 10
+    evo_pop_size: int = 10
+    evo_mutate_prob: float = 0.1
+
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     NUM_UPDATES: Optional[int] = None
     MINIBATCH_SIZE: Optional[int] = None
@@ -85,7 +89,9 @@ class EnjoyConfig(Config):
     
 @dataclass
 class EvalConfig(Config):
+    reevaluate: bool = True
     random_agent: bool = False
+    # In how many bins to divide up each control metric
     n_bins: int = 10
     n_envs: int = 200
     n_eps: int = 1

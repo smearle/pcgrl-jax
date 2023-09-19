@@ -54,6 +54,7 @@ class Problem:
     ctrl_metrics: chex.Array
     stat_trgs: chex.Array
     ctrl_threshes: chex.Array = None
+    queued_ctrl_trgs: chex.Array = None
 
     def __init__(self, map_shape, ctrl_metrics):
         self.map_shape = map_shape
@@ -69,6 +70,9 @@ class Problem:
 
         self.metric_names = [metric.name for metric in self.metrics_enum]
 
+        self.queued_ctrl_trgs = jnp.zeros(len(self.metric_bounds))  # dummy value to placate jax
+        self.has_queued_ctrl_trgs = False
+
     def gen_init_map(self, rng):
         return gen_init_map(rng, self.tile_enum, self.map_shape,
                                self.tile_probs)
@@ -78,6 +82,10 @@ class Problem:
 
     def get_stats(self, env_map: chex.Array, prob_state: ProblemState):
         raise NotImplementedError
+
+    def queue_ctrl_trgs(self, ctrl_trgs):
+        self.queued_ctrl_trgs = ctrl_trgs
+        self.has_queued_ctrl_trgs = True
 
     def init_graphics(self):
         self.graphics = jnp.array(self.graphics)
@@ -113,12 +121,21 @@ class Problem:
         obs = obs[self.ctrl_metric_obs_idxs]
         return obs
 
-    def reset(self, env_map: chex.Array, rng):
+    def gen_rand_ctrl_trgs(self, rng):
         # Randomly sample some control targets
         ctrl_trgs =  jnp.where(
             self.ctrl_metrics_mask,
             gen_ctrl_trgs(self.metric_bounds, rng),
             self.stat_trgs,
+        )
+        return ctrl_trgs
+
+    def reset(self, env_map: chex.Array, rng):
+
+        ctrl_trgs = jax.lax.select(
+            self.has_queued_ctrl_trgs,
+            self.queued_ctrl_trgs,
+            self.gen_rand_ctrl_trgs(rng),
         )
 
         state = self.get_curr_stats(env_map)

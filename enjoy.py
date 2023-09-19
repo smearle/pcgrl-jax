@@ -3,10 +3,11 @@ import os
 import hydra
 import imageio
 import jax
+from jax import numpy as jnp
 import numpy as np
 
 from config import EnjoyConfig
-from envs.pcgrl_env import render_stats
+from envs.pcgrl_env import PCGRLEnv, render_stats
 from train import init_checkpointer
 from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
 
@@ -22,12 +23,17 @@ def main_enjoy(config: EnjoyConfig):
     elif not os.path.exists(exp_dir):
         os.makedirs(exp_dir)
 
+    env: PCGRLEnv
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     env.prob.init_graphics()
     network = get_network(env, env_params, config)
 
     rng = jax.random.PRNGKey(42)
     rng_reset = jax.random.split(rng, config.n_eps)
+
+    frz_map = jnp.zeros(env.map_shape, dtype=jnp.int8)
+    frz_map = frz_map.at[7, 3:-3].set(1)
+    env.queue_static_tiles(frz_map)
 
     # obs, env_state = env.reset(rng, env_params)
     obs, env_state = jax.vmap(env.reset, in_axes=(0, None))(rng_reset, env_params)

@@ -151,6 +151,8 @@ class PCGRLEnv(Environment):
         self.map_shape = map_shape
         self.act_shape = act_shape
         self.static_tile_prob = np.float32(static_tile_prob)
+        self.queued_frz_map = jnp.zeros(map_shape, dtype=bool)
+        self.has_queued_frz_map = False
         self.n_freezies = np.int32(n_freezies)
         self.n_agents = n_agents
 
@@ -219,6 +221,13 @@ class PCGRLEnv(Environment):
     def init_graphics(self):
         self.prob.init_graphics()
 
+    def queue_static_tiles(self, frz_map: chex.Array):
+        self.queued_frz_map = frz_map
+        self.has_queued_frz_map = True
+
+    def queue_ctrl_trgs(self, ctrl_trgs):
+        self.prob.queue_ctrl_trgs(ctrl_trgs)
+
     @partial(jax.jit, static_argnums=(0, 2))
     def reset_env(self, rng, env_params: PCGRLEnvParams) \
             -> Tuple[chex.Array, PCGRLEnvState]:
@@ -229,7 +238,12 @@ class PCGRLEnv(Environment):
         #     lambda _: None,
         #     rng,
         # )
-        frz_map = gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape)
+        # frz_map = self.queued_frz_map if self.queued_frz_map is not None else gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape)
+        frz_map = jax.lax.select(
+            self.has_queued_frz_map,
+            self.queued_frz_map,
+            gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape),
+        )
         # if self.static_tile_prob is not None or self.n_freezies > 0:
         #     frz_map = gen_static_tiles(
         #         rng, self.static_tile_prob, self.n_freezies, self.map_shape)
@@ -410,7 +424,7 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
     clr = (255, 0, 0, 255)
     x_border = x_border.at[:, :, :].set(clr)
     y_border = y_border.at[:, :, :].set(clr)
-    if env.static_tile_prob is not None or env.n_freezies > 0:
+    if env.static_tile_prob is not None or env.n_freezies > 0 or env.queued_frz_map is not None:
         static_map = env_state.static_map
         static_coords = jnp.argwhere(static_map,
                                      size=(
