@@ -24,7 +24,7 @@ class Environment(GymnaxEnvironment):
         obs_st, state_st, reward, done, info = self.step_env(
             key, state, action, params
         )
-        obs_re, state_re = self.reset_env(key_reset, params, )
+        obs_re, state_re = self.reset_env(key_reset, params, queued_state=state.queued_state)
         # Auto-reset environment based on termination
         state = jax.tree_map(
             lambda x, y: jax.lax.select(done, x, y), state_re, state_st
@@ -37,3 +37,13 @@ class Environment(GymnaxEnvironment):
         return obs, state, reward, done, info
 
 
+    @partial(jax.jit, static_argnums=(0,))
+    def reset(
+        self, key: chex.PRNGKey, params: Optional[EnvParams] = None, queued_state=None,
+    ) -> Tuple[chex.Array, EnvState]:
+        """Performs resetting of environment."""
+        # Use default env parameters if no others specified
+        if params is None:
+            params = self.default_params
+        obs, state = self.reset_env(key, params, queued_state)
+        return obs, state

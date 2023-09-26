@@ -18,7 +18,7 @@ class FloodPathState:
     flood_count: chex.Array
     env_map: Optional[chex.Array] = None
     trg: Optional[chex.Array] = None
-    nearest_trg_xy: Optional[chex.Array] = jnp.zeros(2, dtype=jnp.int32)
+    nearest_trg_xy: Optional[chex.Array] = None #  = jnp.zeros(2, dtype=jnp.int32)
     done: bool = False
 
 

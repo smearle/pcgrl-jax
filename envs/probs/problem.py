@@ -85,9 +85,9 @@ class Problem:
     def get_stats(self, env_map: chex.Array, prob_state: ProblemState):
         raise NotImplementedError
 
-    def queue_ctrl_trgs(self, ctrl_trgs):
-        self.queued_ctrl_trgs = ctrl_trgs
-        self.has_queued_ctrl_trgs = True
+    def queue_ctrl_trgs(self, queued_state, ctrl_trgs):
+        queued_state = queued_state.replace(queued_ctrl_trgs=ctrl_trgs, has_queued_ctrl_trgs=True)
+        return queued_state
 
     def init_graphics(self):
         self.graphics = jnp.array(self.graphics)
@@ -132,11 +132,10 @@ class Problem:
         )
         return ctrl_trgs
 
-    def reset(self, env_map: chex.Array, rng):
-
+    def reset(self, env_map: chex.Array, rng, queued_state):
         ctrl_trgs = jax.lax.select(
-            self.has_queued_ctrl_trgs,
-            self.queued_ctrl_trgs,
+            queued_state.has_queued_ctrl_trgs,
+            queued_state.ctrl_trgs,
             self.gen_rand_ctrl_trgs(rng),
         )
 

@@ -76,7 +76,7 @@ class LogWrapper(GymnaxWrapper):
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(
-        self, key: chex.PRNGKey, params: Optional[environment.EnvParams] = None
+        self, key: chex.PRNGKey, params: Optional[environment.EnvParams] = None, queued_state = None,
     ) -> Tuple[chex.Array, environment.EnvState]:
         obs, env_state = self._env.reset(key, params)
         state = LogEnvState(env_state, 0, 0, 0, 0, 0)

@@ -4,6 +4,7 @@ from timeit import default_timer as timer
 from typing import NamedTuple
 
 import hydra
+import numpy as np
 import jax
 import jax.numpy as jnp
 from flax import struct
@@ -15,7 +16,7 @@ import orbax
 from tensorboardX import SummaryWriter
 
 from config import Config, TrainConfig
-from envs.pcgrl_env import PCGRLObs, render_stats
+from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from evo_accel import apply_evo
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
@@ -93,28 +94,23 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         # INIT ENV FOR TRAIN
         rng, _rng = jax.random.split(rng)
-        # obsv, env_state = jax.vmap(
-        #     env.reset, in_axes=(0, None))(reset_rng, env_params)
-
-        # Reshape reset_rng and other per-environment states to (n_devices, -1, ...)
-
         frz_rng = jax.random.split(_rng, config.evo_pop_size)
-        frz_maps = jax.vmap(env.gen_static_tiles, in_axes=(0,))(frz_rng, 0.1, 0, env.map_shape)
-        frz_maps = jnp.repeat(frz_maps, config.n_envs // config.evo_pop_size, axis=0)
-        jax.vmap(env.set_frz_map, in_axes=(0,))(frz_maps)
+        frz_maps = jax.vmap(gen_static_tiles, in_axes=(0, None, None, None))(frz_rng, 0.1, 0, env.map_shape)
+        frz_maps = jnp.repeat(frz_maps, int(np.ceil(config.n_envs / config.evo_pop_size)), axis=0)[:config.n_envs]
+        queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
+        queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps)
         reset_rng = jax.random.split(_rng, config.n_envs)
-        vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None))
-        # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-        obsv, env_state = vmap_reset_fn(reset_rng, env_params)
+        vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, 0))
+        obsv, env_state = vmap_reset_fn(reset_rng, env_params, queued_state)
 
         # INIT ENV FOR RENDER
         rng_r, _rng_r = jax.random.split(rng)
-        jax.vmap(env_r.set_frz_map, in_axes=(0,))(frz_maps[:config.n_render_eps])
         reset_rng_r = jax.random.split(_rng_r, config.n_render_eps)
-
-        vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None))
+        queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
+        queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps[:config.n_render_eps])
+        vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None, 0))
         # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-        obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params)  # Replace None with your env_params if any
+        obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params, queued_state)  # Replace None with your env_params if any
         
         # obsv_r, env_state_r = jax.vmap(
         #     env_r.reset, in_axes=(0, None))(reset_rng_r, env_params)
@@ -412,11 +408,16 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # eval the frz maps and mutate the frz maps
             # NOTE: If you vmap the train function, both of these branches will (most probably)
             # be evaluated each time.                  
+            frz_maps = env_state.env_state.queued_state.frz_map
             frz_maps = jax.lax.cond(
                 runner_state.update_i % config.evo_freq == 0,
-                lambda: apply_evo(rng, frz_maps, env, env_params, config),
-                lambda: frz_maps,)
+                lambda: apply_evo(rng, frz_maps, env, env_params, network_params=network_params,
+                                  network=network, config=config),
+                lambda: frz_maps[:config.evo_pop_size],)
 
+            frz_maps = jnp.repeat(frz_maps, int(np.ceil(config.n_envs / config.evo_pop_size)), axis=0)[:config.n_envs]
+            queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
+            queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps)
             
             # Create a tensorboard writer
             writer = SummaryWriter(get_exp_dir(config))
@@ -512,10 +513,17 @@ def init_checkpointer(config: Config):
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config.n_envs)
 
+    frz_rng = jax.random.split(_rng, config.evo_pop_size)
+    frz_maps = jax.vmap(gen_static_tiles, in_axes=(0, None, None, None))(frz_rng, 0.1, 0, env.map_shape)
+    frz_maps = jnp.repeat(frz_maps, config.n_envs // config.evo_pop_size, axis=0)
+
+    queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
+    queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps)
+
     # reset_rng_r = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
-    vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None))
+    vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, 0))
     # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-    obsv, env_state = vmap_reset_fn(reset_rng, env_params)
+    obsv, env_state = vmap_reset_fn(reset_rng, env_params, queued_state)
     runner_state = RunnerState(train_state=train_state, env_state=env_state, last_obs=obsv,
                                # ep_returns=jnp.full(config.num_envs, jnp.nan), 
                                rng=rng, update_i=0)

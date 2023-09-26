@@ -33,7 +33,7 @@ def main_enjoy(config: EnjoyConfig):
 
     frz_map = jnp.zeros(env.map_shape, dtype=jnp.int8)
     frz_map = frz_map.at[7, 3:-3].set(1)
-    env.queue_static_tiles(frz_map)
+    env.queue_frz_map(frz_map)
 
     # obs, env_state = env.reset(rng, env_params)
     obs, env_state = jax.vmap(env.reset, in_axes=(0, None))(rng_reset, env_params)

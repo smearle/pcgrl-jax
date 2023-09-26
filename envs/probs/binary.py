@@ -1,6 +1,6 @@
 from enum import IntEnum
 import os
-from typing import Optional
+from typing import Optional, Tuple
 
 import chex
 from flax import struct
@@ -69,8 +69,8 @@ class BinaryProblem(Problem):
         bounds[BinaryMetrics.N_REGIONS] = [0, get_max_n_regions(map_shape)]
         return np.array(bounds)
 
-    def get_path_coords(self, env_map: chex.Array, prob_state: BinaryState):
-        return get_path_coords_diam(flood_count=prob_state.flood_count, max_path_len=self.max_path_len)
+    def get_path_coords(self, env_map: chex.Array, prob_state: BinaryState) -> Tuple[chex.Array]:
+        return (get_path_coords_diam(flood_count=prob_state.flood_count, max_path_len=self.max_path_len),)
     
     def init_graphics(self):
         self.graphics = [0] * (len(self.tile_enum) + 1)

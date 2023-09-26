@@ -50,7 +50,9 @@ class RepEnum(IntEnum):
 
 @struct.dataclass
 class QueuedState:
+    has_queued_ctrl_trgs: bool = False
     ctrl_trgs: Optional[chex.Array] = None
+    has_queued_frz_map: bool = False
     frz_map: Optional[chex.Array] = None
 
 @struct.dataclass
@@ -89,7 +91,7 @@ class PCGRLEnvParams:
 def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
     static_rng, rng = jax.random.split(rng)
     static_tiles = jax.random.bernoulli(
-        static_rng, p=static_tile_prob, shape=map_shape)
+        static_rng, p=static_tile_prob, shape=map_shape).astype(bool)
 
 
     # if n_freezies > 0:
@@ -158,8 +160,8 @@ class PCGRLEnv(Environment):
         self.map_shape = map_shape
         self.act_shape = act_shape
         self.static_tile_prob = np.float32(static_tile_prob)
-        self.queued_frz_map = jnp.zeros(map_shape, dtype=bool)
-        self.has_queued_frz_map = False
+        queued_frz_map = jnp.zeros(map_shape, dtype=bool)
+        has_queued_frz_map = False
         self.n_freezies = np.int32(n_freezies)
         self.n_agents = n_agents
 
@@ -227,15 +229,12 @@ class PCGRLEnv(Environment):
     def init_graphics(self):
         self.prob.init_graphics()
 
-    def queue_static_tiles(self, frz_map: chex.Array):
-        self.queued_frz_map = frz_map
-        self.has_queued_frz_map = True
-
-    def queue_ctrl_trgs(self, ctrl_trgs):
-        self.prob.queue_ctrl_trgs(ctrl_trgs)
+    def queue_frz_map(self, queued_state, frz_map: chex.Array):
+        queued_state = queued_state.replace(frz_map=frz_map, has_queued_frz_map=True)
+        return queued_state
 
     @partial(jax.jit, static_argnums=(0, 2))
-    def reset_env(self, rng, env_params: PCGRLEnvParams) \
+    def reset_env(self, rng, env_params: PCGRLEnvParams, queued_state: QueuedState) \
             -> Tuple[chex.Array, PCGRLEnvState]:
         env_map = self.prob.gen_init_map(rng)
         # frz_map = jax.lax.cond(
@@ -246,8 +245,8 @@ class PCGRLEnv(Environment):
         # )
         # frz_map = self.queued_frz_map if self.queued_frz_map is not None else gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape)
         frz_map = jax.lax.select(
-            self.has_queued_frz_map,
-            self.queued_frz_map,
+            queued_state.has_queued_frz_map,
+            queued_state.frz_map,
             gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape),
         )
         # if self.static_tile_prob is not None or self.n_freezies > 0:
@@ -260,14 +259,14 @@ class PCGRLEnv(Environment):
         rep_state = self.rep.reset(frz_map, rng)
 
         rng, _ = jax.random.split(rng)
-        _, prob_state = self.prob.reset(env_map=env_map, rng=rng)
+        _, prob_state = self.prob.reset(env_map=env_map, rng=rng, queued_state=queued_state)
 
         obs = self.get_obs(
             env_map=env_map, static_map=frz_map, rep_state=rep_state, prob_state=prob_state)
 
         env_state = PCGRLEnvState(env_map=env_map, static_map=frz_map,
                                   rep_state=rep_state, prob_state=prob_state,
-                                  step_idx=0, done=False)
+                                  step_idx=0, done=False, queued_state=queued_state)
 
         return obs, env_state
 
@@ -306,7 +305,7 @@ class PCGRLEnv(Environment):
         env_state = PCGRLEnvState(
             env_map=env_map, static_map=env_state.static_map,
             rep_state=rep_state, done=done, reward=reward,
-            prob_state=prob_state, step_idx=step_idx, pct_changed=pct_changed,)
+            prob_state=prob_state, step_idx=step_idx, pct_changed=pct_changed, queued_state=env_state.queued_state)
 
         return (
             jax.lax.stop_gradient(obs),
