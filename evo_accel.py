@@ -44,6 +44,7 @@ def apply_evo(rng, frz_maps, env, env_params, network_params, network, config: T
 
         pi, value = network.apply(network_params, obs_r)
         action_r = pi.sample(seed=rng_r)
+        action_r = jnp.full(action_r.shape, 0) # FIXME dumdum
 
         rng_step = jax.random.split(_rng_r, config.n_envs)
 

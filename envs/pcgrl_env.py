@@ -249,6 +249,7 @@ class PCGRLEnv(Environment):
             queued_state.frz_map,
             gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape),
         )
+        env_map = jnp.where(frz_map == 1, self.tile_enum.WALL, env_map)
         # if self.static_tile_prob is not None or self.n_freezies > 0:
         #     frz_map = gen_static_tiles(
         #         rng, self.static_tile_prob, self.n_freezies, self.map_shape)

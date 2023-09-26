@@ -183,6 +183,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             pi, value = network.apply(network_params, obs_r)
             action_r = pi.sample(seed=rng_r)
+            action_r = jnp.full(action_r.shape, fill_value=0)
 
             rng_step = jax.random.split(_rng_r, config.n_render_eps)
 
@@ -241,6 +242,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 # Squash the gpu dimension (network only takes one batch dimension)
                 pi, value = network.apply(train_state.params, last_obs)
                 action = pi.sample(seed=_rng)
+                action = jnp.full(action.shape, 0) # FIXME DUMDUM
                 log_prob = pi.log_prob(action)
 
                 # STEP ENV
