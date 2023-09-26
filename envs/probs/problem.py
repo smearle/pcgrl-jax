@@ -8,6 +8,8 @@ import jax.numpy as jnp
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from envs.utils import Tiles
+
 
 class Stats(IntEnum):
     pass
@@ -155,3 +157,44 @@ class Problem:
 
     def get_curr_stats(self, env_map: chex.Array) -> ProblemState:
         raise NotImplementedError
+
+    def draw_path(self, lvl_img, env_map, border_size, path_coords_tpl, tile_size):
+        assert len(path_coords_tpl) == 1
+        lvl_img = draw_path(prob=self, lvl_img=lvl_img, env_map=env_map, border_size=border_size, 
+                  path_coords=path_coords_tpl[0], tile_size=tile_size)
+        return lvl_img
+
+
+def draw_path(prob, lvl_img, env_map, border_size, path_coords, tile_size):
+    # Path, if applicable
+    tile_img = prob.graphics[-1]
+
+    def draw_path_tile(carry):
+        path_coords, lvl_img, i = carry
+        y, x = path_coords[i]
+        tile_type = env_map[y + border_size[0]][x + border_size[1]]
+        empty_tile = int(Tiles.EMPTY)
+
+        # Only draw path tiles on top of empty tiles
+        lvl_img = jax.lax.cond(
+            tile_type == empty_tile,
+            lambda: jax.lax.dynamic_update_slice(lvl_img, tile_img,
+                                            ((y + border_size[0]) * tile_size, (x + border_size[1]) * tile_size, 0)),
+            lambda: lvl_img,)
+                            
+        return (path_coords, lvl_img, i+1)
+
+    def cond(carry):
+        path_coords, _, i = carry
+        return jnp.all(path_coords[i] != jnp.array((-1, -1)))
+        # return jnp.all(path_coords[i:i+env.prob.max_path_len+1] != jnp.array(-1, -1))
+        # result = jnp.any(
+        #     jax.lax.dynamic_slice(path_coords, (i, 0), (prob.max_path_len+1, 2)) != jnp.array((-1, -1))
+        # )
+        # return result
+
+    i = 0
+    _, lvl_img, _ = jax.lax.while_loop(
+        cond, draw_path_tile, (path_coords, lvl_img, i))
+
+    return lvl_img

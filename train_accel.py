@@ -98,10 +98,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         # Reshape reset_rng and other per-environment states to (n_devices, -1, ...)
 
-        frz_rng = jax.random.split(_rng, 10)
+        frz_rng = jax.random.split(_rng, config.evo_pop_size)
         frz_maps = jax.vmap(env.gen_static_tiles, in_axes=(0,))(frz_rng, 0.1, 0, env.map_shape)
-        frz_maps = jnp.repeat(frz_maps, config.n_envs // 10, axis=0)
-        breakpoint()
+        frz_maps = jnp.repeat(frz_maps, config.n_envs // config.evo_pop_size, axis=0)
         jax.vmap(env.set_frz_map, in_axes=(0,))(frz_maps)
         reset_rng = jax.random.split(_rng, config.n_envs)
         vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None))
@@ -410,8 +409,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             jax.debug.callback(save_checkpoint, runner_state,
                                metric, steps_prev_complete)
 
-                               
             # eval the frz maps and mutate the frz maps
+            # NOTE: If you vmap the train function, both of these branches will (most probably)
+            # be evaluated each time.                  
             frz_maps = jax.lax.cond(
                 runner_state.update_i % config.evo_freq == 0,
                 lambda: apply_evo(rng, frz_maps, env, env_params, config),

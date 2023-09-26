@@ -24,7 +24,7 @@ def get_exp_dir(config: Config):
             (f'cp-{config.change_pct}' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
             f'fz-{config.n_freezies}_' + \
-            f'act-{config.act_shape[0]}x{config.act_shape[1]}_' + \
+            f'act-{"x".join([str(e) for e in config.act_shape])}_' + \
             f'nag-{config.n_agents}_' + \
             f'{config.seed}_{config.exp_name}')
     elif config.env_name == 'PlayPCGRL':
@@ -123,9 +123,14 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
 
         
 def get_env_params_from_config(config: Config):
-    map_shape = (config.map_width, config.map_width)
+    map_shape = ((config.map_width, config.map_width) if not config.is_3d
+                 else (config.map_width, config.map_width, config.map_width))
     rf_size = max(config.arf_size, config.vrf_size)
-    rf_shape = (rf_size, rf_size)
+    rf_shape = (rf_size, rf_size) if not config.is_3d else (rf_size, rf_size, rf_size)
+
+    act_shape = tuple(config.act_shape)
+    if config.is_3d:
+        assert len(config.act_shape) == 3
 
     # Convert strings to enum ints
     problem = ProbEnum[config.problem.upper()]
@@ -137,7 +142,7 @@ def get_env_params_from_config(config: Config):
         representation=int(RepEnum[config.representation.upper()]),
         map_shape=map_shape,
         rf_shape=rf_shape,
-        act_shape=tuple(config.act_shape),
+        act_shape=act_shape,
         static_tile_prob=config.static_tile_prob,
         n_freezies=config.n_freezies,
         n_agents=config.n_agents,
@@ -151,7 +156,7 @@ def get_env_params_from_config(config: Config):
 def get_play_env_params_from_config(config: Config):
     map_shape = (config.map_width, config.map_width)
     rf_size = max(config.arf_size, config.vrf_size)
-    rf_shape = (rf_size, rf_size)
+    rf_shape = (rf_size, rf_size) if not config.is_3d else (rf_size, rf_size, rf_size)
 
     return PlayPCGRLEnvParams(
         map_shape=map_shape,

@@ -27,7 +27,7 @@ class NarrowRepresentation(Representation):
                          )
         self.rf_shape = np.array(rf_shape)
         self.rf_off = int(max(np.ceil(self.rf_shape - 1) / 2))
-        self.max_steps = np.uint32(env_map.shape[0] * env_map.shape[1] * max_board_scans)
+        self.max_steps = np.uint32(np.prod(env_map.shape) * max_board_scans)
         self.num_tiles = len(tile_enum)
         self.builds = jnp.array(
             [tile for tile in tile_enum if tile != tile_enum.BORDER])

@@ -173,8 +173,8 @@ def get_path_coords(flood_count: chex.Array, max_path_len, coord1):
 def get_path_coords_diam(flood_count: chex.Array, max_path_len):
     """Get the path coordinates from the flood count."""
     # Get the coordinates of a tile where the count is 1
-    y, x = jnp.unravel_index(jnp.argmin(jnp.where(flood_count == 0, jnp.inf, flood_count)), flood_count.shape)
-    return get_path_coords(flood_count, max_path_len, (y, x))
+    yx = jnp.unravel_index(jnp.argmin(jnp.where(flood_count == 0, jnp.inf, flood_count)), flood_count.shape)
+    return get_path_coords(flood_count, max_path_len, yx)
 
 
 def get_max_path_length(map_shape: Tuple[int]):

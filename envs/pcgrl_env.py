@@ -49,6 +49,11 @@ class RepEnum(IntEnum):
     PLAYER = 4
 
 @struct.dataclass
+class QueuedState:
+    ctrl_trgs: Optional[chex.Array] = None
+    frz_map: Optional[chex.Array] = None
+
+@struct.dataclass
 class PCGRLEnvState:
     env_map: chex.Array
     static_map: chex.Array
@@ -58,6 +63,7 @@ class PCGRLEnvState:
     reward: np.float32 = 0.0
     pct_changed: np.float32 = 0.0
     done: bool = False
+    queued_state: Optional[QueuedState] = None
 
 @struct.dataclass
 class PCGRLObs:
@@ -143,6 +149,7 @@ def get_prob_cls(problem: str):
 
 
 class PCGRLEnv(Environment):
+    prob: Problem
     def __init__(self, env_params: PCGRLEnvParams):
         map_shape, act_shape, rf_shape, problem, representation, static_tile_prob, n_freezies, n_agents = (
             env_params.map_shape, env_params.act_shape, env_params.rf_shape, env_params.problem,
@@ -156,7 +163,6 @@ class PCGRLEnv(Environment):
         self.n_freezies = np.int32(n_freezies)
         self.n_agents = n_agents
 
-        self.prob: Problem
         prob_cls = PROB_CLASSES[problem]
         self.prob = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics)
 
@@ -320,10 +326,10 @@ class PCGRLEnv(Environment):
 
     def render(self, env_state: PCGRLEnvState):
         # TODO: Refactor this into problem
-        path_coords = self.prob.get_path_coords(
+        path_coords_tpl = self.prob.get_path_coords(
             env_map=env_state.env_map,
             prob_state=env_state.prob_state)
-        return render_map(self, env_state, path_coords)
+        return render_map(self, env_state, path_coords_tpl)
 
     @property
     def default_params(self) -> PCGRLEnvParams:
@@ -353,7 +359,7 @@ class PCGRLEnv(Environment):
 
 
 def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
-               path_coords: chex.Array):
+               path_coords_tpl: chex.Array):
     tile_size = env.prob.tile_size
     env_map = env_state.env_map
     border_size = np.array((1, 1))
@@ -371,29 +377,8 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
             lvl_img = lvl_img.at[y*tile_size: (y+1)*tile_size,
                                  x*tile_size: (x+1)*tile_size, :].set(tile_img)
 
-    # Path, if applicable
-    tile_img = env.prob.graphics[-1]
-
-    def draw_path_tile(carry):
-        path_coords, lvl_img, i = carry
-        y, x = path_coords[i]
-        tile_type = env_map[y + border_size[0]][x + border_size[1]]
-        empty_tile = int(Tiles.EMPTY)
-        lvl_img = jax.lax.cond(
-            tile_type == empty_tile,
-            lambda: jax.lax.dynamic_update_slice(lvl_img, tile_img,
-                                               ((y + border_size[0]) * tile_size, (x + border_size[1]) * tile_size, 0)),
-            lambda: lvl_img,)
-                            
-        return (path_coords, lvl_img, i+1)
-
-    def cond(carry):
-        path_coords, _, i = carry
-        return jnp.all(path_coords[i] != jnp.array((-1, -1)))
-
-    i = 0
-    _, lvl_img, _ = jax.lax.while_loop(
-        cond, draw_path_tile, (path_coords, lvl_img, i))
+    lvl_img = env.prob.draw_path(lvl_img=lvl_img, env_map=env_map,
+                                 path_coords_tpl=path_coords_tpl, border_size=border_size, tile_size=tile_size)
 
     clr = (255, 255, 255, 255)
     y_border = jnp.zeros((2, tile_size, 4), dtype=jnp.uint8)

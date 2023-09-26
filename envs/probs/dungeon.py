@@ -11,7 +11,7 @@ from PIL import Image
 import numpy as np
 
 from envs.pathfinding import FloodPath, FloodPathState, FloodRegions, FloodRegionsState, calc_diameter, calc_n_regions, calc_path_length, get_max_n_regions, get_max_path_length, get_path_coords
-from envs.probs.problem import Problem, ProblemState, get_reward
+from envs.probs.problem import Problem, ProblemState, draw_path, get_reward
 from envs.utils import idx_dict_to_arr, Tiles
 
 
@@ -135,8 +135,8 @@ class DungeonProblem(Problem):
 
     def get_path_coords(self, env_map: chex.Array, prob_state: ProblemState):
         """Return a list of tile coords, starting somewhere (assumed in the flood) and following the water level upward."""
-        k_xy = jnp.argwhere(env_map == DungeonTiles.KEY, size=1)[0]
-        d_xy = jnp.argwhere(env_map == DungeonTiles.DOOR, size=1)[0]
+        k_xy = jnp.argwhere(env_map == DungeonTiles.KEY, size=1, fill_value=-1)[0]
+        d_xy = jnp.argwhere(env_map == DungeonTiles.DOOR, size=1, fill_value=-1)[0]
         e_xy = prob_state.enemy_xy
         pk_flood_count = prob_state.player_key_flood_count
         kd_flood_count = prob_state.key_door_flood_count
@@ -144,8 +144,7 @@ class DungeonProblem(Problem):
         pk_coords = get_path_coords(pk_flood_count, max_path_len=self.max_path_len, coord1=k_xy)
         kd_cords = get_path_coords(kd_flood_count, max_path_len=self.max_path_len, coord1=d_xy)
         pe_coords = get_path_coords(pe_flood_count, max_path_len=self.max_path_len, coord1=e_xy) 
-        path_coords = jnp.concatenate((pk_coords, kd_cords, pe_coords))
-        return path_coords
+        return (pk_coords, kd_cords, pe_coords)
 
     def get_curr_stats(self, env_map: chex.Array):
         n_players = jnp.sum(env_map == DungeonTiles.PLAYER)
@@ -246,3 +245,14 @@ class DungeonProblem(Problem):
         }
         self.graphics = jnp.array(idx_dict_to_arr(self.graphics))
         super().init_graphics()
+
+    def draw_path(self, lvl_img,env_map, border_size, path_coords_tpl, tile_size):
+        assert len(path_coords_tpl) == 3
+        lvl_img = draw_path(prob=self, lvl_img=lvl_img, env_map=env_map, border_size=border_size,
+                            path_coords=path_coords_tpl[0], tile_size=tile_size)
+        lvl_img = draw_path(prob=self, lvl_img=lvl_img, env_map=env_map, border_size=border_size,
+                            path_coords=path_coords_tpl[1], tile_size=tile_size)
+        lvl_img = draw_path(prob=self, lvl_img=lvl_img, env_map=env_map, border_size=border_size,
+                            path_coords=path_coords_tpl[2], tile_size=tile_size)
+        return lvl_img
+

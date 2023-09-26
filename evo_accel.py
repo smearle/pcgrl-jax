@@ -7,22 +7,23 @@ import numpy as np
 from config import TrainConfig
 
 
-def apply_evo(rng, frz_map, env, env_params, network_params, network, config: TrainConfig):
+def apply_evo(rng, frz_maps, env, env_params, network_params, network, config: TrainConfig):
     '''
-    copy and mutate the frz map
+    copy and mutate the frz maps
     get the fitness of the evolved frz map
     rank the frz maps based on the fitness
     discard the worst frz maps and return the best frz maps
     '''
     rng, _rng = jax.random.split(rng)
-    frz_rng = jax.random.split(_rng, 10)
+    frz_rng = jax.random.split(_rng, config.evo_pop_size)
     reset_rng = jax.random.split(rng, config.n_envs)
     
-    frz_maps = jnp.repeat(frz_maps, 2, axis=0)
+    # frz_maps = jnp.repeat(frz_maps, 2, axis=0)
     mutate_fn = jax.vmap(mutate_frz_map, in_axes=(0, 0))
-    frz_maps = frz_maps.at[:config.evo_pop_size//2].set(mutate_fn(frz_rng, frz_maps[:config.evo_pop_size//2]))
+    mutant_frz_maps = mutate_fn(frz_rng, frz_maps[:config.evo_pop_size//2])
+    frz_maps = jnp.concatenate((frz_maps, mutant_frz_maps), axis=0)
 
-    jax.vmap(env.set_frz_map, in_axes=(0,))(frz_maps)
+    set_frz_map_fn = jax.vmap(env.set_frz_map, in_axes=(0,))(frz_maps)
 
     vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None))
     obsv, env_state = vmap_reset_fn(reset_rng, env_params)
