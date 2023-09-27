@@ -96,7 +96,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         rng, _rng = jax.random.split(rng)
         frz_rng = jax.random.split(_rng, config.evo_pop_size)
         frz_maps = jax.vmap(gen_static_tiles, in_axes=(0, None, None, None))(frz_rng, 0.1, 0, env.map_shape)
-        frz_maps = jnp.repeat(frz_maps, int(np.ceil(config.n_envs / config.evo_pop_size)), axis=0)[:config.n_envs]
+        frz_maps = jnp.tile(frz_maps, (int(np.ceil(config.n_envs / config.evo_pop_size)), 1, 1))[:config.n_envs]
         queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
         queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps)
         reset_rng = jax.random.split(_rng, config.n_envs)
@@ -169,7 +169,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     return
             print(f"Done rendering episode gifs at update {i}")
 
-        def render_episodes(network_params):
+        def render_episodes(network_params, queued_state):
+            queued_state = jax.tree_map(lambda x: x[:config.n_render_eps], queued_state)
+            obsv_r, env_state_r = jax.vmap(env_r.reset, in_axes=(0, None, 0))(
+                reset_rng_r, env_params, queued_state
+            )
             _, (states, rewards, dones, infos, frames) = jax.lax.scan(
                 step_env_render, (rng_r, obsv_r, env_state_r, network_params),
                 None, 1*env.max_steps)
@@ -221,7 +225,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                                                 'save_args': save_args})
                     break
 
-        frames, states = render_episodes(train_state.params)
+        frames, states = render_episodes(train_state.params, env_state.env_state.queued_state)
         jax.debug.callback(render_frames, frames, runner_state.update_i, states)
         old_render_results = (frames, states)
 
@@ -242,7 +246,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 # Squash the gpu dimension (network only takes one batch dimension)
                 pi, value = network.apply(train_state.params, last_obs)
                 action = pi.sample(seed=_rng)
-                action = jnp.full(action.shape, 0) # FIXME DUMDUM
+                action = jnp.full(action.shape, 0) # FIXME DUMDUM Only for cleaning all blocks (debugging evo)
                 log_prob = pi.log_prob(action)
 
                 # STEP ENV
@@ -252,6 +256,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 # rng_step = rng_step.reshape((config.n_gpus, -1) + rng_step.shape[1:])
                 vmap_step_fn = jax.vmap(env.step, in_axes=(0, 0, 0, None))
                 # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
+
                 obsv, env_state, reward, done, info = vmap_step_fn(
                     rng_step, env_state, action, env_params
                 )
@@ -417,7 +422,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                                   network=network, config=config),
                 lambda: frz_maps[:config.evo_pop_size],)
 
-            frz_maps = jnp.repeat(frz_maps, int(np.ceil(config.n_envs / config.evo_pop_size)), axis=0)[:config.n_envs]
+            frz_maps = jnp.tile(frz_maps, (int(np.ceil(config.n_envs / config.evo_pop_size)), 1, 1))[:config.n_envs]
             queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
             queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps)
             
@@ -454,7 +459,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # Currently not vmapping the train loop though, so it's ok.
             frames, states = jax.lax.cond(
                 runner_state.update_i % config.render_freq == 0,
-                lambda: render_episodes(train_state.params),
+                lambda: render_episodes(train_state.params, env_state.env_state.queued_state),
                 lambda: old_render_results,)
             jax.debug.callback(render_frames, frames, runner_state.update_i, states)
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
@@ -517,7 +522,7 @@ def init_checkpointer(config: Config):
 
     frz_rng = jax.random.split(_rng, config.evo_pop_size)
     frz_maps = jax.vmap(gen_static_tiles, in_axes=(0, None, None, None))(frz_rng, 0.1, 0, env.map_shape)
-    frz_maps = jnp.repeat(frz_maps, config.n_envs // config.evo_pop_size, axis=0)
+    frz_maps = jnp.tile(frz_maps, (config.n_envs // config.evo_pop_size, 1, 1))
 
     queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
     queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps)

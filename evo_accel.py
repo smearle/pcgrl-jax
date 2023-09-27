@@ -23,7 +23,7 @@ def apply_evo(rng, frz_maps, env, env_params, network_params, network, config: T
     mutate_fn = jax.vmap(mutate_frz_map, in_axes=(0, 0, None))
     mutant_frz_maps = mutate_fn(frz_rng, frz_maps, config)
     frz_maps = jnp.concatenate((frz_maps, mutant_frz_maps), axis=0)
-    frz_maps = jnp.repeat(frz_maps, int(np.ceil(config.n_envs / frz_maps.shape[0])), axis=0)[:config.n_envs]
+    frz_maps = jnp.tile(frz_maps, (int(np.ceil(config.n_envs / frz_maps.shape[0])), 1, 1))[:config.n_envs]
 
     queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
     queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps)
@@ -32,6 +32,15 @@ def apply_evo(rng, frz_maps, env, env_params, network_params, network, config: T
     
  
     def eval_frzs(frz_maps, network_params):
+        eval_rng = jax.random.split(rng, config.n_envs)
+        frz_maps = jnp.tile(
+            frz_maps, (int(np.ceil(config.n_envs / frz_maps.shape[0])), 1, 1)
+        )[:config.n_envs]
+
+        obsv, env_state = jax.vmap(env.reset, in_axes=(0, None, 0))(
+                eval_rng, env_params, queued_state
+        )
+
         _, (states, rewards, dones, infos, fits) = jax.lax.scan(
             step_env_evo_eval, (rng, obsv, env_state, network_params),
             None, 1*env.max_steps)
@@ -44,7 +53,7 @@ def apply_evo(rng, frz_maps, env, env_params, network_params, network, config: T
 
         pi, value = network.apply(network_params, obs_r)
         action_r = pi.sample(seed=rng_r)
-        action_r = jnp.full(action_r.shape, 0) # FIXME dumdum
+        action_r = jnp.full(action_r.shape, 0) # FIXME dumdum Debugging evo 
 
         rng_step = jax.random.split(_rng_r, config.n_envs)
 
@@ -60,11 +69,11 @@ def apply_evo(rng, frz_maps, env, env_params, network_params, network, config: T
             (env_state_r, reward_r, done_r, info_r, fit)
     
     fits, states = eval_frzs(frz_maps, network_params)    
-    fits = fits.reshape((config.evo_pop_size*2, -1)).mean(axis=1)
+    fits = fits.reshape((-1, config.evo_pop_size*2)).mean(axis=0)
     # sort the top frz maps based on the fitness
     # Get indices of the top 5 largest elements
     top_indices = jnp.argpartition(-fits, config.evo_pop_size)[:config.evo_pop_size] # We negate arr to get largest elements
-    top = frz_maps[:config.evo_pop_size][top_indices]
+    top = frz_maps[:2 * config.evo_pop_size][top_indices]
 
     jax.debug.print(f"top fitness: {str(fits[top_indices])}")
     return top

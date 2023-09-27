@@ -68,15 +68,6 @@ from train import main as main_train
 #     'total_timesteps': [200_000_000],
 # }
 
-hypers = {
-    'ctrl_metrics': [['diameter']],
-    'vrf_size': [3],
-    'seed': [0],
-    'model': ['seqnca'],
-    'n_envs': [600],
-    'total_timesteps': [200_000_000],
-}
-
 
 def get_sweep_cfgs(default_config, **kwargs):
     subconfigs = [default_config]

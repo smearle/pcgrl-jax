@@ -4,7 +4,7 @@ import gymnax
 import jax
 import numpy as np
 
-from config import Config
+from config import Config, TrainConfig
 from envs.binary_0 import Binary0
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
@@ -61,6 +61,8 @@ def init_config(config: Config):
     config.arf_size = config.arf_size if config.arf_size is None \
         else config.arf_size
     config.exp_dir = get_exp_dir(config)
+    if hasattr(config, 'n_envs'):
+        assert config.n_envs % (config.evo_pop_size * 2) == 0, "n_envs must be divisible by evo_pop_size * 2"
     return config
 
 

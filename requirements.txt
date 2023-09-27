@@ -10,6 +10,7 @@ flax
 numpy
 pandas
 hydra-core
+submitit
 imageio
 tensorboard
 tensorboardX
