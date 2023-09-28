@@ -2,6 +2,7 @@ import os
 import shutil
 from timeit import default_timer as timer
 from typing import NamedTuple
+from gymnax import EnvState
 
 import hydra
 import numpy as np
@@ -17,7 +18,7 @@ from tensorboardX import SummaryWriter
 
 from config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
-from evo_accel import apply_evo
+from evo_accel import EvoState, apply_evo
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
                    init_config)
@@ -25,7 +26,8 @@ from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
 
 class RunnerState(struct.PyTreeNode):
     train_state: TrainState
-    env_state: jnp.ndarray
+    env_state: EnvState
+    evo_state: EvoState
     last_obs: jnp.ndarray
     # rng_act: jnp.ndarray
 #   ep_returns: jnp.ndarray
@@ -96,6 +98,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         rng, _rng = jax.random.split(rng)
         frz_rng = jax.random.split(_rng, config.evo_pop_size)
         frz_maps = jax.vmap(gen_static_tiles, in_axes=(0, None, None, None))(frz_rng, 0.1, 0, env.map_shape)
+        evo_state = EvoState(frz_map=frz_maps, top_fitness=jnp.zeros(config.evo_pop_size))
         frz_maps = jnp.tile(frz_maps, (int(np.ceil(config.n_envs / config.evo_pop_size)), 1, 1))[:config.n_envs]
         queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
         queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps) 
@@ -121,8 +124,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 #                             fill_value=jnp.nan, dtype=jnp.float32)
         steps_prev_complete = 0
         runner_state = RunnerState(
-            train_state, env_state, obsv, rng,
-            update_i=0)
+            train_state=train_state, env_state=env_state, evo_state=evo_state,
+            last_obs=obsv, rng=rng, update_i=0)
 
         # exp_dir = get_exp_dir(config)
         if restored_ckpt is not None:
@@ -225,6 +228,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                                                 'save_args': save_args})
                     break
 
+        # Dummy render to initialize the render frames
         frames, states = render_episodes(train_state.params, env_state.env_state.queued_state)
         jax.debug.callback(render_frames, frames, runner_state.update_i, states)
         old_render_results = (frames, states)
@@ -235,8 +239,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         def _update_step(runner_state, unused):
             # COLLECT TRAJECTORIES
             def _env_step(runner_state: RunnerState, unused):
-                train_state, env_state, last_obs, rng, update_i = (
+                train_state, env_state, evo_state, last_obs, rng, update_i = (
                     runner_state.train_state, runner_state.env_state,
+                    runner_state.evo_state,
                     runner_state.last_obs,
                     runner_state.rng, runner_state.update_i,
                 )
@@ -264,7 +269,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     done, action, value, reward, log_prob, last_obs, info
                 )
                 runner_state = RunnerState(
-                    train_state, env_state, obsv, rng,
+                    train_state, env_state, evo_state, obsv, rng,
                     update_i=update_i)
                 return runner_state, transition
 
@@ -273,8 +278,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             )
 
             # CALCULATE ADVANTAGE
-            train_state, env_state, last_obs, rng = runner_state.train_state, runner_state.env_state, \
-                runner_state.last_obs, runner_state.rng
+            train_state, env_state, evo_state, last_obs, rng = runner_state.train_state, runner_state.env_state, \
+                runner_state.evo_state, runner_state.last_obs, runner_state.rng
             
             _, last_val = network.apply(train_state.params, last_obs)
 
@@ -416,21 +421,22 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # NOTE: If you vmap the train function, both of these branches will (most probably)
             # be evaluated each time.                  
             frz_maps = env_state.env_state.queued_state.frz_map
-            frz_maps = jax.lax.cond(
+            evo_state: EvoState = jax.lax.cond(
                 runner_state.update_i % config.evo_freq == 0,
                 lambda: apply_evo(rng, frz_maps, env, env_params, network_params=network_params,
                                   network=network, config=config, runner_state=runner_state),
-                lambda: frz_maps[:config.evo_pop_size],)
+                lambda: evo_state)
             
-
+            frz_maps = evo_state.frz_map
             frz_maps = jnp.tile(frz_maps, (int(np.ceil(config.n_envs / config.evo_pop_size)), 1, 1))[:config.n_envs]
             queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
             queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps)
+            env_state = env_state.replace(env_state=env_state.env_state.replace(queued_state=queued_state))
             
             # Create a tensorboard writer
             writer = SummaryWriter(get_exp_dir(config))
 
-            def log_callback(metric, steps_prev_complete):
+            def log_callback(metric, evo_fits, steps_prev_complete):
                 timesteps = metric["timestep"][metric["returned_episode"]
                                                ] * config.n_envs
                 if len(timesteps) > 0:
@@ -448,6 +454,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
                     writer.add_scalar("ep_return", ep_return, t)
                     writer.add_scalar("ep_length", ep_length, t)
+                    writer.add_scalar("mean_fitness", evo_fits.mean(), t)
                     # for k, v in zip(env.prob.metric_names, env.prob.stats):
                     #     writer.add_scalar(k, v, t)
 
@@ -456,19 +463,22 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                             env.tile_size * (env.map_shape[0] + 2),
                             env.tile_size * (env.map_shape[1] + 2), 4)
 
-            # FIXME: Inside vmap, both conditions are likely to geQueuedStates ok.
+            # FIXME: Inside vmap, both conditions will be executed. But that's ok for now
+            #   since we don't vmap `train`.
             frames, states = jax.lax.cond(
                 runner_state.update_i % config.render_freq == 0,
-                lambda: render_episodes(train_state.params, env_state.env_state.queued_state),
+                lambda: render_episodes(train_state.params, queued_state),
                 lambda: old_render_results,)
             jax.debug.callback(render_frames, frames, runner_state.update_i, states)
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
+            evo_fits = evo_state.top_fitness
 
-            jax.debug.callback(log_callback, metric,
+            jax.debug.callback(log_callback, metric, evo_fits,
                                steps_prev_complete)
 
             runner_state = RunnerState(
-                train_state, env_state, last_obs, rng,
+                train_state=train_state, env_state=env_state, evo_state=evo_state,
+                last_obs=last_obs, rng=rng,
                 update_i=runner_state.update_i+1)
 
             return runner_state, metric
@@ -522,6 +532,7 @@ def init_checkpointer(config: Config):
 
     frz_rng = jax.random.split(_rng, config.evo_pop_size)
     frz_maps = jax.vmap(gen_static_tiles, in_axes=(0, None, None, None))(frz_rng, 0.1, 0, env.map_shape)
+    evo_state = EvoState(frz_map=frz_maps, top_fitness=jnp.zeros(config.evo_pop_size))
     frz_maps = jnp.tile(frz_maps, (config.n_envs // config.evo_pop_size, 1, 1))
 
     queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
@@ -531,7 +542,8 @@ def init_checkpointer(config: Config):
     vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, 0))
     # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
     obsv, env_state = vmap_reset_fn(reset_rng, env_params, queued_state)
-    runner_state = RunnerState(train_state=train_state, env_state=env_state, last_obs=obsv,
+    runner_state = RunnerState(train_state=train_state, env_state=env_state, evo_state=evo_state,
+                               last_obs=obsv,
                                # ep_returns=jnp.full(config.num_envs, jnp.nan), 
                                rng=rng, update_i=0)
     target = {'runner_state': runner_state, 'step_i': 0}
