@@ -1,14 +1,25 @@
 '''
 get the fitness of the evolved frz map (or other thingys we want to evolve)
 '''
+import os
+from flax import struct
+from typing import Optional
+import chex
 import jax
 from jax import numpy as jnp
 import numpy as np
 from config import TrainConfig
 from envs.pcgrl_env import QueuedState
+from tensorboardX import SummaryWriter
 
+from utils import get_exp_dir
 
-def apply_evo(rng, frz_maps, env, env_params, network_params, network, config: TrainConfig):
+@struct.dataclass # need to make a carrier for for the fitness to the tensorboard logging? hmm unnecessary
+class EvoState:
+    top_fitness: Optional[chex.Array] = None
+    frz_map: Optional[chex.Array] = None
+
+def apply_evo(rng, frz_maps, env, env_params, network_params, network, config: TrainConfig, runner_state):
     '''
     copy and mutate the frz maps
     get the fitness of the evolved frz map
@@ -63,8 +74,10 @@ def apply_evo(rng, frz_maps, env, env_params, network_params, network, config: T
         obs_r, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
                         rng_step, env_state_r, action_r,
                         env_params)
-        # TODO: Da good fit forreal.
-        fit = reward_r
+        # TODO: Da good fit forreal. dumdum
+        # fit = reward_r
+        # count the number of tiles that are not empty
+        fit = jnp.sum(env_state_r.env_state.env_map == 0, axis=(1, 2))
         return (rng_r, obs_r, env_state_r, network_params),\
             (env_state_r, reward_r, done_r, info_r, fit)
     
@@ -74,8 +87,12 @@ def apply_evo(rng, frz_maps, env, env_params, network_params, network, config: T
     # Get indices of the top 5 largest elements
     top_indices = jnp.argpartition(-fits, config.evo_pop_size)[:config.evo_pop_size] # We negate arr to get largest elements
     top = frz_maps[:2 * config.evo_pop_size][top_indices]
-
-    jax.debug.print(f"top fitness: {str(fits[top_indices])}")
+    
+    top_fitnesses = fits[top_indices]
+    # evo_writer = SummaryWriter(os.path.join(get_exp_dir(config), "evo"))
+    # jax.debug.breakpoint()
+    # evo_writer.add_scalar("fitness", top_fitnesses.mean(0), runner_state.update_i)
+    # return EvoState(top_fitness=top_fitnesses, frz_map=top) # here do I need to init an empty one and evo_state.replace(top_fitness=top_fitnesses, frz_map=top) ?
     return top
     
 

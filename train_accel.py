@@ -98,7 +98,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         frz_maps = jax.vmap(gen_static_tiles, in_axes=(0, None, None, None))(frz_rng, 0.1, 0, env.map_shape)
         frz_maps = jnp.tile(frz_maps, (int(np.ceil(config.n_envs / config.evo_pop_size)), 1, 1))[:config.n_envs]
         queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
-        queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps)
+        queued_state = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state, frz_maps) 
         reset_rng = jax.random.split(_rng, config.n_envs)
         vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, 0))
         obsv, env_state = vmap_reset_fn(reset_rng, env_params, queued_state)
@@ -419,8 +419,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             frz_maps = jax.lax.cond(
                 runner_state.update_i % config.evo_freq == 0,
                 lambda: apply_evo(rng, frz_maps, env, env_params, network_params=network_params,
-                                  network=network, config=config),
+                                  network=network, config=config, runner_state=runner_state),
                 lambda: frz_maps[:config.evo_pop_size],)
+            
 
             frz_maps = jnp.tile(frz_maps, (int(np.ceil(config.n_envs / config.evo_pop_size)), 1, 1))[:config.n_envs]
             queued_state = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
@@ -455,8 +456,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                             env.tile_size * (env.map_shape[0] + 2),
                             env.tile_size * (env.map_shape[1] + 2), 4)
 
-            # FIXME: Inside vmap, both conditions are likely to get executed. Any way around this?
-            # Currently not vmapping the train loop though, so it's ok.
+            # FIXME: Inside vmap, both conditions are likely to geQueuedStates ok.
             frames, states = jax.lax.cond(
                 runner_state.update_i % config.render_freq == 0,
                 lambda: render_episodes(train_state.params, env_state.env_state.queued_state),
