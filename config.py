@@ -74,6 +74,8 @@ class TrainConfig(Config):
     evo_freq: int = 10
     evo_pop_size: int = 10
     evo_mutate_prob: float = 0.1
+    
+    # discount factor for regret value calculation is the same as GAMMA
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     NUM_UPDATES: Optional[int] = None

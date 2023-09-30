@@ -48,13 +48,29 @@ def apply_evo(rng, frz_maps, env: PCGRLEnv, env_params, network_params, network,
                 eval_rng, env_params, queued_state
         )
 
-        _, (states, rewards, dones, infos, fits) = jax.lax.scan(
+        _, (states, rewards, dones, infos, values) = jax.lax.scan(
             step_env_evo_eval, (rng, obsv, env_state, network_params),
             None, 1*env.max_steps)
         
-        # DUM
-        fits = states.env_state.env_map.sum(axis=(0, 2, 3))
+        # regret value
+        def calc_regret_value(carry, t_step):
+            '''
+            for each env (axis = 0)
+            rewards = [r1, r2, r3, r4, ..., ]
+            discount_factors = [gamma^0, ^1, ^2, ^3, ..., ]
+            values = [v1, v2, v3, v4, ..., ]
+            '''
+            rewards, discount_factors, values = carry
+            breakpoint()
+            discount_factors = discount_factors[::-1][:t_step]
+            rewards, values = rewards[:t_step, ...], values[:t_step, ...]
+            return jnp.abs(rewards * discount_factors - values) 
 
+        discount_factors = jnp.power(config.GAMMA, jnp.arange(values.shape[0]))
+
+        _, fits = jax.lax.scan(calc_regret_value, (rewards, discount_factors, values), jnp.arange(values.shape[0]))
+        # fits = jax.lax.fori_loop(0, values.shape[0], calc_regret_value, (rewards, discount_factors, values))
+        fits = fits.sum(axis=0)
         return fits, states
 
     def step_env_evo_eval(carry, _):
@@ -73,16 +89,9 @@ def apply_evo(rng, frz_maps, env: PCGRLEnv, env_params, network_params, network,
         obs_r, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
                         rng_step, env_state_r, action_r,
                         env_params)
-        # TODO: Da good fit forreal. dumdum
-        # fit = reward_r
-        # count the number of tiles that are not empty
-        fit = 0
-        # fit = jnp.where(
-        #     done_r,
-        #     jnp.sum(env_state_r.env_state.env_map == env.tile_enum.WALL, axis=(1, 2)),
-        #     0)
+        
         return (rng_r, obs_r, env_state_r, network_params),\
-            (env_state_r, reward_r, done_r, info_r, fit)
+            (env_state_r, reward_r, done_r, info_r, value)
     
     fits, states = eval_frzs(frz_maps, network_params)    
     fits = fits.reshape((-1, config.evo_pop_size*2)).mean(axis=0)
