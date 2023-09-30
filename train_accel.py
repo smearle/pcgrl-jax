@@ -18,7 +18,7 @@ from tensorboardX import SummaryWriter
 
 from config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
-from evo_accel import EvoState, apply_evo
+from evo_accel import EvoState, apply_evo, gen_discount_factors_matrix
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
                    init_config)
@@ -55,8 +55,14 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     )
     env_r, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     # env = FlattenObservationWrapper(env)
-    env = LogWrapper(env_r)
+    env = LogWrapper(env_r)  # Does this need to be a LogWrapper env? No(?)
     env_r.init_graphics()
+
+    max_episode_steps = env._env.max_steps
+    # Generating this here for efficiency since it will never change.
+    # (Used in ACCEL value function error computation.)
+    discount_factor_matrix = gen_discount_factors_matrix(
+        config.GAMMA, max_episode_steps)
 
     def linear_schedule(count):
         frac = (
@@ -278,7 +284,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             )
 
             # CALCULATE ADVANTAGE
-            train_state, env_state, evo_state, last_obs, rng = runner_state.train_state, runner_state.env_state, \
+            train_state, env_state, evo_state, last_obs, rng = \
+                runner_state.train_state, runner_state.env_state, \
                 runner_state.evo_state, runner_state.last_obs, runner_state.rng
             
             _, last_val = network.apply(train_state.params, last_obs)
@@ -338,7 +345,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         ratio = jnp.exp(log_prob - traj_batch.log_prob)
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
 
-                        # Some reshaping to accomodate player, x, and y dimensions to action output. (Not used often...)
+                        # Some reshaping to accomodate player, x, and y 
+                        # dimensions to action output. (Not used often...)
                         gae = gae[..., None, None, None]
 
                         loss_actor1 = ratio * gae
@@ -423,8 +431,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             frz_maps = env_state.env_state.queued_state.frz_map
             evo_state: EvoState = jax.lax.cond(
                 runner_state.update_i % config.evo_freq == 0,
-                lambda: apply_evo(rng, frz_maps, env, env_params, network_params=network_params,
-                                  network=network, config=config, runner_state=runner_state),
+                lambda: apply_evo(
+                    rng, frz_maps, env, env_params, 
+                    network_params=network_params, network=network,
+                    config=config,
+                    discount_factor_matrix=discount_factor_matrix),
                 lambda: evo_state)
             
             frz_maps = evo_state.frz_map

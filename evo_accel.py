@@ -15,13 +15,30 @@ from tensorboardX import SummaryWriter
 
 from utils import get_exp_dir
 
+
+def fill_row_rolled(i, row, n_rows):
+    rolled = jnp.roll(row, shift=i)
+    return jnp.where(jnp.arange(n_rows) < i, 0, rolled)
+
+
+def gen_discount_factors_matrix(gamma, max_episode_steps):
+    '''
+    Generate a discount factor matrix for each timestep in the episode
+    '''
+    discount_factors = jnp.power(gamma, jnp.arange(max_episode_steps))
+    matrix = jax.vmap(fill_row_rolled, in_axes=(0, None, None))(
+        jnp.arange(max_episode_steps), discount_factors, max_episode_steps
+    )
+    return matrix
+
+
 @struct.dataclass # need to make a carrier for for the fitness to the tensorboard logging? hmm unnecessary
 class EvoState:
     top_fitness: Optional[chex.Array] = None
     frz_map: Optional[chex.Array] = None
 
 def apply_evo(rng, frz_maps, env: PCGRLEnv, env_params, network_params, network,
-              config: TrainConfig, runner_state):
+              config: TrainConfig, discount_factor_matrix):
     '''
     copy and mutate the frz maps
     get the fitness of the evolved frz map
@@ -51,26 +68,40 @@ def apply_evo(rng, frz_maps, env: PCGRLEnv, env_params, network_params, network,
         _, (states, rewards, dones, infos, values) = jax.lax.scan(
             step_env_evo_eval, (rng, obsv, env_state, network_params),
             None, 1*env.max_steps)
+
+        n_steps = rewards.shape[0]
+
+        # Truncate the discount factor matrix in case the episode terminated 
+        # early. Add empty batch dimension for broadcasting.
+        discount_mat = discount_factor_matrix[:n_steps][..., None]
+
+        # Tile along new 0th axis
+        rewards_mat = jnp.tile(rewards[None], (n_steps, 1, 1))
+        discounted_rewards_mat = rewards_mat * discount_mat
+        returns = discounted_rewards_mat.sum(axis=1)
+        vf_errs = jnp.abs(returns - values)
+        fits = vf_errs.sum(axis=0)
         
         # regret value
-        def calc_regret_value(carry, t_step):
-            '''
-            for each env (axis = 0)
-            rewards = [r1, r2, r3, r4, ..., ]
-            discount_factors = [gamma^0, ^1, ^2, ^3, ..., ]
-            values = [v1, v2, v3, v4, ..., ]
-            '''
-            rewards, discount_factors, values = carry
-            breakpoint()
-            discount_factors = discount_factors[::-1][:t_step]
-            rewards, values = rewards[:t_step, ...], values[:t_step, ...]
-            return jnp.abs(rewards * discount_factors - values) 
+        # def calc_regret_value(carry, t_step):
+        #     '''
+        #     for each env (axis = 0)
+        #     rewards = [r1, r2, r3, r4, ..., ]
+        #     discount_factors = [gamma^0, ^1, ^2, ^3, ..., ]
+        #     values = [v1, v2, v3, v4, ..., ]
+        #     '''
+        #     rewards, discount_factors, values = carry
+        #     breakpoint()
+        #     # discount_factors = discount_factors[::-1][:t_step]
+        #     # Need to use jax.lax.dynamic_slice
+        #     rewards, values = rewards[:t_step, ...], values[:t_step, ...]
+        #     return jnp.abs(rewards * discount_factors - values) 
 
-        discount_factors = jnp.power(config.GAMMA, jnp.arange(values.shape[0]))
 
-        _, fits = jax.lax.scan(calc_regret_value, (rewards, discount_factors, values), jnp.arange(values.shape[0]))
+        # _, fits = jax.lax.scan(calc_regret_value, (rewards, discount_factors, values), jnp.arange(values.shape[0]))
         # fits = jax.lax.fori_loop(0, values.shape[0], calc_regret_value, (rewards, discount_factors, values))
-        fits = fits.sum(axis=0)
+        # fits = fits.sum(axis=0)
+        # fits = rewards.sum(axis=0)
         return fits, states
 
     def step_env_evo_eval(carry, _):
