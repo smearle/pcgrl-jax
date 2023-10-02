@@ -52,7 +52,7 @@ class Config:
     static_tile_prob: Optional[float] = 0.0
     n_freezies: int = 0
     n_agents: int = 1
-    max_board_scans: float = 3.0
+    max_board_scans: float = 1.0
 
     # How many milliseconds to wait between frames of the rendered gifs
     gif_frame_duration: int = 25
