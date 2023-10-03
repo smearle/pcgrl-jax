@@ -7,3 +7,5 @@ venv
 
 *.swp
 submitit_logs
+
+user_defined_freezies/*.npy

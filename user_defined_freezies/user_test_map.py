@@ -6,17 +6,21 @@ from datetime import datetime
 SAVE_FOLDER = "user_defined_freezies"
 
 class BinaryBoard(tk.Tk):
-    def __init__(self, rows, cols):
+    def __init__(self, rows, cols, num_states=4):
         super().__init__()
         self.title("Create your own freezies!")
 
         self.rows = rows
         self.cols = cols
+        self.num_states = num_states
         self.board = np.zeros((rows, cols), dtype=int)
 
         # Load images
-        self.selected_img = tk.PhotoImage(file='envs/probs/tile_ims/solid.png')
-        self.unselected_img = tk.PhotoImage(file='envs/probs/tile_ims/empty.png')
+        self.state_images = []
+        self.state_images.append(tk.PhotoImage(file='envs/probs/tile_ims/empty.png'))
+        self.state_images.append(tk.PhotoImage(file='envs/probs/tile_ims/solid.png'))
+        self.state_images.append(tk.PhotoImage(file='envs/probs/tile_ims/player.png'))
+        self.state_images.append(tk.PhotoImage(file='envs/probs/tile_ims/key.png'))
 
         self.buttons = [[None] * cols for _ in range(rows)]
 
@@ -29,7 +33,7 @@ class BinaryBoard(tk.Tk):
 
         for row in range(rows):
             for col in range(cols):
-                btn = tk.Button(button_frame, image=self.unselected_img)
+                btn = tk.Button(button_frame, image=self.state_images[0])
                 btn.grid(row=row, column=col, sticky='news')
                 btn.bind('<Button-1>', lambda e, row=row, col=col: self.on_click(row, col))
                 btn.bind('<ButtonRelease-1>', self.on_release)
@@ -65,11 +69,12 @@ class BinaryBoard(tk.Tk):
         self.minsize(600, 400)
         self.resizable(False, False)  # Disallow both horizontal and vertical resizing
 
-
     def on_click(self, row, col):
-        self.toggle_button(row, col)
+        self.board[row][col] = (self.board[row][col] + 1) % self.num_states  # Cycle through the states
+        self.buttons[row][col].config(image=self.state_images[self.board[row][col]])
+        self.toggled_during_drag.add((row, col))
         self.dragging = True
-        self.display_board()  # Display updated board
+        self.display_board()
 
     def on_drag(self, event):
         if self.dragging:
@@ -92,9 +97,9 @@ class BinaryBoard(tk.Tk):
         self.toggled_during_drag.clear()
 
     def toggle_button(self, row, col):
-        self.board[row, col] = 1 - self.board[row, col]  # toggle the state
-        img = self.selected_img if self.board[row, col] == 1 else self.unselected_img
-        self.buttons[row][col].config(image=img)
+        self.board[row][col] = (self.board[row][col] + 1) % self.num_states  # Cycle through the states
+        current_image = self.state_images[self.board[row][col]]
+        self.buttons[row][col].config(image=current_image)
 
     def save_board(self):
         timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -114,7 +119,7 @@ class BinaryBoard(tk.Tk):
         self.board = np.zeros((self.rows, self.cols), dtype=int)  # Reset the board to all zeros
         for row in range(self.rows):
             for col in range(self.cols):
-                self.buttons[row][col].config(image=self.unselected_img)  # Reset the button images to unselected
+                self.buttons[row][col].config(image=self.state_images[0])  # Reset the button images to the first state
         self.display_board()  # Display the updated board
 
     def display_board(self):
