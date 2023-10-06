@@ -3,9 +3,13 @@ import tkinter as tk
 import numpy as np
 from datetime import datetime
 
+import tkinter.filedialog
+import tkinter.messagebox
+
+
 SAVE_FOLDER = "user_defined_freezies"
 
-class BinaryBoard(tk.Tk):
+class DrawGUI(tk.Tk):
     def __init__(self, rows, cols, num_states=4):
         super().__init__()
         self.title("Create your own freezies!")
@@ -17,10 +21,10 @@ class BinaryBoard(tk.Tk):
 
         # Load images
         self.state_images = []
-        self.state_images.append(tk.PhotoImage(file='envs/probs/tile_ims/empty.png'))
-        self.state_images.append(tk.PhotoImage(file='envs/probs/tile_ims/solid.png'))
-        self.state_images.append(tk.PhotoImage(file='envs/probs/tile_ims/player.png'))
-        self.state_images.append(tk.PhotoImage(file='envs/probs/tile_ims/key.png'))
+        self.state_images.append(tk.PhotoImage(file='../envs/probs/tile_ims/empty.png'))
+        self.state_images.append(tk.PhotoImage(file='../envs/probs/tile_ims/solid.png'))
+        self.state_images.append(tk.PhotoImage(file='../envs/probs/tile_ims/player.png'))
+        self.state_images.append(tk.PhotoImage(file='../envs/probs/tile_ims/key.png'))
 
         self.buttons = [[None] * cols for _ in range(rows)]
 
@@ -59,6 +63,10 @@ class BinaryBoard(tk.Tk):
 
         reset_button = tk.Button(frame, text='Reset', command=self.reset_board)
         reset_button.pack(side='left', padx=5, pady=5)
+
+        load_button = tk.Button(frame, text='Load', command=self.load_board)
+        load_button.pack(side='left', padx=5, pady=5)
+
 
         # Configure the grid to allocate more space to the Text widget
         self.grid_rowconfigure(0, weight=1)
@@ -122,12 +130,61 @@ class BinaryBoard(tk.Tk):
                 self.buttons[row][col].config(image=self.state_images[0])  # Reset the button images to the first state
         self.display_board()  # Display the updated board
 
+    def load_board(self):
+        filepath = tk.filedialog.askopenfilename(title="Open file", filetypes=[("Numpy Files", "*.npy")])
+        if filepath:  # Ensuring that a file was selected
+            loaded_board = np.load(filepath)
+            
+            # Check for the same shape
+            if loaded_board.shape == self.board.shape:
+                self.board = loaded_board
+                for row in range(self.rows):
+                    for col in range(self.cols):
+                        current_image = self.state_images[self.board[row][col]]
+                        self.buttons[row][col].config(image=current_image)
+                self.display_board()
+            else:
+                tk.messagebox.showerror("Error", "Invalid board shape!")
+
+
     def display_board(self):
         # Clear the Text widget and insert the new array
         self.array_display.delete('1.0', tk.END)
         self.array_display.insert(tk.END, str(self.board))
 
 
+def load_board(filename):
+    ''' 
+    print them in the format of in terminal:
+    "board_name:"
+    board
+    '''
+    board = np.load(filename)
+    board_name = os.path.basename(filename)
+    board_name = os.path.splitext(board_name)[0]
+    print(f'"{board_name}:"')
+    print(board)
+    print(",")
+    return board_name, board
+
+def save_as_json(problem):
+    '''
+    save the board in the format of yaml
+    '''
+    dataset_folder = os.path.join(SAVE_FOLDER, problem)
+    test_board = {}
+    for filename in os.listdir(dataset_folder):
+        if filename.endswith(".npy"):
+            board_name, board = load_board(os.path.join(dataset_folder, filename))
+            test_board[board_name] = board.tolist()
+    
+    import json
+    with open(f"{problem}_eval_maps.json", "w") as f:
+        json.dump(test_board, f, indent=4)
+    print("saved!")
+    
+    
 if __name__ == "__main__":
-    app = BinaryBoard(16, 16)
+    # save_as_json("binary")
+    app = DrawGUI(16, 16)
     app.mainloop()

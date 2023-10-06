@@ -74,7 +74,11 @@ class TrainConfig(Config):
     evo_freq: int = 10
     evo_pop_size: int = 10
     evo_mutate_prob: float = 0.1
-    
+
+    # eval the model on pre-made eval freezie maps to see how it's doing
+    eval_freq: int = 100
+    n_eval_maps: int = 5
+    eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
     # discount factor for regret value calculation is the same as GAMMA
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
