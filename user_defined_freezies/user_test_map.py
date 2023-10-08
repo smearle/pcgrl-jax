@@ -7,7 +7,8 @@ import tkinter.filedialog
 import tkinter.messagebox
 
 
-SAVE_FOLDER = "user_defined_freezies"
+SAVE_FOLDER = "."
+# SAVE_FOLDER = "user_defined_freezies"
 
 class DrawGUI(tk.Tk):
     def __init__(self, rows, cols, num_states=4):
@@ -112,7 +113,7 @@ class DrawGUI(tk.Tk):
     def save_board(self):
         timestamp_str = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'binary_board_{timestamp_str}.npy'
-        filename = os.path.join(SAVE_FOLDER, filename)
+        # filename = os.path.join(SAVE_FOLDER, filename)
         np.save(filename, self.board)
         self.display_board()  # Display saved board
         self.array_display.insert(tk.END, f'\nNice! Your freezies is saved as {filename}')

@@ -34,6 +34,7 @@ class RunnerState(struct.PyTreeNode):
 #   ep_returns: jnp.ndarray
     rng: jnp.ndarray
     update_i: int
+    last_eval_results: tuple
 
 
 class Transition(NamedTuple):
@@ -117,10 +118,17 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # INIT ENV FOR EVAL
         rng_e, _rng_e = jax.random.split(rng)
         reset_rng_e = jax.random.split(_rng_e, config.n_envs) # maybe we don't need this new rng?
+        # load the user defined map for evaluation
         with open(config.eval_map_path, 'r') as f:
             eval_maps = json.load(f)
         eval_maps = jnp.array(list(eval_maps.values())).astype(bool)
-        eval_maps = jnp.tile(eval_maps, (int(np.ceil(config.n_envs / config.n_eval_maps)), 1, 1))[:config.n_envs]
+        # also create new random freezies for evaluation
+        rng_ef, _rng_ef = jax.random.split(rng_e)
+        frz_rng_ee = jax.random.split(_rng_ef, config.n_eval_maps)
+        frz_maps_ee = jax.vmap(gen_static_tiles, in_axes=(0, None, None, None))(frz_rng_ee, 0.1, 0, env.map_shape)
+        eval_maps = jnp.concatenate((eval_maps, frz_maps_ee), axis=0)
+
+        eval_maps = jnp.tile(eval_maps, (int(np.ceil(config.n_envs / eval_maps.shape[0])), 1, 1))[:config.n_envs]
         queued_state_e = QueuedState(ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)))
         queued_state_e = jax.vmap(env.queue_frz_map, in_axes=(None, 0))(queued_state_e, eval_maps)
         vmap_reset_fn_e = jax.vmap(env_e.reset, in_axes=(0, None, 0))
@@ -143,9 +151,41 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 #       ep_returns = jnp.full(shape=1,
 #                             fill_value=jnp.nan, dtype=jnp.float32)
         steps_prev_complete = 0
+
+        def step_env_eval(carry, _):
+            rng_e, obs_e, env_state_e, network_params = carry
+            rng_e, _rng_e = jax.random.split(rng_e)
+
+            pi, value = network.apply(network_params, obs_e)
+            action_e = pi.sample(seed=rng_e)
+            
+            rng_step = jax.random.split(_rng_e, config.n_envs)
+
+            vmap_step_fn = jax.vmap(env_e.step, in_axes=(0, 0, 0, None))
+            obs_e, env_state_e, reward_e, done_e, info_e = vmap_step_fn(
+                            rng_step, env_state_e, action_e,
+                            env_params)
+            return (rng_e, obs_e, env_state_e, network_params),\
+                (env_state_e, reward_e, done_e, info_e)
+
+        def eval_episodes(network_params, queued_state):
+            
+
+           
+
+            obsv_e, env_state_e = jax.vmap(env_e.reset, in_axes=(0, None, 0))(reset_rng_e, env_params_e, queued_state)
+            _, (states, rewards, dones, infos) = jax.lax.scan(
+                step_env_eval, (rng_e, obsv_e, env_state_e, network_params),
+                None, 1*env.max_steps)
+            
+            return rewards, states    # TODO: maybe not only return rewards but also stats?
+
+        rewards_e, eval_states = eval_episodes(train_state.params, env_state_e.queued_state)
+        last_eval_results = (rewards_e, eval_states)
+
         runner_state = RunnerState(
             train_state=train_state, env_state=env_state, evo_state=evo_state,
-            last_obs=obsv, rng=rng, update_i=0)
+            last_obs=obsv, rng=rng, update_i=0, last_eval_results=last_eval_results)
 
         # exp_dir = get_exp_dir(config)
         if restored_ckpt is not None:
@@ -191,34 +231,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     print("Failed to save gif. Skipping...")
                     return
             print(f"Done rendering episode gifs at update {i}")
-
-        def eval_episodes(network_params, queued_state):
-            obsv_e, env_state_e = jax.vmap(env_e.reset, in_axes=(0, None, 0))(
-                reset_rng_e, env_params_e, queued_state
-            )
-            _, (states, rewards, dones, infos) = jax.lax.scan(
-                step_env_eval, (rng_e, obsv_e, env_state_e, network_params),
-                None, 1*env.max_steps)
-
-            return rewards, states    # TODO: maybe not only return rewards but also stats?
-
-        def step_env_eval(carry, _):
-            rng_e, obs_e, env_state_e, network_params = carry
-            rng_e, _rng_e = jax.random.split(rng_e)
-
-            pi, value = network.apply(network_params, obs_e)
-            action_e = pi.sample(seed=rng_e)
-            
-            jax.debug.breakpoint()
-
-            rng_step = jax.random.split(_rng_e, config.n_envs)
-
-            vmap_step_fn = jax.vmap(env_e.step, in_axes=(0, 0, 0, None))
-            obs_e, env_state_e, reward_e, done_e, info_e = vmap_step_fn(
-                            rng_step, env_state_e, action_e,
-                            env_params)
-            return (rng_e, obs_e, env_state_e, network_params),\
-                (env_state_e, reward_e, done_e, info_e)
 
         def render_episodes(network_params, queued_state):
             queued_state = jax.tree_map(lambda x: x[:config.n_render_eps], queued_state)
@@ -281,12 +293,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         jax.debug.callback(render_frames, frames, runner_state.update_i, states)
         old_render_results = (frames, states)
 
-        rewards, states = eval_episodes(train_state.params, env_state_e.queued_state)
-        old_eval_results = (rewards, states)
         # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
         # TRAIN LOOP
         def _update_step(runner_state, unused):
+            last_eval_results = runner_state.last_eval_results
             # COLLECT TRAJECTORIES
             def _env_step(runner_state: RunnerState, unused):
                 train_state, env_state, evo_state, last_obs, rng, update_i = (
@@ -320,7 +331,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 )
                 runner_state = RunnerState(
                     train_state, env_state, evo_state, obsv, rng,
-                    update_i=update_i)
+                    update_i=update_i, last_eval_results=runner_state.last_eval_results)
                 return runner_state, transition
 
             runner_state, traj_batch = jax.lax.scan(
@@ -495,7 +506,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 timesteps = metric["timestep"][metric["returned_episode"]
                                                ] * config.n_envs
                 if len(timesteps) > 0:
-                    t = timesteps[0]
+                    t = timesteps[0] + steps_prev_complete
                     ep_return = (metric["returned_episode_returns"]
                                  [metric["returned_episode"]].mean(
                     ))
@@ -528,12 +539,14 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             jax.debug.callback(render_frames, frames, runner_state.update_i, states)
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
+            jax.debug.breakpoint()
             eval_rewards, states = jax.lax.cond(
-                runner_state.update_i % config.eval_freq== 0,
+                runner_state.update_i % config.eval_freq == 0,
                 lambda: eval_episodes(train_state.params, queued_state_e),
-                lambda: old_eval_results,)
+                lambda: last_eval_results,)
 
-            eval_rewards = eval_rewards.mean()
+            last_eval_results = (eval_rewards, states)
+            eval_rewards = eval_rewards.mean(0)
             evo_fits = evo_state.top_fitness
 
             jax.debug.callback(log_callback, metric, evo_fits, eval_rewards,
@@ -542,7 +555,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             runner_state = RunnerState(
                 train_state=train_state, env_state=env_state, evo_state=evo_state,
                 last_obs=last_obs, rng=rng,
-                update_i=runner_state.update_i+1)
+                update_i=runner_state.update_i+1,
+                last_eval_results=last_eval_results)
 
             return runner_state, metric
 
@@ -605,10 +619,11 @@ def init_checkpointer(config: Config):
     vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, 0))
     # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
     obsv, env_state = vmap_reset_fn(reset_rng, env_params, queued_state)
+    dummy_last_eval_results = (jnp.zeros((env._env.max_steps, config.n_envs)), env_state)
     runner_state = RunnerState(train_state=train_state, env_state=env_state, evo_state=evo_state,
                                last_obs=obsv,
                                # ep_returns=jnp.full(config.num_envs, jnp.nan), 
-                               rng=rng, update_i=0)
+                               rng=rng, update_i=0, last_eval_results=dummy_last_eval_results)
     target = {'runner_state': runner_state, 'step_i': 0}
     options = orbax.checkpoint.CheckpointManagerOptions(
         max_to_keep=2, create=True)
