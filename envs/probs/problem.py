@@ -90,7 +90,7 @@ class Problem:
         return queued_state
 
     def init_graphics(self):
-        self.graphics = jnp.array(self.graphics)
+        self.graphics = jnp.array([np.array(g) for g in self.graphics])
         # Load TTF font (Replace 'path/to/font.ttf' with the actual path)
         self.render_font = font = ImageFont.truetype("./fonts/AcPlus_IBM_VGA_9x16-2x.ttf", 20)
 

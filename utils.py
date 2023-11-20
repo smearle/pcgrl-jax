@@ -49,7 +49,7 @@ def get_exp_dir(config: Config):
     return exp_dir
 
 
-def init_config(config: Config):
+def init_config(config: Config, evo=True):
     config.n_gpus = jax.local_device_count()
 
     if config.env_name == 'Candy':
@@ -61,7 +61,7 @@ def init_config(config: Config):
     config.arf_size = config.arf_size if config.arf_size is None \
         else config.arf_size
     config.exp_dir = get_exp_dir(config)
-    if hasattr(config, 'n_envs'):
+    if evo and hasattr(config, 'n_envs'):
         assert config.n_envs % (config.evo_pop_size * 2) == 0, "n_envs must be divisible by evo_pop_size * 2"
     return config
 

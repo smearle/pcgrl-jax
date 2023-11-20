@@ -550,7 +550,7 @@ def gen_dummy_queued_state(config, env, frz_rng):
 
 @hydra.main(version_base=None, config_path='./', config_name='train_pcgrl')
 def main(config: TrainConfig):
-    config = init_config(config)
+    config = init_config(config, evo=False)
     rng = jax.random.PRNGKey(config.seed)
 
     exp_dir = get_exp_dir(config)
