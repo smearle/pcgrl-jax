@@ -15,7 +15,7 @@ import orbax
 from tensorboardX import SummaryWriter
 
 from config import Config, TrainConfig
-from envs.pcgrl_env import PCGRLObs, render_stats
+from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
                    init_config)
@@ -99,10 +99,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # Reshape reset_rng and other per-environment states to (n_devices, -1, ...)
         # reset_rng = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
 
+        dummy_queued_state = gen_dummy_queued_state(config, env, reset_rng)
+
         # Apply pmap
-        vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None))
+        vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, None))
         # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-        obsv, env_state = vmap_reset_fn(reset_rng, env_params)
+        obsv, env_state = vmap_reset_fn(reset_rng, env_params, dummy_queued_state)
 
         # INIT ENV FOR RENDER
         rng_r, _rng_r = jax.random.split(rng)
@@ -110,9 +112,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         # Apply pmap
         # reset_rng_r = reset_rng_r.reshape((config.n_gpus, -1) + reset_rng_r.shape[1:])
-        vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None))
+        vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None, None))
         # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-        obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params)  # Replace None with your env_params if any
+        obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params, dummy_queued_state)  # Replace None with your env_params if any
         
         # obsv_r, env_state_r = jax.vmap(
         #     env_r.reset, in_axes=(0, None))(reset_rng_r, env_params)
@@ -503,9 +505,13 @@ def init_checkpointer(config: Config):
     reset_rng = jax.random.split(_rng, config.n_envs)
 
     # reset_rng_r = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
-    vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None))
+    vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, None))
     # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-    obsv, env_state = vmap_reset_fn(reset_rng, env_params)
+    obsv, env_state = vmap_reset_fn(
+        reset_rng, 
+        env_params, 
+        gen_dummy_queued_state(config, env, reset_rng)
+    )
     runner_state = RunnerState(train_state=train_state, env_state=env_state, last_obs=obsv,
                                # ep_returns=jnp.full(config.num_envs, jnp.nan), 
                                rng=rng, update_i=0)
@@ -532,6 +538,14 @@ def init_checkpointer(config: Config):
         # progress_df.to_csv(progress_csv_path, header=False, index=False)
 
     return checkpoint_manager, restored_ckpt
+
+    
+def gen_dummy_queued_state(config, env, frz_rng):
+    queued_state = QueuedState(
+        ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)),
+        frz_map=jnp.zeros(env.map_shape, dtype=bool)
+    )
+    return queued_state
 
 
 @hydra.main(version_base=None, config_path='./', config_name='train_pcgrl')
