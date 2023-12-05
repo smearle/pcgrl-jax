@@ -23,6 +23,7 @@ def get_exp_dir(config: Config):
             f'{config.activation}_w-{config.map_width}_vrf-{config.vrf_size}_' +
             (f'cp-{config.change_pct}' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
+            f'bs-{config.max_board_scans}_' + \
             f'fz-{config.n_freezies}_' + \
             f'act-{"x".join([str(e) for e in config.act_shape])}_' + \
             f'nag-{config.n_agents}_' + \

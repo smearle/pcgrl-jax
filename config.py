@@ -71,10 +71,6 @@ class TrainConfig(Config):
     render_freq: int = 100
     n_render_eps: int = 3
 
-    evo_freq: int = 10
-    evo_pop_size: int = 10
-    evo_mutate_prob: float = 0.1
-
     # eval the model on pre-made eval freezie maps to see how it's doing
     eval_freq: int = 100
     n_eval_maps: int = 6
@@ -85,6 +81,13 @@ class TrainConfig(Config):
     NUM_UPDATES: Optional[int] = None
     MINIBATCH_SIZE: Optional[int] = None
     ###########################################################################
+
+
+@dataclass
+class TrainAccelConfig(TrainConfig):
+    evo_freq: int = 10
+    evo_pop_size: int = 10
+    evo_mutate_prob: float = 0.1
 
 
 @dataclass
@@ -118,6 +121,7 @@ class BatchConfig(TrainConfig):
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
+cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
