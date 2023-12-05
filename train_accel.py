@@ -21,7 +21,7 @@ from config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from evo_accel import EvoState, apply_evo, gen_discount_factors_matrix
 from purejaxrl.experimental.s5.wrappers import LogWrapper
-from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
+from pcgrl_utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
                    init_config)
 
 
@@ -539,7 +539,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             jax.debug.callback(render_frames, frames, runner_state.update_i, states)
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
-            jax.debug.breakpoint()
             eval_rewards, states = jax.lax.cond(
                 runner_state.update_i % config.eval_freq == 0,
                 lambda: eval_episodes(train_state.params, queued_state_e),
@@ -649,7 +648,7 @@ def init_checkpointer(config: Config):
     return checkpoint_manager, restored_ckpt
 
 
-@hydra.main(version_base=None, config_path='./', config_name='train_pcgrl')
+@hydra.main(version_base=None, config_path='./conf', config_name='train_accel')
 def main(config: TrainConfig):
     config = init_config(config)
     rng = jax.random.PRNGKey(config.seed)
