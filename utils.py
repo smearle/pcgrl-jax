@@ -8,10 +8,11 @@ from config import Config, TrainConfig
 from envs.binary_0 import Binary0
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
+from envs.lego_env import PROB_CLASSES, LegoEnvParams, LegoEnv, ProbEnum, RepEnum, get_prob_cls
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
 from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
-from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, Dense, NCA, SeqNCA
+from models import ActorCritic, ActorCriticPCGRL, ActorCriticLEGO, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, Dense, NCA, SeqNCA, ConvForward3d
 
 
 def get_exp_dir(config: Config):
@@ -41,13 +42,18 @@ def get_exp_dir(config: Config):
             'candy_' + \
             f'{config.seed}_{config.exp_name}',
         )
+    elif config.env_name == 'Lego':
+        exp_dir = os.path.join(
+            'saves',
+            'lego_' + \
+            f'{config.seed}_{config.exp_name}',
+        )
     else:
         exp_dir = os.path.join(
             'saves',
             config.env_name,
         )
-    return exp_dir
-
+    return os.path.join(os.getcwd(), exp_dir)
 
 def init_config(config: Config, evo=True):
     config.n_gpus = jax.local_device_count()
@@ -79,9 +85,11 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         # First consider number of possible tiles
         # action_dim = env.action_space(env_params).n
         action_dim = env.rep.per_tile_action_dim
-    
     else:
         action_dim = env.num_actions
+
+    if config.model != "conv" and config.is_3d == True:
+        raise NotImplementedError
 
     if config.model == "dense":
         network = Dense(
@@ -89,11 +97,18 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
             arf_size=config.arf_size, vrf_size=config.vrf_size,
         )
     if config.model == "conv":
-        network = ConvForward(
-            action_dim=action_dim, activation=config.activation,
-            arf_size=config.arf_size, act_shape=config.act_shape,
-            vrf_size=config.vrf_size,
-        )
+        if config.is_3d:
+            network = ConvForward3d(
+                action_dim=action_dim, activation=config.activation,
+                arf_size=config.arf_size, act_shape=config.act_shape,
+                vrf_size=config.vrf_size,
+            )
+        else:
+            network = ConvForward(
+                action_dim=action_dim, activation=config.activation,
+                arf_size=config.arf_size, act_shape=config.act_shape,
+                vrf_size=config.vrf_size,
+            )
     if config.model == "seqnca":
         network = SeqNCA(
             action_dim, activation=config.activation,
@@ -116,6 +131,12 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     # if config.env_name == 'PCGRL':
     if 'PCGRL' in config.env_name:
         network = ActorCriticPCGRL(network, act_shape=config.act_shape,
+                            n_agents=config.n_agents, n_ctrl_metrics=len(config.ctrl_metrics))
+    # elif config.env_name == 'PlayPCGRL':
+    #     network = ActorCriticPlayPCGRL(network)
+
+    elif 'lego' in config.env_name.lower():
+        network = ActorCriticLEGO(network, act_shape=config.act_shape,
                             n_agents=config.n_agents, n_ctrl_metrics=len(config.ctrl_metrics))
     # elif config.env_name == 'PlayPCGRL':
     #     network = ActorCriticPlayPCGRL(network)
@@ -154,6 +175,34 @@ def get_env_params_from_config(config: Config):
     )
     return env_params
 
+def get_lego_params_from_config(config: Config):
+    map_shape = ((config.map_width, config.map_width) if not config.is_3d
+        else (config.map_width, config.map_width*3-2, config.map_width))
+    rf_size = config.map_width*2-1
+    rf_shape = (rf_size, (config.map_width*3-2)*2-1, rf_size)
+
+    act_shape = tuple(config.act_shape)
+    #if config.is_3d:
+    #    assert len(config.act_shape) == 3
+
+    # Convert strings to enum ints
+    problem = ProbEnum[config.problem.upper()]
+    prob_cls = PROB_CLASSES[problem]
+    ctrl_metrics = tuple([int(prob_cls.metrics_enum[c.upper()]) for c in config.ctrl_metrics])
+
+    env_params = LegoEnvParams(
+        problem=problem,
+        representation=int(RepEnum[config.representation.upper()]),
+        map_shape=map_shape,
+        act_shape=act_shape,
+        rf_shape=rf_shape,
+        #n_freezies=config.n_freezies,
+        n_agents=config.n_agents,
+        #max_board_scans=config.max_board_scans,
+        #ctrl_metrics=ctrl_metrics,
+        #change_pct=config.change_pct,
+    )
+    return env_params
 
 def get_play_env_params_from_config(config: Config):
     map_shape = (config.map_width, config.map_width)
@@ -183,5 +232,8 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
     elif env_name == 'Candy':
         env_params = CandyParams()
         env = Candy(env_params)
+    elif env_name == "Lego":
+        env_params = get_lego_params_from_config(config)
+        env = LegoEnv(env_params)
 
     return env, env_params

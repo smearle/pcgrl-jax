@@ -24,7 +24,7 @@ class Config:
     VF_COEF: float = 0.5
     MAX_GRAD_NORM: float = 0.5
     activation: str = "relu"
-    env_name: str = "PCGRL"
+    env_name: str = "pcgrl_env"
     ANNEAL_LR: bool = False
     DEBUG: bool = True
     exp_name: str = "0"
@@ -62,6 +62,7 @@ class Config:
     n_gpus: int = 1
 
 
+
 @dataclass
 class TrainConfig(Config):
     overwrite: bool = False
@@ -69,7 +70,7 @@ class TrainConfig(Config):
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e6)
     render_freq: int = 100
-    n_render_eps: int = 3
+    
 
     evo_freq: int = 10
     evo_pop_size: int = 10
@@ -86,7 +87,62 @@ class TrainConfig(Config):
     MINIBATCH_SIZE: Optional[int] = None
     ###########################################################################
 
+@dataclass
+class LegoConfig(Config):
+    lr: float = 1.0e-4
+    num_envs: int = 4
+    num_steps: int = 128
+    total_timesteps: int = int(5e7)
+    update_epochs: int = 10
+    NUM_MINIBATCHES: int = 4
+    GAMMA: float = 0.99
+    GAE_LAMBDA: float = 0.95
+    CLIP_EPS: float = 0.2
+    ENT_COEF: float = 0.01
+    VF_COEF: float = 0.5
+    MAX_GRAD_NORM: float = 0.5
+    activation: str = "relu"
+    env_name: str = "Lego"
+    ANNEAL_LR: bool = False
+    DEBUG: bool = True
+    exp_name: str = "0"
+    seed: int = 0
 
+    problem: str = "lego"
+    representation: str = "lego_rearrange"
+    model: str = "conv"
+
+    map_width: int = 6#12
+    is_3d: bool = True
+    n_render_eps: int = 3
+
+    ckpt_freq: int = int(1e6)
+    render_freq: int = 100
+
+ 
+    ctrl_metrics: Tuple[str] = ()
+    # Size of the receptive field to be fed to the action subnetwork.
+    #vrf_size: Optional[int] = 31
+    # Size of the receptive field to be fed to the value subnetwork.
+    #arf_size: Optional[int] = 31
+    # TODO: actually take arf and vrf into account in models, where possible
+
+    #change_pct: float = -1.0
+
+    # The shape of the (patch of) edit(s) to be made by the edited by the generator at each step.
+    act_shape: Tuple[int] = (1,)
+
+    static_tile_prob: Optional[float] = 0.0
+    #n_freezies: int = 0
+    n_agents: int = 1
+    #max_board_scans: float = 1.0
+
+    # How many milliseconds to wait between frames of the rendered gifs
+    #gif_frame_duration: int = 25
+    overwrite: bool =  True
+
+    NUM_UPDATES: Optional[int] = None
+    MINIBATCH_SIZE: Optional[int] = None
 @dataclass
 class EnjoyConfig(Config):
     random_agent: bool = False
@@ -118,6 +174,7 @@ class BatchConfig(TrainConfig):
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
+cs.store(name="lego_pcgrl", node=LegoConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
