@@ -63,6 +63,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         return config["LR"] * frac
 
     def train(rng, config: TrainConfig):
+
+        train_start_time = timer()
+
+        # Create a tensorboard writer
+        writer = SummaryWriter(get_exp_dir(config))
+
         # INIT NETWORK
         network = get_network(env, env_params, config)
 
@@ -396,27 +402,23 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             train_state = update_state[0]
             metric = traj_batch.info
             rng = update_state[-1]
-            if config.DEBUG:
-                def callback(info, steps_prev_complete):
-                    return_values = info["returned_episode_returns"][info["returned_episode"]]
-                    timesteps = info["timestep"][info["returned_episode"]
-                                                 ] * config.n_envs
-                    for t in range(len(timesteps)):
-                        print(
-                            f"global step={timesteps[t]}, episodic return={return_values[t]}")
-                jax.debug.callback(callback, metric, steps_prev_complete)
 
             jax.debug.callback(save_checkpoint, runner_state,
                                metric, steps_prev_complete)
 
-            # Create a tensorboard writer
-            writer = SummaryWriter(get_exp_dir(config))
-
             def log_callback(metric, steps_prev_complete):
                 timesteps = metric["timestep"][metric["returned_episode"]
                                                ] * config.n_envs
+                return_values = metric["returned_episode_returns"][metric["returned_episode"]]
+
+                # for t in range(len(timesteps)):
+                #     print(
+                #         f"global step={timesteps[t]}, episodic return={return_values[t]}")
+
                 if len(timesteps) > 0:
                     t = timesteps[0]
+                    print(f"global step={t}; episodic return mean: {return_values.mean()} " + \
+                        f"max: {return_values.max()}, min: {return_values.min()}")
                     ep_return = (metric["returned_episode_returns"]
                                  [metric["returned_episode"]].mean(
                     ))
@@ -430,6 +432,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
                     writer.add_scalar("ep_return", ep_return, t)
                     writer.add_scalar("ep_length", ep_length, t)
+                    fps = (t - steps_prev_complete) / (timer() - train_start_time)
+                    writer.add_scalar("fps", fps, t)
+
+                    print(f"fps: {fps}")
                     # for k, v in zip(env.prob.metric_names, env.prob.stats):
                     #     writer.add_scalar(k, v, t)
 
