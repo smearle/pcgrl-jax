@@ -39,7 +39,8 @@ class Environment(GymnaxEnvironment):
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(
-        self, key: chex.PRNGKey, params: Optional[EnvParams] = None, queued_state=None,
+        self, key: chex.PRNGKey, params: Optional[EnvParams] = None,
+        queued_state=None,
     ) -> Tuple[chex.Array, EnvState]:
         """Performs resetting of environment."""
         # Use default env parameters if no others specified

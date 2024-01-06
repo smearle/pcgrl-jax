@@ -21,7 +21,7 @@ def get_exp_dir(config: Config):
             'saves',
             f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
             f'{config.activation}_w-{config.map_width}_vrf-{config.vrf_size}_' +
-            (f'cp-{config.change_pct}' if config.change_pct > 0 else '') +
+            (f'cp-{config.change_pct}_' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
             f'bs-{config.max_board_scans}_' + \
             f'fz-{config.n_freezies}_' + \

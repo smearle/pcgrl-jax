@@ -3,7 +3,7 @@ import copy
 import hydra
 import submitit
 
-from config import EnjoyConfig, TrainConfig
+from config import EnjoyConfig, EvalConfig, SweepConfig, TrainConfig
 from enjoy import main_enjoy
 from plot import main as main_plot
 from train import main as main_train
@@ -59,13 +59,17 @@ from train import main as main_train
 # }
 
 # # (0) first sweep for ICLR
+# hypers = {
+#     'ctrl_metrics': [['diameter']],
+#     'vrf_size': [3, 5, 8, 16, 32],
+#     'seed': [0, 1, 2],
+#     'model': ['conv', 'seqnca'],
+#     'n_envs': [600],
+#     'total_timesteps': [200_000_000],
+# }
+
 hypers = {
-    'ctrl_metrics': [['diameter']],
-    'vrf_size': [3, 5, 8, 16, 32],
-    'seed': [0, 1, 2],
-    'model': ['conv', 'seqnca'],
-    'n_envs': [600],
-    'total_timesteps': [200_000_000],
+    'change_pct': [0.2, 0.4, 0.6, 0.8, 1.0],
 }
 
 
@@ -105,14 +109,15 @@ def get_sweep_cfgs(default_config, **kwargs):
 
 
 def seq_main(main_fn, sweep_configs):
-    """Convenience function for executing a sweep of jobs sequentially on a
-    SLURM cluster."""
+    """Convenience function for executing a sweep of jobs sequentially"""
     return [main_fn(sc) for sc in sweep_configs]
 
 
 @hydra.main(version_base=None, config_path='./', config_name='batch_pcgrl')
-def sweep_main(cfg):
+def sweep_main(cfg: SweepConfig):
 
+    # This is a hack. Would mean that we can't overwrite trial-specific settings
+    # via hydra yamls or command line arguments...
     if cfg.mode == 'train':
         main_fn = main_train
         default_config = TrainConfig()
@@ -121,39 +126,50 @@ def sweep_main(cfg):
         default_config = TrainConfig()
     elif cfg.mode == 'enjoy':
         default_config = EnjoyConfig()
+    elif cfg.mode == 'eval':
+        default_config = EvalConfig()
 
     for k, v in dict(cfg).items():
         setattr(default_config, k, v)
 
+    # ... but we work around this kind of.
     sweep_configs = get_sweep_cfgs(default_config, **hypers)
+
     # sweep_configs = [(sc,) for sc in sweep_configs]
 
-    if cfg.mode == 'enjoy':
-        executor = submitit.AutoExecutor(folder='submitit_logs')
-        executor.update_parameters(
-                mem_gb=30,
-                tasks_per_node=1,
-                cpus_per_task=1,
-                gpus_per_node=1,
-                timeout_min=60,
-            )
-        return executor.submit(seq_main, main_enjoy, sweep_configs)
+    if cfg.slurm:
 
-    if cfg.mode == 'train':
-        executor = submitit.AutoExecutor(folder='submitit_logs')
-        executor.update_parameters(
-                mem_gb=30,
-                tasks_per_node=1,
-                cpus_per_task=1,
-                # gpus_per_node=1,
-                timeout_min=1440,
-                slurm_gres='gpu:rtx8000:1',
-                # partition='rtx8000',
-            )
-        executor.map_array(main_fn, sweep_configs)
-    elif cfg.mode == 'plot':
-        [main_fn(sc) for sc in sweep_configs]
+        # Launch rendering sweep on SLURM
+        if cfg.mode == 'enjoy':
+            executor = submitit.AutoExecutor(folder='submitit_logs')
+            executor.update_parameters(
+                    mem_gb=30,
+                    tasks_per_node=1,
+                    cpus_per_task=1,
+                    gpus_per_node=1,
+                    timeout_min=60,
+                )
+            return executor.submit(seq_main, main_enjoy, sweep_configs)
 
+        # TODO: Launch eval sweep on SLURM
+
+        # Launch training sweep on SLURM
+        if cfg.mode == 'train':
+            if cfg.slurm:
+                executor = submitit.AutoExecutor(folder='submitit_logs')
+                executor.update_parameters(
+                        mem_gb=30,
+                        tasks_per_node=1,
+                        cpus_per_task=1,
+                        # gpus_per_node=1,
+                        timeout_min=1440,
+                        slurm_gres='gpu:rtx8000:1',
+                        # partition='rtx8000',
+                    )
+                executor.map_array(main_fn, sweep_configs)
+
+    else:
+        return seq_main(main_fn, sweep_configs)
 
 if __name__ == '__main__':
     sweep_main()

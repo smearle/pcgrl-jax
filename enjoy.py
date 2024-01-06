@@ -7,14 +7,14 @@ from jax import numpy as jnp
 import numpy as np
 
 from config import EnjoyConfig
-from envs.pcgrl_env import PCGRLEnv, render_stats
-from train import init_checkpointer
+from envs.pcgrl_env import PCGRLEnv, QueuedState, render_stats
+from train import gen_dummy_queued_state, init_checkpointer
 from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
 
 
 @hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
 def main_enjoy(config: EnjoyConfig):
-    config = init_config(config)
+    config = init_config(config, evo=False)
 
     exp_dir = get_exp_dir(config)
     if not config.random_agent:
@@ -31,12 +31,16 @@ def main_enjoy(config: EnjoyConfig):
     rng = jax.random.PRNGKey(42)
     rng_reset = jax.random.split(rng, config.n_eps)
 
-    frz_map = jnp.zeros(env.map_shape, dtype=jnp.int8)
-    frz_map = frz_map.at[7, 3:-3].set(1)
-    env.queue_frz_map(frz_map)
+    # Can manually define frozen tiles here, e.g. to set an OOD task
+    frz_map = jnp.zeros(env.map_shape, dtype=bool)
+    # frz_map = frz_map.at[7, 3:-3].set(1)
+    queued_state = gen_dummy_queued_state(env)
+    queued_state = env.queue_frz_map(queued_state, frz_map)
 
     # obs, env_state = env.reset(rng, env_params)
-    obs, env_state = jax.vmap(env.reset, in_axes=(0, None))(rng_reset, env_params)
+    obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(
+        rng_reset, env_params, queued_state
+    )
 
     def step_env(carry, _):
         rng, obs, env_state = carry
@@ -119,7 +123,9 @@ def main_enjoy(config: EnjoyConfig):
         imageio.v3.imwrite(
             gif_name,
             ep_frames,
-            duration=config.gif_frame_duration
+            # Not sure why but the frames are too slow otherwise (compared to 
+            # when captured in `train.py`). Are we saving extra frames?
+            duration=config.gif_frame_duration / 2
         )
 
 

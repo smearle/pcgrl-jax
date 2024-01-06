@@ -3,7 +3,9 @@
 outputs*
 multirun*
 saves*
+_saves*
 venv
+
 
 *.swp
 submitit_logs

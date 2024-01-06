@@ -99,7 +99,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # Reshape reset_rng and other per-environment states to (n_devices, -1, ...)
         # reset_rng = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
 
-        dummy_queued_state = gen_dummy_queued_state(config, env, reset_rng)
+        dummy_queued_state = gen_dummy_queued_state(env)
 
         # Apply pmap
         vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, None))
@@ -510,7 +510,7 @@ def init_checkpointer(config: Config):
     obsv, env_state = vmap_reset_fn(
         reset_rng, 
         env_params, 
-        gen_dummy_queued_state(config, env, reset_rng)
+        gen_dummy_queued_state(env)
     )
     runner_state = RunnerState(train_state=train_state, env_state=env_state, last_obs=obsv,
                                # ep_returns=jnp.full(config.num_envs, jnp.nan), 
@@ -540,7 +540,7 @@ def init_checkpointer(config: Config):
     return checkpoint_manager, restored_ckpt
 
     
-def gen_dummy_queued_state(config, env, frz_rng):
+def gen_dummy_queued_state(env):
     queued_state = QueuedState(
         ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)),
         frz_map=jnp.zeros(env.map_shape, dtype=bool)

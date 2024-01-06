@@ -51,8 +51,8 @@ class Config:
 
     static_tile_prob: Optional[float] = 0.0
     n_freezies: int = 0
-    n_agents: int = 1
-    max_board_scans: float = 1.0
+    n_agents: int = 1  # multi-agent is fake and broken
+    max_board_scans: float = 3.0
 
     # How many milliseconds to wait between frames of the rendered gifs
     gif_frame_duration: int = 25
@@ -101,7 +101,7 @@ class EnjoyConfig(Config):
 class EvalConfig(Config):
     reevaluate: bool = True
     random_agent: bool = False
-    # In how many bins to divide up each control metric
+    # In how many bins to divide up each metric being evaluated
     n_bins: int = 10
     n_envs: int = 200
     n_eps: int = 1
@@ -113,7 +113,7 @@ class ProfileEnvConfig(Config):
 
 
 @dataclass
-class BatchConfig(TrainConfig):
+class SweepConfig(TrainConfig):
     mode: str = 'train'
     slurm: bool = True
 
@@ -125,4 +125,4 @@ cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
-cs.store(name="batch_pcgrl", node=BatchConfig)
+cs.store(name="batch_pcgrl", node=SweepConfig)
