@@ -15,7 +15,7 @@ import PIL
 from gymnax.environments.environment import Environment as GymnaxEnvironment
 from envs.env import Environment
 from envs.pcgrl_env import PCGRLObs
-from envs.probs.lego import LegoProblem, LegoProblemState
+from envs.probs.lego import LegoProblem, LegoProblemState, LegoMetrics
 #from envs.probs.binary import BinaryMetrics, BinaryProblem
 #from envs.probs.dungeon import DungeonProblem
 #from envs.probs.maze import MazeProblem
@@ -280,7 +280,11 @@ class LegoEnv(Environment):
             jax.lax.stop_gradient(env_state),
             reward,
             done,
-            {"discount": self.discount(env_state, env_params)},
+            {"discount": self.discount(env_state, env_params), 
+             "footprint": prob_state.stats[LegoMetrics.FOOTPRINT],
+             "avg_height": prob_state.stats[LegoMetrics.AVG_HEIGHT], 
+             "last_action": action[0][0],
+             },
         )
     
     def is_terminal(self, state: LegoEnvState, params: LegoEnvParams) \
@@ -304,8 +308,9 @@ class LegoEnv(Environment):
         #TO DO: For real, the leocad/ldraw rendering
         flatmap = jnp.count_nonzero(env_state.env_map, 1)
         return render_map(env_state, flatmap, tile_size = self.prob.tile_size)
-    
 
+    def get_blocks(self, env_state):
+        return env_state.rep_state.blocks
     
     
     @property

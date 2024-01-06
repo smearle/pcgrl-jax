@@ -107,6 +107,8 @@ class LegoRearrangeRepresentation(Representation):
         obs = jnp.zeros((2*self.env_shape[0]-1, 2*self.env_shape[1]-1, 2*self.env_shape[2]-1))
         for block in blocks:
             obs = obs.at[curr_x + x_offset, curr_y + y_offset, curr_z + z_offset].set(1)
+        
+        
 
         #obs = jax.lax.select(x_offset<0, obs.at[x_offset:,:,:].set(-1), obs.at[0:x_offset,:,:].set(-1))
         #obs = jax.lax.select(y_offset<0, obs.at[:,y_offset:,:].set(-1), obs.at[:,0:y_offset,:].set(-1))
@@ -156,19 +158,42 @@ class LegoRearrangeRepresentation(Representation):
         
         x_step, z_step = self.moves[action[0][0]]
 
-        new_blocks = rep_state.blocks.at[rep_state.curr_block, 0].add(x_step)
+        curr_y = rep_state.blocks[rep_state.curr_block, 1]
+        curr_x = rep_state.blocks[rep_state.curr_block, 0]
+        curr_z = rep_state.blocks[rep_state.curr_block, 2]
+
+        #cond = (row[0] == curr_x) * (row[2] == curr_z) * (row[1] > curr_y)
+        def subtract_if_condition_met(arr):
+            def update_row(row):
+                def subtract_one(row):
+                    return row - jnp.array([0, 1, 0])
+
+                def identity(row):
+                    return row
+
+                cond = (row[0] == curr_x) * (row[2] == curr_z) * (row[1] > curr_y)
+                subtracted_row = jax.lax.cond(cond, subtract_one, identity, row)
+                return subtracted_row
+
+            updated_arr = jax.vmap(update_row)(arr)
+            return updated_arr
+
+        new_blocks = subtract_if_condition_met(rep_state.blocks)
+
+        new_blocks = new_blocks.at[rep_state.curr_block, 0].add(x_step)
         new_blocks = new_blocks.at[rep_state.curr_block, 2].add(z_step)
         new_blocks = jnp.clip(new_blocks, a_min = 0, a_max = self.env_shape[0]-1)
 
         x = new_blocks[rep_state.curr_block, 0]
         z = new_blocks[rep_state.curr_block, 2]
-        
-        #env_map = self.get_env_map(new_blocks)
+     
         new_height = jnp.count_nonzero(env_map, 1)[x, z]
+ 
         max_height = self.get_max_height
         new_blocks = new_blocks.at[rep_state.curr_block, 1].set(jnp.count_nonzero(env_map, 1)[x, z])        
 
-        return_blocks = jax.lax.select(new_height > max_height,rep_state.blocks, new_blocks)
+        return_blocks = jax.lax.select(new_height > max_height, rep_state.blocks, new_blocks)
+        return_blocks = jax.lax.select(((x == curr_x) & (z == curr_z)), rep_state.blocks, new_blocks)
 
         return_map = self.get_env_map(return_blocks)
         return_state = LegoRearrangeRepresentationState(curr_block = (rep_state.curr_block + 1)%self.num_blocks, blocks = return_blocks)

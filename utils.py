@@ -177,9 +177,11 @@ def get_env_params_from_config(config: Config):
 
 def get_lego_params_from_config(config: Config):
     map_shape = ((config.map_width, config.map_width) if not config.is_3d
-        else (config.map_width, config.map_width*3-2, config.map_width))
-    rf_size = config.map_width*2-1
-    rf_shape = (rf_size, (config.map_width*3-2)*2-1, rf_size)
+        #else (config.map_width, config.map_width*3-2, config.map_width))
+        else (config.map_width, config.map_width, config.map_width))
+    rf_size = (config.map_width*2-1)*2
+    #rf_shape = (rf_size, (config.map_width*3-2)*2-1, rf_size)
+    rf_shape = (rf_size, rf_size, rf_size)
 
     act_shape = tuple(config.act_shape)
     #if config.is_3d:
@@ -189,7 +191,7 @@ def get_lego_params_from_config(config: Config):
     problem = ProbEnum[config.problem.upper()]
     prob_cls = PROB_CLASSES[problem]
     ctrl_metrics = tuple([int(prob_cls.metrics_enum[c.upper()]) for c in config.ctrl_metrics])
-
+ 
     env_params = LegoEnvParams(
         problem=problem,
         representation=int(RepEnum[config.representation.upper()]),
