@@ -79,19 +79,22 @@ def main_eval_cp(config: EvalConfig):
         cell_reward = jnp.mean(ep_rewards)
 
         cell_states = states.prob_state
-        init_prob_state: ProblemState = cell_states[0]
-        final_prob_state: ProblemState = cell_states[-1]
+
+        done_idxs = jnp.where(dones)        
+        init_idxs = jnp.concatenate(([0], done_idxs[:-1]))
+        init_prob_states: ProblemState = jax.tree_map(lambda x: x[init_idxs], cell_states)
+        final_prob_states: ProblemState = jax.tree_map(lambda x: x[done_idxs], cell_states)
 
         # Compute weighted loss from targets
         cell_loss = jnp.mean(jnp.abs(
-            final_prob_state.ctrl_trgs - final_prob_state.stats) * env.prob.ct
+            final_prob_states.ctrl_trgs - final_prob_states.stats) * env.prob.stat_weights
         )
 
         # Compute relative progress toward target from initial metric values
         # cell_progs = 1 - jnp.abs(final_stats[:, ctrl_metrics] - ctrl_trg) / jnp.abs(init_stats[:, ctrl_metrics] - ctrl_trg)
-        final_prog = jnp.abs(final_prob_state.stats - final_prob_state.ctrl_trgs)
-        trg_prog = jnp.abs(init_prob_state.stats - init_prob_state.ctrl_trgs)
-        trg_prog = trg_prog if trg_prog != 0 else 1e4
+        final_prog = jnp.abs(final_prob_states.stats - final_prob_states.ctrl_trgs)
+        trg_prog = jnp.abs(init_prob_states.stats - init_prob_states.ctrl_trgs)
+        trg_prog = jnp.where(trg_prog == 0, 1e4, trg_prog)
         cell_progs = (1 - jnp.abs(final_prog / trg_prog))
         cell_prog = jnp.mean(cell_progs)
 
@@ -107,7 +110,7 @@ def main_eval_cp(config: EvalConfig):
 
     # For each bin, evaluate the change pct. at the center of the bin
     change_pcts = np.linspace(
-        config.n_bins,0,1
+        0, 1, config.n_bins,
     )
     
     if config.reevaluate:
@@ -120,14 +123,23 @@ def main_eval_cp(config: EvalConfig):
         with open(json_path, 'r') as f:
             stats = json.load(f)
             stats = EvalData(**stats)
-
+    
     # Make a bar plot of cell losses
     fig, ax = plt.subplots()
     ax.bar(np.arange(len(stats.cell_losses)), stats.cell_losses)
     ax.set_xticks(np.arange(len(stats.cell_losses)))
-    ax.set_xticklabels(change_pcts)
+    ax.set_xticklabels([f'{cp:.2f}' for cp in change_pcts])
     ax.set_ylabel('Loss')
     ax.set_xlabel('Change pct.')
+    plt.savefig(os.path.join(exp_dir, 'cp_loss.png'))
+
+    fig, ax = plt.subplots()
+    ax.bar(np.arange(len(stats.cell_losses)), stats.cell_losses)
+    ax.set_xticks(np.arange(len(stats.cell_losses)))
+    ax.set_xticklabels([f'{cp:.2f}' for cp in change_pcts])
+    ax.set_ylabel('Reward')
+    ax.set_xlabel('Change pct.')
+    plt.savefig(os.path.join(exp_dir, 'cp_reward.png'))
 
     # cell_progs = np.array(stats.cell_progs)
 
@@ -145,7 +157,6 @@ def main_eval_cp(config: EvalConfig):
     # plt.colorbar()
     # plt.title('Control target success')
 
-    plt.savefig(os.path.join(exp_dir, 'ctrl_loss.png'))
 
 if __name__ == '__main__':
     main_eval_cp()
