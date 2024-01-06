@@ -68,6 +68,7 @@ class TrainConfig(Config):
 
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e6)
+    # Render after this many update steps
     render_freq: int = 100
     n_render_eps: int = 3
 

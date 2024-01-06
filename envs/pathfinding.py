@@ -1,3 +1,4 @@
+from dataclasses import field
 import math
 from typing import Optional, Tuple
 import numpy as np
@@ -18,7 +19,11 @@ class FloodPathState:
     flood_count: chex.Array
     env_map: Optional[chex.Array] = None
     trg: Optional[chex.Array] = None
-    nearest_trg_xy: Optional[chex.Array] = None #  = jnp.zeros(2, dtype=jnp.int32)
+    # FIXME: For some reason, we need to do this for the dungeon environment (why not maze?). Think this might be 
+    #   causing a phantom path tile to render in upper-left corner of map when rendering.
+    # nearest_trg_xy: Optional[chex.Array] = None #  = jnp.zeros(2, dtype=jnp.int32)
+    nearest_trg_xy: Optional[chex.Array] = field(default_factory=lambda: 
+                                                 (jnp.zeros(2, dtype=jnp.int32) - 1))
     done: bool = False
 
 

@@ -23,7 +23,7 @@ class EvalData:
     cell_rewards: chex.Array
 
 @hydra.main(version_base=None, config_path='./', config_name='eval_pcgrl')
-def main_eval_cp(config: EvalConfig):
+def main_eval(config: EvalConfig):
     config = init_config(config, evo=False)
 
     exp_dir = get_exp_dir(config)
@@ -40,10 +40,9 @@ def main_eval_cp(config: EvalConfig):
     rng = jax.random.PRNGKey(42)
     reset_rng = jax.random.split(rng, config.n_envs)
 
-    def eval_cp(change_pct, env_params):
+    def eval(env_params):
         # obs, env_state = env.reset(reset_rng, env_params)
         queued_state = gen_dummy_queued_state(env)
-        env_params = env_params.replace(change_pct=change_pct)
         obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(
             reset_rng, env_params, queued_state)
 
@@ -73,18 +72,15 @@ def main_eval_cp(config: EvalConfig):
 
         return _, (states, rewards, dones, infos)
 
-    def _eval_cp(change_pct, env_params):
-        _, (states, reward, dones, infos) = eval_cp(change_pct, env_params)
+    def _eval_cp(env_params):
+        _, (states, reward, dones, infos) = eval(env_params)
         ep_rewards = reward.sum(axis=0)
         cell_reward = jnp.mean(ep_rewards)
 
         cell_states = states.prob_state
 
         cell_loss = jnp.mean(jnp.where(dones, 
-                                jnp.sum(
-                                    jnp.abs(cell_states.ctrl_trgs - cell_states.stats) * env.prob.stat_weights
-                                    , axis=-1)
-                                , 0))
+                                jnp.abs(cell_states.ctrl_trgs - cell_states.stats) * env.prob.stat_weights, 0))
 
         # Compute weighted loss from targets
         # cell_loss = jnp.mean(jnp.abs(
@@ -107,7 +103,7 @@ def main_eval_cp(config: EvalConfig):
         
         return eval_data
 
-    json_path = os.path.join(exp_dir, 'cp_stats.json')
+    json_path = os.path.join(exp_dir, 'eval_stats.json')
 
     # For each bin, evaluate the change pct. at the center of the bin
     change_pcts = np.linspace(
@@ -125,23 +121,6 @@ def main_eval_cp(config: EvalConfig):
             stats = json.load(f)
             stats = EvalData(**stats)
     
-    # Make a bar plot of cell losses
-    fig, ax = plt.subplots()
-    ax.bar(np.arange(len(stats.cell_losses)), stats.cell_losses)
-    ax.set_xticks(np.arange(len(stats.cell_losses)))
-    ax.set_xticklabels([f'{cp:.2f}' for cp in change_pcts])
-    ax.set_ylabel('Loss')
-    ax.set_xlabel('Change pct.')
-    plt.savefig(os.path.join(exp_dir, 'cp_loss.png'))
-
-    fig, ax = plt.subplots()
-    ax.bar(np.arange(len(stats.cell_rewards)), stats.cell_rewards)
-    ax.set_xticks(np.arange(len(stats.cell_rewards)))
-    ax.set_xticklabels([f'{cp:.2f}' for cp in change_pcts])
-    ax.set_ylabel('Reward')
-    ax.set_xlabel('Change pct.')
-    plt.savefig(os.path.join(exp_dir, 'cp_reward.png'))
-
     # cell_progs = np.array(stats.cell_progs)
 
     # fig, ax = plt.subplots()
@@ -160,4 +139,4 @@ def main_eval_cp(config: EvalConfig):
 
 
 if __name__ == '__main__':
-    main_eval_cp()
+    main_eval()

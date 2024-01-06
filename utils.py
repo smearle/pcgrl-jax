@@ -62,7 +62,7 @@ def init_config(config: Config, evo=True):
     config.arf_size = config.arf_size if config.arf_size is None \
         else config.arf_size
     config.exp_dir = get_exp_dir(config)
-    if evo and hasattr(config, 'n_envs'):
+    if hasattr(config, 'evo_pop_size') and hasattr(config, 'n_envs'):
         assert config.n_envs % (config.evo_pop_size * 2) == 0, "n_envs must be divisible by evo_pop_size * 2"
     return config
 

@@ -145,7 +145,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # TODO: Overwrite certain config values
 
         def render_frames(frames, i, env_states=None):
-            if i % config.render_freq != 0:
+            if config.render_freq <= 0 or i % config.render_freq != 0:
             # if jnp.all(frames == 0):
                 return
             print(f"Rendering episode gifs at update {i}")
@@ -522,6 +522,8 @@ def init_checkpointer(config: Config):
                                # ep_returns=jnp.full(config.num_envs, jnp.nan), 
                                rng=rng, update_i=0)
     target = {'runner_state': runner_state, 'step_i': 0}
+    # Get absolute path
+    ckpt_dir = os.path.abspath(ckpt_dir)
     options = orbax.checkpoint.CheckpointManagerOptions(
         max_to_keep=2, create=True)
     checkpoint_manager = orbax.checkpoint.CheckpointManager(

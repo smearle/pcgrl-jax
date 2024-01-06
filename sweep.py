@@ -1,10 +1,13 @@
 import copy
+import pprint
 
 import hydra
 import submitit
 
 from config import EnjoyConfig, EvalConfig, SweepConfig, TrainConfig
 from enjoy import main_enjoy
+from eval import main_eval
+from eval_change_pct import main_eval_cp
 from plot import main as main_plot
 from train import main as main_train
 
@@ -68,12 +71,31 @@ from train import main as main_train
 #     'total_timesteps': [200_000_000],
 # }
 
-hypers = {
-    'change_pct': [0.2, 0.4, 0.6, 0.8, 1.0],
-}
 
 
-def get_sweep_cfgs(default_config, **kwargs):
+### IJCAI experiments ###
+
+hypers = [
+    {
+        'change_pct': [0.2, 0.4, 0.6, 0.8, 1.0],
+        'seed': [0, 1, 2],
+        'n_envs': [600],
+        'max_board_scans': [3.0],
+        'total_timesteps': [200_000_000],
+    },
+    {
+        'change_pct': [-1.0],
+        'seed': [0, 1, 2],
+        'n_envs': [600],
+        'max_board_scans': [1, 5, 10],
+        'total_timesteps': [200_000_000],
+    }
+]
+
+########################
+
+
+def get_sweep_cfgs(default_config, kwargs):
     subconfigs = [default_config]
     # Name of hyper, list of values
     for k, v in kwargs.items():
@@ -119,21 +141,29 @@ def sweep_main(cfg: SweepConfig):
     # This is a hack. Would mean that we can't overwrite trial-specific settings
     # via hydra yamls or command line arguments...
     if cfg.mode == 'train':
+        default_config = TrainConfig()
         main_fn = main_train
-        default_config = TrainConfig()
     elif cfg.mode == 'plot':
-        main_fn = main_plot
         default_config = TrainConfig()
+        main_fn = main_plot
     elif cfg.mode == 'enjoy':
         default_config = EnjoyConfig()
+        main_fn = main_enjoy
+    elif cfg.mode == 'eval_cp':
+        default_config = EvalConfig()
+        main_fn = main_eval_cp
     elif cfg.mode == 'eval':
         default_config = EvalConfig()
+        main_fn = main_eval
 
+    # ... but we work around this kind of.
     for k, v in dict(cfg).items():
         setattr(default_config, k, v)
 
-    # ... but we work around this kind of.
-    sweep_configs = get_sweep_cfgs(default_config, **hypers)
+    # sweep_configs = get_sweep_cfgs(default_config, **hypers)
+    sweep_configs = []
+    for h in hypers:
+        sweep_configs += get_sweep_cfgs(default_config, h)
 
     # sweep_configs = [(sc,) for sc in sweep_configs]
 
@@ -166,6 +196,8 @@ def sweep_main(cfg: SweepConfig):
                         slurm_gres='gpu:rtx8000:1',
                         # partition='rtx8000',
                     )
+                # Pretty print all configs to be executed
+                pprint.pprint(sweep_configs)
                 executor.map_array(main_fn, sweep_configs)
 
     else:
