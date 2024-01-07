@@ -46,7 +46,7 @@ def get_exp_dir(config: Config):
         exp_dir = os.path.join(
             'saves',
             'lego_' + \
-            f'{config.seed}_{config.exp_name}',
+            f'{config.seed}_{config.exp_name}_rf{config.arf_size}_reps{config.max_steps_multiple}',
         )
     else:
         exp_dir = os.path.join(
@@ -183,6 +183,8 @@ def get_lego_params_from_config(config: Config):
     #rf_shape = (rf_size, (config.map_width*3-2)*2-1, rf_size)
     rf_shape = (rf_size, rf_size, rf_size)
 
+    max_steps_multiple = config.max_steps_multiple
+
     act_shape = tuple(config.act_shape)
     #if config.is_3d:
     #    assert len(config.act_shape) == 3
@@ -198,6 +200,7 @@ def get_lego_params_from_config(config: Config):
         map_shape=map_shape,
         act_shape=act_shape,
         rf_shape=rf_shape,
+        max_steps_multiple=max_steps_multiple,
         #n_freezies=config.n_freezies,
         n_agents=config.n_agents,
         #max_board_scans=config.max_board_scans,

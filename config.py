@@ -29,6 +29,7 @@ class Config:
     DEBUG: bool = True
     exp_name: str = "0"
     seed: int = 0
+    
 
     problem: str = "binary"
     representation: str = "narrow"
@@ -91,7 +92,8 @@ class TrainConfig(Config):
 class LegoConfig(Config):
     lr: float = 1.0e-4
     num_envs: int = 4
-    num_steps: int = 128
+    #num_steps: int = 
+    max_steps_multiple:int = 26
     total_timesteps: int = int(5e7)
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4
@@ -122,20 +124,21 @@ class LegoConfig(Config):
  
     ctrl_metrics: Tuple[str] = ()
     # Size of the receptive field to be fed to the action subnetwork.
-    #vrf_size: Optional[int] = 31
+    #vrf_size: Optional[int] = 11
     # Size of the receptive field to be fed to the value subnetwork.
-    #arf_size: Optional[int] = 31
+    #arf_size: Optional[int] = 11
     # TODO: actually take arf and vrf into account in models, where possible
 
     #change_pct: float = -1.0
 
     # The shape of the (patch of) edit(s) to be made by the edited by the generator at each step.
-    act_shape: Tuple[int] = (1,)
+    act_shape: Tuple[int] = (1,1)
 
     static_tile_prob: Optional[float] = 0.0
     #n_freezies: int = 0
     n_agents: int = 1
     #max_board_scans: float = 1.0
+   
 
     # How many milliseconds to wait between frames of the rendered gifs
     #gif_frame_duration: int = 25

@@ -80,6 +80,7 @@ class LegoEnvParams:
     representation: int = RepEnum.LEGO_REARRANGE
     map_shape: Tuple[int, int, int] = (6, 6*3-2, 6)
     act_shape: Tuple[int] = (1,)
+    max_steps_multiple: int = 25
     #static_tile_prob: Optional[float] = 0.0
     #n_freezies: int = 0
     n_agents: int = 1
@@ -157,9 +158,9 @@ def get_prob_cls(problem: str):
 class LegoEnv(Environment):
     prob: Problem
     def __init__(self, env_params: LegoEnvParams):
-        map_shape, act_shape, problem, representation, n_agents, n_blocks = (
+        map_shape, act_shape, problem, representation, n_agents, n_blocks, max_steps_multiple = (
             env_params.map_shape, env_params.act_shape, env_params.problem,
-            env_params.representation, env_params.n_agents, env_params.n_blocks)
+            env_params.representation, env_params.n_agents, env_params.n_blocks, env_params.max_steps_multiple)
 
         self.map_shape = map_shape
         self.act_shape = act_shape
@@ -184,6 +185,7 @@ class LegoEnv(Environment):
                 act_shape=act_shape,
                 env_shape = map_shape,
                 n_blocks = n_blocks,
+                max_steps_multiple = max_steps_multiple
                 #max_board_scans=env_params.max_board_scans,
             )
         else:
@@ -261,6 +263,12 @@ class LegoEnv(Environment):
         
         #env_state = jax.lax.cond(env_state.prob_state == None, env_state.prob_state = LegoProblemState(reward = 0), env_state)
         reward, prob_state = self.prob.step(env_map, state=env_state.prob_state, blocks=rep_state.blocks)
+
+        def true_fun():
+            return 1.0
+        def false_fun():
+            return 0.0
+        #reward = jax.lax.cond(action[0][0][0] == 4, true_fun, false_fun)
         
         obs = self.get_obs(env_state.rep_state, env_state.prob_state)
             #env_map=env_map, static_map=env_state.static_map,
@@ -283,7 +291,7 @@ class LegoEnv(Environment):
             {"discount": self.discount(env_state, env_params), 
              "footprint": prob_state.stats[LegoMetrics.FOOTPRINT],
              "avg_height": prob_state.stats[LegoMetrics.AVG_HEIGHT], 
-             "last_action": action[0][0],
+             "last_action": action[0][0][0],
              },
         )
     

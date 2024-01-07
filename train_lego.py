@@ -192,8 +192,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             for ep_is in range(config.n_render_eps):
                 ep_blocks = blocks[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
-                ep_avg_height = states.prob_state.stats[-1, ep_is, 0]
-                ep_footprint = states.prob_state.stats[-1, ep_is, 1]
+                ep_avg_height = states.prob_state.stats[-2, ep_is, 0]
+                ep_footprint = states.prob_state.stats[-2, ep_is, 1]
 
                 savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_avg_height:.2f}_fp{ep_footprint:.2f}/"
                 if not os.path.exists(savedir):
@@ -506,8 +506,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     ))
                     ep_length = (metric["returned_episode_lengths"]
                                   [metric["returned_episode"]].mean())
-                    ep_footprint = (metric["footprint"][-1,:].mean())
-                    ep_avg_height = (metric["avg_height"][-1,:].mean())
+                    ep_footprint = (metric["footprint"][-2,:].mean())
+                    ep_avg_height = (metric["avg_height"][-2,:].mean())
 
                     # Add a row to csv with ep_return
                     with open(os.path.join(get_exp_dir(config),

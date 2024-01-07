@@ -33,7 +33,8 @@ class LegoRearrangeRepresentation(Representation):
             tile_enum: Tiles, 
             act_shape: Tuple[int, int], 
             env_shape: Tuple[int, int, int], 
-            n_blocks: int
+            n_blocks: int,
+            max_steps_multiple: int
             ):
 
         self.tile_enum = tile_enum
@@ -42,7 +43,7 @@ class LegoRearrangeRepresentation(Representation):
         self.num_blocks = n_blocks
 
         
-        self.max_steps = 26*self.num_blocks
+        self.max_steps = max_steps_multiple*self.num_blocks
         """
         self.blocks = jnp.zeros((self.num_blocks, 3), dtype="int32")
         for i in range(self.num_blocks):
@@ -156,7 +157,7 @@ class LegoRearrangeRepresentation(Representation):
 
     def step(self, env_map: chex.Array, action: chex.Array, rep_state: LegoRearrangeRepresentationState, step_idx: int):
         
-        x_step, z_step = self.moves[action[0][0]]
+        x_step, z_step = self.moves[action[0][0][0]]
 
         curr_y = rep_state.blocks[rep_state.curr_block, 1]
         curr_x = rep_state.blocks[rep_state.curr_block, 0]
