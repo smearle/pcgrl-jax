@@ -77,28 +77,84 @@ from train import main as main_train
 
 hypers = [
     {
+        'NAME': 'cp_binary',
         'change_pct': [0.2, 0.4, 0.6, 0.8, 1.0],
         'seed': [0, 1, 2],
         'n_envs': [600],
         'max_board_scans': [3.0],
-        'total_timesteps': [200_000_000],
+        # 'total_timesteps': [200_000_000],
+        'total_timesteps': [1_000_000_000],
     },
+]
+
+# hypers = [
+#     {
+#         'NAME': 'bs_binary',
+#         'max_board_scans': [1, 5, 10],
+#         'change_pct': [-1.0],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         # 'total_timesteps': [200_000_000],
+#         'total_timesteps': [1_000_000_000],
+#     }
+# ]
+
+# hypers = [
+#     {
+#         'arf_size': [3, 5, 8, 16, 31],
+#         'change_pct': [-1.0],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'max_board_scans': [4],
+#         'total_timesteps': [200_000_000],
+#     },
+# ]
+
+# hypers = [
+#     {
+#         'problem': ['dungeon'],
+#         'change_pct': [-1.0],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'max_board_scans': [4],
+#         'total_timesteps': [200_000_000],
+#     },
+# ]
+
+
+hypers = [
     {
+        'NAME': 'arf_seqnca_binary',
+        'model': ['seqnca'],
+        'arf_size': [3, 5, 8, 16, 31],
         'change_pct': [-1.0],
         'seed': [0, 1, 2],
-        'n_envs': [600],
-        'max_board_scans': [1, 5, 10],
+        'n_envs': [200],
+        'max_board_scans': [5],
         'total_timesteps': [200_000_000],
-    }
+    },
 ]
+
 
 ########################
 
 
-def get_sweep_cfgs(default_config, kwargs):
+def get_sweep_cfgs(default_config, hypers):
+    # sweep_configs = get_sweep_cfgs(default_config, **hypers)
+    sweep_configs = []
+    for h in hypers:
+        sweep_configs += get_grid_cfgs(default_config, h)
+    return sweep_configs
+
+
+def get_grid_cfgs(default_config, kwargs):
+    """Return set of experiment configs corresponding to the grid of 
+    hyperparameter values specified by kwargs."""
     subconfigs = [default_config]
     # Name of hyper, list of values
     for k, v in kwargs.items():
+        if k == 'NAME':
+            continue
         if hasattr(default_config, k):
             assert isinstance(v, list)
             new_subconfigs = []
@@ -155,15 +211,14 @@ def sweep_main(cfg: SweepConfig):
     elif cfg.mode == 'eval':
         default_config = EvalConfig()
         main_fn = main_eval
+    else:
+        raise Exception('Invalid mode: f{cfg.mode}')
 
     # ... but we work around this kind of.
     for k, v in dict(cfg).items():
         setattr(default_config, k, v)
 
-    # sweep_configs = get_sweep_cfgs(default_config, **hypers)
-    sweep_configs = []
-    for h in hypers:
-        sweep_configs += get_sweep_cfgs(default_config, h)
+    sweep_configs = get_sweep_cfgs(default_config, hypers)
 
     # sweep_configs = [(sc,) for sc in sweep_configs]
 
@@ -199,9 +254,14 @@ def sweep_main(cfg: SweepConfig):
                 # Pretty print all configs to be executed
                 pprint.pprint(sweep_configs)
                 executor.map_array(main_fn, sweep_configs)
+        
+        else:
+            raise Exception(
+                (f'Sweep jobs of mode {cfg.mode} cannot be submitted to SLURM. '
+                f'Try again with `slurm=false`.'))
 
     else:
         return seq_main(main_fn, sweep_configs)
 
 if __name__ == '__main__':
-    sweep_main()
+    ret = sweep_main()

@@ -46,5 +46,7 @@ class Environment(GymnaxEnvironment):
         # Use default env parameters if no others specified
         if params is None:
             params = self.default_params
+        if queued_state is None:
+            queued_state = self.dummy_queued_state
         obs, state = self.reset_env(key, params, queued_state)
         return obs, state

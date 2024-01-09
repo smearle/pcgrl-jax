@@ -2,8 +2,10 @@
 *egg-info*
 outputs*
 multirun*
+cross_eval/*
 saves*
 _saves*
+log
 venv
 
 

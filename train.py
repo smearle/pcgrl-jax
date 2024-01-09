@@ -15,7 +15,7 @@ import orbax
 from tensorboardX import SummaryWriter
 
 from config import Config, TrainConfig
-from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
+from envs.pcgrl_env import gen_dummy_queued_state
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
                    init_config)
@@ -548,17 +548,9 @@ def init_checkpointer(config: Config):
     return checkpoint_manager, restored_ckpt
 
     
-def gen_dummy_queued_state(env):
-    queued_state = QueuedState(
-        ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)),
-        frz_map=jnp.zeros(env.map_shape, dtype=bool)
-    )
-    return queued_state
-
-
 @hydra.main(version_base=None, config_path='./', config_name='train_pcgrl')
 def main(config: TrainConfig):
-    config = init_config(config, evo=False)
+    config = init_config(config)
     rng = jax.random.PRNGKey(config.seed)
 
     exp_dir = get_exp_dir(config)

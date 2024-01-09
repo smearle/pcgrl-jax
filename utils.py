@@ -50,7 +50,7 @@ def get_exp_dir(config: Config):
     return exp_dir
 
 
-def init_config(config: Config, evo=True):
+def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
     if config.env_name == 'Candy':

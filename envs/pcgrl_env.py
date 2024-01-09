@@ -337,6 +337,10 @@ class PCGRLEnv(Environment):
     def default_params(self) -> PCGRLEnvParams:
         return PCGRLEnvParams(map_shape=(16, 16))
 
+    @property
+    def dummy_queued_state(self) -> QueuedState:
+        return gen_dummy_queued_state(self)
+
     def action_space(self, env_params: PCGRLEnvParams) -> int:
         return self.rep.action_space()
 
@@ -358,6 +362,20 @@ class PCGRLEnv(Environment):
         act_window_shape = action_shape[:-1]
         n_tile_types = action_shape[-1]
         return jax.random.randint(rng, act_window_shape, 0, n_tile_types)[None, ...]
+
+
+def gen_dummy_queued_state(env):
+    queued_state = QueuedState(
+        ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)),
+        frz_map=jnp.zeros(env.map_shape, dtype=bool)
+    )
+    return queued_state
+
+
+def flatten_obs(obs: PCGRLObs) -> chex.Array:
+    map_obs = jnp.reshape(obs.map_obs, (-1,))
+    obs = jnp.concatenate((map_obs, obs.flat_obs))
+    return obs
 
 
 def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,

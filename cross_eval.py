@@ -1,0 +1,81 @@
+
+import json
+import os
+from typing import Iterable
+
+import hydra
+import matplotlib.pyplot as plt
+import numpy as np
+
+from config import EvalConfig, SweepConfig, TrainConfig
+from eval_change_pct import EvalData, get_change_pcts
+from sweep import get_grid_cfgs, hypers
+from utils import init_config
+
+
+CROSS_EVAL_DIR = 'cross_eval'
+
+
+def cross_eval_main():
+    for grid_hypers in hypers:
+        name = grid_hypers['NAME']
+        if name.startswith('cp_'):
+            cross_eval_cp(grid_hypers)
+
+
+def cross_eval_cp(grid_hypers):
+    default_config = TrainConfig()
+    sweep_configs = get_grid_cfgs(default_config, grid_hypers)
+    sweep_configs = [init_config(sc) for sc in sweep_configs]
+    eval_config = EvalConfig()
+
+    cp_stats = {}
+    for sc in sweep_configs:
+        log_dir = sc.exp_dir
+        sc_stats = EvalData(**json.load(open(f'{log_dir}/cp_stats.json')))
+        cp_stats[sc.exp_dir] = (sc_stats, sc)
+
+    # Treat change_percentage during training as the independent variable
+    cps_to_rews = {}
+    for exp_dir, (sc_stats, sc) in cp_stats.items():
+        print(f'Gathering stats for experiment: {exp_dir}')
+        if sc.change_pct not in cps_to_rews:
+            cps_to_rews[sc.change_pct] = []
+        cps_to_rews[sc.change_pct].append(sc_stats.cell_rewards)
+
+    # Training CPs to eval CPs to mean reward
+    cps_to_cps_mean_rews = {k: np.mean(v, 0) for k, v in cps_to_rews.items()}
+
+    # Note that `n_bins` needs to be the same as it was during eval.
+    change_pcts_eval = get_change_pcts(eval_config.n_bins)
+    change_pcts_train = sorted(list(cps_to_cps_mean_rews.keys()))
+
+    # Generate a heatmap of change_pct vs eval_cp
+    heatmap = np.zeros((len(change_pcts_train), len(change_pcts_eval)))
+    for i, cp_train in enumerate(change_pcts_train):
+        for j, cp_eval in enumerate(change_pcts_eval):
+            heatmap[i, j] = cps_to_cps_mean_rews[cp_train][j]
+    
+    # Plot heatmap
+    fig, ax = plt.subplots()
+    im = ax.imshow(heatmap)
+    ax.set_xticks(np.arange(len(change_pcts_eval)))
+    x_labels = [f'{cp:.2f}' for cp in change_pcts_eval]
+    if x_labels[-1] == -1:
+        x_labels[-1] = 'Unlimited'
+    ax.set_xticklabels(x_labels)
+    ax.set_yticks(np.arange(len(change_pcts_train)))
+    y_labels = [f'{cp:.2f}' for cp in change_pcts_train]
+    if y_labels[-1] == -1:
+        y_labels[-1] = 'Unlimited'
+    ax.set_yticklabels(y_labels)
+    ax.set_xlabel('Eval Change Percentage')
+    ax.set_ylabel('Train Change Percentage')
+    fig.colorbar(im)
+    os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
+    plt.savefig(os.path.join(CROSS_EVAL_DIR, 
+                             f"{grid_hypers['NAME']}_cp_heatmap.png"))
+
+
+if __name__ == '__main__':
+    cross_eval_main()

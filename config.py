@@ -104,8 +104,8 @@ class EvalConfig(Config):
     random_agent: bool = False
     # In how many bins to divide up each metric being evaluated
     n_bins: int = 10
-    n_envs: int = 200
-    n_eps: int = 1
+    n_eval_envs: int = 10
+    n_eps: int = 5
 
 
 @dataclass

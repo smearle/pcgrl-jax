@@ -37,6 +37,7 @@ class WideRepresentation(Representation):
         # Always observe static tile channel. Do not observe border tiles.
         return (*self.rf_shape, len(self.tile_enum))
 
+    @property
     def action_space(self) -> spaces.Discrete:
         return spaces.Discrete((len(self.tile_enum) - 1) *
                                math.prod(self.map_shape))

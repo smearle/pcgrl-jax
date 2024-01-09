@@ -114,6 +114,8 @@ class DungeonProblem(Problem):
             DungeonMetrics.N_ENEMIES: 3.5,
             DungeonMetrics.PATH_LENGTH: np.inf,
             # DungeonMetrics.NEAREST_ENEMY: (2, np.inf),
+
+            # FIXME: This should be max_path_len
             DungeonMetrics.NEAREST_ENEMY: self.n_tiles,
         }
         self.stat_trgs = idx_dict_to_arr(stat_trgs)
