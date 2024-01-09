@@ -46,10 +46,10 @@ class Transition(NamedTuple):
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     config.NUM_UPDATES = (
-        config.total_timesteps // config.num_steps // config.n_envs
+        config.total_timesteps // (config.max_steps_multiple*config.n_blocks )// config.n_envs
     )
     config.MINIBATCH_SIZE = (
-        config.n_envs * config.num_steps // config.NUM_MINIBATCHES
+        config.n_envs * config.n_blocks * config.max_steps_multiple // config.NUM_MINIBATCHES
     )
     env_r, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     # env = FlattenObservationWrapper(env)
@@ -192,16 +192,22 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             for ep_is in range(config.n_render_eps):
                 ep_blocks = blocks[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
-                ep_avg_height = states.prob_state.stats[-2, ep_is, 0]
-                ep_footprint = states.prob_state.stats[-2, ep_is, 1]
+                ep_avg_height = states.prob_state.stats[-1, ep_is, 0]
+                ep_footprint = states.prob_state.stats[-1, ep_is, 1]
+                ep_rotation_0 = states.rep_state.rotation[0, ep_is]
+                ep_rotation_1 = states.rep_state.rotation[1, ep_is]
+                ep_rotation_end = states.rep_state.rotation[-2, ep_is]
+                ep_rotations = states.rep_state.rotation[:,ep_is]
 
-                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_avg_height:.2f}_fp{ep_footprint:.2f}/"
+
+                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_avg_height:.2f}_fp{ep_footprint:.2f}_ro{ep_rotation_0}{ep_rotation_1}{ep_rotation_end}/"
                 if not os.path.exists(savedir):
                     os.makedirs(savedir)
                 
                 for num in range(ep_blocks.shape[0]):
                     curr_blocks = ep_blocks[num,:,:]
-                    savename = os.path.join(savedir, f"{num}.mpd")
+                    rotation = ep_rotations[num]
+                    savename = os.path.join(savedir, f"{num}_r{rotation}.mpd")
                     
                     f = open(savename, "a")
                     f.write("0/n")
@@ -350,7 +356,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 return runner_state, transition
 
             runner_state, traj_batch = jax.lax.scan(
-                _env_step, runner_state, None, config.num_steps
+                _env_step, runner_state, None, config.max_steps_multiple*config.n_blocks
             )
 
             # CALCULATE ADVANTAGE
@@ -449,7 +455,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 rng, _rng = jax.random.split(rng)
                 batch_size = config.MINIBATCH_SIZE * config.NUM_MINIBATCHES
                 assert (
-                    batch_size == config.num_steps * config.n_envs
+                    batch_size == config.n_blocks * config.max_steps_multiple * config.n_envs
                 ), "batch size must be equal to number of steps * number " + \
                     "of envs"
                 permutation = jax.random.permutation(_rng, batch_size)
@@ -497,17 +503,28 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             writer = SummaryWriter(get_exp_dir(config))
 
             def log_callback(metric, steps_prev_complete):
-                timesteps = metric["timestep"][metric["returned_episode"]
-                                               ] * config.n_envs
+                timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
                 if len(timesteps) > 0:
                     t = timesteps[0]
                     ep_return = (metric["returned_episode_returns"]
                                  [metric["returned_episode"]].mean(
                     ))
-                    ep_length = (metric["returned_episode_lengths"]
-                                  [metric["returned_episode"]].mean())
-                    ep_footprint = (metric["footprint"][-2,:].mean())
-                    ep_avg_height = (metric["avg_height"][-2,:].mean())
+                    #ep_length = (metric["returned_episode_lengths"]
+                    #              [metric["returned_episode"]].mean())
+                    #ep_footprint = (metric["footprint"][metric["returned_episode"]].mean())
+                    #ep_avg_height = (metric["avg_height"][metric["returned_episode"]].mean())
+                    
+                    #test = (metric["avg_height"][metric["returned_episode"]])
+                    #second_test = (metric["avg_height"][-2])
+                    #test1 = jnp.argmax(metric["avg_height"],0)
+                    #test2 = metric["avg_height"][test1]
+                    ep_footprint = metric["stats"][metric["returned_episode"]][:,1].mean()
+                    ep_avg_height = metric["stats"][metric["returned_episode"]][:,0].mean()
+
+                    n_envs = metric["last_action"].shape[1]
+                    mean_num_actions = sum([len(set(metric["last_action"][:,i])) for i in range(n_envs)])/n_envs
+                    #ep_dominant_action
+                    #ep_dominant_action_frequency
 
                     # Add a row to csv with ep_return
                     with open(os.path.join(get_exp_dir(config),
@@ -515,9 +532,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         f.write(f"{t},{ep_return}\n")
 
                     writer.add_scalar("ep_return", ep_return, t)
-                    writer.add_scalar("ep_length", ep_length, t)
+                    #writer.add_scalar("ep_length", ep_length, t)
                     writer.add_scalar("ep_end_footprint", ep_footprint,t)
                     writer.add_scalar("ep_end_avg_height", ep_avg_height, t)
+                    writer.add_scalar("num_actions", mean_num_actions, t)
                     # for k, v in zip(env.prob.metric_names, env.prob.stats):
                     #     writer.add_scalar(k, v, t)
 

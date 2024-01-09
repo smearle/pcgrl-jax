@@ -28,7 +28,7 @@ class LegoMetrics(IntEnum):
 class LegoProblem(Problem):
     #tile_size = np.int8(16)
     stat_weights = jnp.ones((len(LegoMetrics)))
-    stat_weights = stat_weights.at[1].set(0.5)
+    stat_weights = stat_weights.at[LegoMetrics.FOOTPRINT].set(0)
     metrics_enum = LegoMetrics
 
     def __init__(self, map_shape, ctrl_metrics):
@@ -62,7 +62,6 @@ class LegoProblem(Problem):
         #max_height = jnp.max(blocks[:,1])
 
         footprint = jnp.count_nonzero(jnp.where(blocks[:,1] == 0, 1, 0))
-        
 
         stats = jnp.zeros(len(LegoMetrics))
         stats = stats.at[LegoMetrics.AVG_HEIGHT].set(avg_height)

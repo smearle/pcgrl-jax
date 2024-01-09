@@ -13,7 +13,7 @@ from dataclasses import dataclass
 class Config:
     lr: float = 1.0e-4
     n_envs: int = 4
-    num_steps: int = 128
+    #num_steps: int = 128
     total_timesteps: int = int(5e7)
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4
@@ -94,6 +94,7 @@ class LegoConfig(Config):
     num_envs: int = 4
     #num_steps: int = 
     max_steps_multiple:int = 26
+    n_blocks:int = 20
     total_timesteps: int = int(5e7)
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4
@@ -124,9 +125,9 @@ class LegoConfig(Config):
  
     ctrl_metrics: Tuple[str] = ()
     # Size of the receptive field to be fed to the action subnetwork.
-    #vrf_size: Optional[int] = 11
+    vrf_size: Optional[int] = 7
     # Size of the receptive field to be fed to the value subnetwork.
-    #arf_size: Optional[int] = 11
+    arf_size: Optional[int] = 7
     # TODO: actually take arf and vrf into account in models, where possible
 
     #change_pct: float = -1.0

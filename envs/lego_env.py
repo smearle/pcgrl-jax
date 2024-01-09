@@ -255,7 +255,8 @@ class LegoEnv(Environment):
         env_map, _, rep_state = self.rep.step(
             env_map=env_state.env_map, action=action,
             rep_state=env_state.rep_state,
-            step_idx = env_state.step_idx
+            step_idx = env_state.step_idx,
+            rng = rng
         )
         #env_map = jnp.where(env_state.static_map == 1,
         #                    env_state.env_map, env_map,
@@ -263,12 +264,7 @@ class LegoEnv(Environment):
         
         #env_state = jax.lax.cond(env_state.prob_state == None, env_state.prob_state = LegoProblemState(reward = 0), env_state)
         reward, prob_state = self.prob.step(env_map, state=env_state.prob_state, blocks=rep_state.blocks)
-
-        def true_fun():
-            return 1.0
-        def false_fun():
-            return 0.0
-        #reward = jax.lax.cond(action[0][0][0] == 4, true_fun, false_fun)
+        
         
         obs = self.get_obs(env_state.rep_state, env_state.prob_state)
             #env_map=env_map, static_map=env_state.static_map,
@@ -289,9 +285,11 @@ class LegoEnv(Environment):
             reward,
             done,
             {"discount": self.discount(env_state, env_params), 
-             "footprint": prob_state.stats[LegoMetrics.FOOTPRINT],
+             "footprint": prob_state.stats[LegoMetrics.FOOTPRINT], 
              "avg_height": prob_state.stats[LegoMetrics.AVG_HEIGHT], 
              "last_action": action[0][0][0],
+             "stats": prob_state.stats,
+             "rotation": rep_state.rotation
              },
         )
     
