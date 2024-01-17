@@ -125,6 +125,7 @@ class ConvForward(nn.Module):
 
 class SeqNCA(nn.Module):
     action_dim: Sequence[int]
+    act_shape: Tuple[int, int]
     arf_size: int
     vrf_size: int
     activation: str = "relu"
@@ -143,13 +144,15 @@ class SeqNCA(nn.Module):
 
         act, critic = crop_arf_vrf(hid, self.arf_size, self.vrf_size)
 
+        flat_action_dim = self.action_dim * math.prod(self.act_shape)
+
         act = act.reshape((act.shape[0], -1))
         act = jnp.concatenate((act, flat_x), axis=-1)
         act = nn.Dense(
             64, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
         )(act)
         act = nn.Dense(
-            self.action_dim, kernel_init=orthogonal(0.01),
+            flat_action_dim, kernel_init=orthogonal(0.01),
             bias_init=constant(0.0)
         )(act)
 

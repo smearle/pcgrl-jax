@@ -193,6 +193,7 @@ def get_max_n_regions(map_shape: Tuple[int]):
 def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passable_tiles: chex.Array):
     """Approximate the diameter of a maze-like tile map."""
     max_path_length = get_max_path_length(env_map.shape)
+    max_n_regions = get_max_n_regions(env_map.shape)
 
     # Get array of flattened indices of all tiles in env_map
     idxs = jnp.arange(math.prod(env_map.shape), dtype=jnp.float32) + 1
@@ -214,7 +215,9 @@ def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passabl
     regions_flood_count = flood_regions_state.flood_count.astype(jnp.int32)
 
     # FIXME: Sketchily upper-bounding number of regions here since we need a concrete value
-    n_regions = jnp.clip(jnp.unique(regions_flood_count, size=256, fill_value=0), 0, 1).sum()
+    n_regions = jnp.clip(
+        jnp.unique(regions_flood_count, size=max_n_regions, fill_value=0), 
+        0, 1).sum()
 
     return n_regions
 
@@ -236,7 +239,8 @@ def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: jnp.n
 
 
 def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, env_map: chex.Array, passable_tiles: chex.Array):
-    """Approximate the diameter of a maze-like tile map."""
+    """Approximate the diameter of a maze-like tile map. Simultaneously compute 
+    the number of regions (connected traversible components) in the map."""
     max_path_length = get_max_path_length(env_map.shape)
     max_n_regions = get_max_n_regions(env_map.shape)
 
@@ -246,7 +250,6 @@ def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, en
 
     # Mask out flood_count where env_map is not empty
     occupied_map = (env_map[...,None] != passable_tiles).all(-1)
-    # occupied_map = env_map != Tiles.EMPTY
     init_flood_count = regions_flood_count * (1 - occupied_map)
 
     # We'll use this for determining region anchors later
@@ -261,7 +264,9 @@ def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, en
     regions_flood_count = flood_regions_state.flood_count.astype(jnp.int32)
 
     # FIXME: Sketchily upper-bounding number of regions here since we need a concrete value
-    n_regions = jnp.clip(jnp.unique(regions_flood_count, size=256, fill_value=0), 0, 1).sum()
+    n_regions = jnp.clip(
+        jnp.unique(regions_flood_count, size=max_n_regions, fill_value=0),
+        0, 1).sum()
     idxs = jnp.arange(math.prod(env_map.shape), dtype=jnp.float32)
     # path_length, flood_path_state = self.calc_path(env_map)
     regions_flood_count = flood_regions_state.flood_count[..., 0]
@@ -283,7 +288,7 @@ def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, en
 
     # We need to find the max path length in *each region*. So we'll mask out the path lengths of all other regions.
     # Unique (max) region indices
-    region_idxs = jnp.unique(regions_flood_count, size=max_n_regions, fill_value=0)
+    region_idxs = jnp.unique(regions_flood_count, size=max_n_regions+1, fill_value=0)[1:]  # exclude the `0` non-region
     region_masks = jnp.where(regions_flood_count[..., None] == region_idxs, 1, 0)
     path_flood_count = flood_path_state.flood_count
     region_path_floods = path_flood_count[..., None] * region_masks

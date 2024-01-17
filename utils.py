@@ -98,7 +98,7 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     if config.model == "seqnca":
         network = SeqNCA(
             action_dim, activation=config.activation,
-            arf_size=config.arf_size,
+            arf_size=config.arf_size, act_shape=config.act_shape,
             vrf_size=config.vrf_size,
         )
     if config.model in {"nca", "autoencoder"}:

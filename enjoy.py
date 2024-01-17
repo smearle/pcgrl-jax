@@ -14,10 +14,11 @@ from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
 
 @hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
 def main_enjoy(config: EnjoyConfig):
-    config = init_config(config, evo=False)
+    config = init_config(config)
 
-    exp_dir = get_exp_dir(config)
+    exp_dir = config.exp_dir
     if not config.random_agent:
+        print(f'Loading checkpoint from {exp_dir}')
         checkpoint_manager, restored_ckpt = init_checkpointer(config)
         network_params = restored_ckpt['runner_state'].train_state.params
     elif not os.path.exists(exp_dir):
@@ -82,10 +83,10 @@ def main_enjoy(config: EnjoyConfig):
 
 
     # Save gifs.
+    print('Adding stats to frames:')
     for ep_is in range(config.n_eps):
         # ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
 
-        print('Adding stats to frames:')
         new_ep_frames = []
         for i in range(env.max_steps):
             frame = frames[i, ep_is]
