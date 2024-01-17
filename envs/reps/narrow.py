@@ -1,3 +1,5 @@
+from functools import partial
+import math
 from typing import Tuple
 
 import chex
@@ -17,6 +19,32 @@ class NarrowRepresentationState(RepresentationState):
     agent_coords: chex.Array
     n_valid_agent_coords: int
 
+    
+@partial(jax.jit, static_argnames=('tile_enum', 'act_shape'))
+def gen_agent_coords(frz_map: chex.Array, tile_enum: Tiles, 
+                     act_shape: Tuple[int, int]):
+
+    # TODO: If using larger action patches, ignore patches that are all frozen.
+    
+    if act_shape != (1, 1):
+        # This is static. Not going to be recomputed/recompiled each function
+        # call... right? TODO: Factor this out, only needs to be called once.
+        agent_coords = np.argwhere(np.ones(frz_map.shape, dtype=np.uint8))
+                                    # size=math.prod(frz_map.shape))
+        # Filter out coordinates so that agent with larger action shapes do 
+        # minimal redundant builds (note that they may still make some 
+        # overlapping builds near the edges).
+        m, n = act_shape
+        agent_coords = agent_coords[
+            (agent_coords[:, 0] % m == 0) &
+            (agent_coords[:, 1] % n == 0)]
+        n_valid_agent_coords = np.int32(len(agent_coords))
+    else:
+        # Skip frozen tiles.
+        agent_coords = jnp.argwhere(frz_map == 0, size=math.prod(frz_map.shape))
+        n_valid_agent_coords = jnp.sum(frz_map == 0)
+    return agent_coords, n_valid_agent_coords
+
 
 class NarrowRepresentation(Representation):
     def __init__(self, env_map: chex.Array, rf_shape: Tuple[int, int],
@@ -31,8 +59,9 @@ class NarrowRepresentation(Representation):
         self.num_tiles = len(tile_enum)
         self.builds = jnp.array(
             [tile for tile in tile_enum if tile != tile_enum.BORDER])
-        self.agent_coords = jnp.argwhere(env_map != tile_enum.BORDER)
-        self.n_valid_agent_coords = np.int32(len(self.agent_coords))
+
+        # agent_coords, self.n_valid_agent_coords = gen_agent_coords(
+        #     env_map, tile_enum, act_shape)
         self.act_shape = act_shape
 
     def step(self, env_map: chex.Array, action: int,
@@ -53,8 +82,8 @@ class NarrowRepresentation(Representation):
         return new_env_map, map_changed, rep_state
 
     def reset(self, frz_map: chex.Array = None, rng: chex.PRNGKey = None):
-        agent_coords = jnp.argwhere(frz_map == 0, size=self.max_steps)
-        n_valid_agent_coords = jnp.sum(frz_map == 0)
+        agent_coords, n_valid_agent_coords = gen_agent_coords(
+            frz_map, self.tile_enum, self.act_shape)
         pos = agent_coords[0]
 
         return NarrowRepresentationState(

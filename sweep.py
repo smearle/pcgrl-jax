@@ -73,7 +73,7 @@ from train import main as main_train
 
 
 
-### IJCAI experiments ###
+### Jan. 2024 experiments ###
 
 # hypers = [
 #     {
@@ -139,22 +139,7 @@ from train import main as main_train
 
 hypers = [
     {
-        'NAME': 'arf_seqnca_dungeon',
-        'model': ['seqnca'],
-        'problem': ['dungeon'],
-        'arf_size': [3, 5, 8, 16, 31],
-        'change_pct': [-1.0],
-        'seed': [0, 1, 2],
-        'n_envs': [200],
-        'max_board_scans': [5],
-        'total_timesteps': [1_000_000_000],
-    },
-]
-
-
-hypers = [
-    {
-        'NAME': 'arf_seqnca_dungeon',
+        'NAME': 'act_shape_seqnca_dungeon',
         'model': ['seqnca'],
         'problem': ['dungeon'],
         'act_shape': [(2,2), (3,3), (4,4), (5,5), (6,6)],
@@ -166,6 +151,20 @@ hypers = [
         'total_timesteps': [1_000_000_000],
     },
 ]
+
+# hypers = [
+#     {
+#         'NAME': 'arf_seqnca_dungeon',
+#         'model': ['seqnca'],
+#         'problem': ['dungeon'],
+#         'arf_size': [3, 5, 8, 16, 31],
+#         'change_pct': [-1.0],
+#         'seed': [0, 1, 2],
+#         'n_envs': [200],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
 
 
 ########################
