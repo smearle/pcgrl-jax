@@ -93,8 +93,8 @@ class LegoConfig(Config):
     lr: float = 1.0e-4
     num_envs: int = 4
     #num_steps: int = 
-    max_steps_multiple:int = 26
-    n_blocks:int = 20
+    max_steps_multiple:int = 15
+    n_blocks:int = 26
     total_timesteps: int = int(5e7)
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4
@@ -125,9 +125,9 @@ class LegoConfig(Config):
  
     ctrl_metrics: Tuple[str] = ()
     # Size of the receptive field to be fed to the action subnetwork.
-    vrf_size: Optional[int] = 7
+    vrf_size: Optional[int] = 11
     # Size of the receptive field to be fed to the value subnetwork.
-    arf_size: Optional[int] = 7
+    arf_size: Optional[int] = 11
     # TODO: actually take arf and vrf into account in models, where possible
 
     #change_pct: float = -1.0
@@ -142,7 +142,7 @@ class LegoConfig(Config):
    
 
     # How many milliseconds to wait between frames of the rendered gifs
-    #gif_frame_duration: int = 25
+    gif_frame_duration: int = 50
     overwrite: bool =  True
 
     NUM_UPDATES: Optional[int] = None

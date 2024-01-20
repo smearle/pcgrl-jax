@@ -177,7 +177,7 @@ class ConvForward3d(nn.Module):
             flat_action_dim, kernel_init=orthogonal(0.01),
             bias_init=constant(0.0)
         )(act)
-
+        """
         critic = critic.reshape((critic.shape[0], -1))
         critic = jnp.concatenate((critic, flat_x), axis=-1)
 
@@ -191,6 +191,28 @@ class ConvForward3d(nn.Module):
         critic = activation(critic)
         critic = nn.Dense(
             1, kernel_init=orthogonal(1.0), bias_init=constant(0.0)
+        )(critic)
+        """
+        critic = nn.Conv(
+            features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(3, 3,3)
+        )(critic)
+        critic = activation(critic)
+        critic = nn.Conv(
+            features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(3, 3,3)
+        )(critic)
+        critic = activation(critic)
+
+        critic = critic.reshape((critic.shape[0], -1))
+        critic = jnp.concatenate((critic, flat_x), axis=-1)
+
+        critic = nn.Dense(
+            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+        )(critic)
+        critic = activation(critic)
+
+        critic = nn.Dense(
+            1, kernel_init=orthogonal(0.01),
+            bias_init=constant(0.0)
         )(critic)
 
         return act, jnp.squeeze(critic, axis=-1)

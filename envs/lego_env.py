@@ -72,6 +72,7 @@ class LegoEnvState:
     reward: np.float32 = 0.0
     done: bool = False
     queued_state: Optional[QueuedState] = None
+    #key: Optional[jax.random.PRNGKey] = None
 
 @struct.dataclass
 class LegoEnvParams:
@@ -79,7 +80,7 @@ class LegoEnvParams:
     problem: int = ProbEnum.LEGO
     representation: int = RepEnum.LEGO_REARRANGE
     map_shape: Tuple[int, int, int] = (6, 6*3-2, 6)
-    act_shape: Tuple[int] = (1,)
+    act_shape: Tuple[int] = (1,1)
     max_steps_multiple: int = 25
     #static_tile_prob: Optional[float] = 0.0
     #n_freezies: int = 0
@@ -223,7 +224,7 @@ class LegoEnv(Environment):
          
 
         rng, _ = jax.random.split(rng)
-        _, prob_state = self.prob.reset(blocks=rep_state.blocks)        
+        _, prob_state = self.prob.reset(blocks=rep_state.blocks, env_map = env_map)        
 
         obs = self.get_obs(
             rep_state=rep_state, prob_state=prob_state)
@@ -250,13 +251,14 @@ class LegoEnv(Environment):
     def step(self, rng, env_state: LegoEnvState, action, env_params):
         action = action[..., None]
         
+        rng, subkey = jax.random.split(rng)
         if self.n_agents == 1:
             action = action[0]
-        env_map, _, rep_state = self.rep.step(
+        env_map, rng, rep_state = self.rep.step(
             env_map=env_state.env_map, action=action,
             rep_state=env_state.rep_state,
             step_idx = env_state.step_idx,
-            rng = rng
+            rng = subkey
         )
         #env_map = jnp.where(env_state.static_map == 1,
         #                    env_state.env_map, env_map,
@@ -274,7 +276,7 @@ class LegoEnv(Environment):
         step_idx = env_state.step_idx + 1
         env_state = LegoEnvState(
             env_map=env_map, static_map=env_state.static_map,
-            rep_state=rep_state, done=done, reward=reward,
+            rep_state=rep_state, done=done, reward=reward + rep_state.punish_term,
             prob_state=prob_state, step_idx=step_idx, queued_state = env_state.queued_state)
         
         self.render(env_state)
@@ -282,7 +284,7 @@ class LegoEnv(Environment):
         return (
             jax.lax.stop_gradient(obs),
             jax.lax.stop_gradient(env_state),
-            reward,
+            reward+rep_state.punish_term,
             done,
             {"discount": self.discount(env_state, env_params), 
              "footprint": prob_state.stats[LegoMetrics.FOOTPRINT], 
@@ -290,7 +292,7 @@ class LegoEnv(Environment):
              "last_action": action[0][0][0],
              "stats": prob_state.stats,
              "rotation": rep_state.rotation
-             },
+             }
         )
     
     def is_terminal(self, state: LegoEnvState, params: LegoEnvParams) \
@@ -327,7 +329,7 @@ class LegoEnv(Environment):
     def num_actions(self) -> int:
         """Number of actions possible in environment."""
         # TO DO: NOT HARD CODED
-        return 9
+        return 5
 
     def action_space(self, env_params: LegoEnvParams) -> int:
         return self.rep.action_space()
@@ -351,6 +353,7 @@ class LegoEnv(Environment):
         n_tile_types = action_shape[-1]
         return jax.random.randint(rng, action_shape, -1, 1)[None, ...]
  
+
 def render_map(env_state: LegoEnvState, flatmap: chex.Array, tile_size: int):
         #tile_size = env_state.prob.tile_size
         border_size = np.array((1, 1))

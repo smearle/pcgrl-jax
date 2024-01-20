@@ -198,6 +198,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 ep_rotation_1 = states.rep_state.rotation[1, ep_is]
                 ep_rotation_end = states.rep_state.rotation[-2, ep_is]
                 ep_rotations = states.rep_state.rotation[:,ep_is]
+                ep_curr_blocks = states.rep_state.curr_block[:,ep_is]
+                actions = states.rep_state.last_action[:,ep_is]
 
 
                 savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_avg_height:.2f}_fp{ep_footprint:.2f}_ro{ep_rotation_0}{ep_rotation_1}{ep_rotation_end}/"
@@ -207,7 +209,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 for num in range(ep_blocks.shape[0]):
                     curr_blocks = ep_blocks[num,:,:]
                     rotation = ep_rotations[num]
-                    savename = os.path.join(savedir, f"{num}_r{rotation}.mpd")
+                    curr_block = ep_curr_blocks[num]
+                    action = actions[num]
+
+                    savename = os.path.join(savedir, f"{num}_r{rotation}_a{action}.mpd")
                     
                     f = open(savename, "a")
                     f.write("0/n")
@@ -219,6 +224,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         for z in range(config.map_width):
                             lego_block_name = "3005"
                             block_color = "2 "
+                            if curr_block == num:
+                                block_color = "7 "
                             
                             y_offset = -3#-24
 
@@ -265,8 +272,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             rng_r, obs_r, env_state_r, network_params = carry
             rng_r, _rng_r = jax.random.split(rng_r)
             
-        
-      
             pi, value = network.apply(network_params, obs_r)
             action_r = pi.sample(seed=rng_r)
 

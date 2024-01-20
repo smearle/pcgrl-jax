@@ -24,11 +24,15 @@ class LegoProblemState:
 class LegoMetrics(IntEnum):
     AVG_HEIGHT = 0
     FOOTPRINT = 1 #num blocks touching the floor
+    AVG_EUCLIDEAN = 2
+    DIST_TO_CENTER = 3
 
 class LegoProblem(Problem):
     #tile_size = np.int8(16)
     stat_weights = jnp.ones((len(LegoMetrics)))
+    stat_weights = stat_weights.at[LegoMetrics.AVG_HEIGHT].set(0)
     stat_weights = stat_weights.at[LegoMetrics.FOOTPRINT].set(0)
+    stat_weights = stat_weights.at[LegoMetrics.AVG_EUCLIDEAN].set(0)
     metrics_enum = LegoMetrics
 
     def __init__(self, map_shape, ctrl_metrics):
@@ -39,6 +43,8 @@ class LegoProblem(Problem):
         stat_trgs = np.zeros(len(LegoMetrics))
         stat_trgs[LegoMetrics.AVG_HEIGHT] = np.inf
         stat_trgs[LegoMetrics.FOOTPRINT] = 1
+        stat_trgs[LegoMetrics.AVG_EUCLIDEAN] = 1
+        stat_trgs[LegoMetrics.DIST_TO_CENTER] = 0
         self.stat_trgs = jnp.array(stat_trgs)
         
         super().__init__(map_shape = map_shape, ctrl_metrics = ctrl_metrics)
@@ -52,9 +58,11 @@ class LegoProblem(Problem):
         bounds = [None] * len(LegoMetrics)
         bounds[LegoMetrics.AVG_HEIGHT] = [0, map_shape[1]]
         bounds[LegoMetrics.FOOTPRINT] = [1, map_shape[0] * map_shape[2]]
+        bounds[LegoMetrics.AVG_EUCLIDEAN] = [1, (map_shape[0]**2+map_shape[2]**2)**(0.5)]
+        bounds[LegoMetrics.DIST_TO_CENTER] = [0, (map_shape[0]**2+map_shape[2]**2)**(0.5)]
         return np.array(bounds)
 
-    def get_curr_stats(self, blocks: chex.Array, env_map: chex.Array = None):
+    def get_curr_stats(self, blocks: chex.Array, env_map: chex.Array):
         """Get relevant metrics from the current state of the environment."""
         
         total_heights = jnp.sum(blocks[:,1], axis = None)
@@ -63,9 +71,28 @@ class LegoProblem(Problem):
 
         footprint = jnp.count_nonzero(jnp.where(blocks[:,1] == 0, 1, 0))
 
+        cntr_x, cntr_z = (env_map.shape[0]-1)//2, (env_map.shape[2]-1)//2
+
+        dists = 0
+        cnt = 0
+        cntr_dist = 0
+
+        for i in range(blocks.shape[0]):
+            cntr_dist+= ((blocks[i][0]-cntr_x)**2+(blocks[i][2]-cntr_z)**2)**(.5)
+            for j in range(blocks.shape[0]):
+                dist = ((blocks[i][0] - blocks[j][0])**2+(blocks[i][2] - blocks[j][2])**2)**(.5)
+                dists +=dist
+                cnt+= 1
+
+        avg_euclidean = dists/cnt
+        avg_cntr_dist = cntr_dist/blocks.shape[0]
+
         stats = jnp.zeros(len(LegoMetrics))
         stats = stats.at[LegoMetrics.AVG_HEIGHT].set(avg_height)
         stats = stats.at[LegoMetrics.FOOTPRINT].set(footprint)
+        stats = stats.at[LegoMetrics.AVG_EUCLIDEAN].set(avg_euclidean)
+        stats = stats.at[LegoMetrics.DIST_TO_CENTER].set(avg_cntr_dist)
+
 
         state = LegoProblemState(
             stats=stats, ctrl_trgs=self.get_stat_trgs)
@@ -88,17 +115,17 @@ class LegoProblem(Problem):
     def get_stat_trgs(self):
         return self.stat_trgs
    
-    def reset(self, blocks: chex.Array):
-
+    def reset(self, blocks: chex.Array, env_map: chex.Array):
+        old_stats = self.get_curr_stats(blocks, env_map).stats
         
-        state = LegoProblemState(ctrl_trgs = self.get_stat_trgs, stats = self.get_curr_stats(blocks).stats)
-        reward = 0
+        state = LegoProblemState(ctrl_trgs = self.get_stat_trgs, stats = old_stats)
+        reward = self.get_reward(state.stats, old_stats, self.stat_weights, self.stat_trgs, self.ctrl_threshes)
         return reward, state
 
     
 
     def step(self, env_map: chex.Array, state: LegoProblemState, blocks:chex.Array):
-        new_state = self.get_curr_stats(blocks=blocks)
+        new_state = self.get_curr_stats(blocks=blocks, env_map = env_map)
         reward = self.get_reward(new_state.stats, state.stats, self.stat_weights, state.ctrl_trgs, self.ctrl_threshes)
         new_state = new_state.replace(
             ctrl_trgs=state.ctrl_trgs,
