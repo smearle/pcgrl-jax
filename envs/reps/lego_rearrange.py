@@ -75,7 +75,7 @@ class LegoRearrangeRepresentation(Representation):
         )
 
     def action_space(self) -> spaces.Discrete:
-        return spaces.Discrete(9)
+        return spaces.Discrete(self.moves.shape[0])
         #return spaces.Discrete((len(self.tile_enum)-1)
         #                       * math.prod(self.act_shape))
     
