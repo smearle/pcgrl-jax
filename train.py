@@ -2,6 +2,7 @@ import os
 import shutil
 from timeit import default_timer as timer
 from typing import NamedTuple
+from gymnax import EnvState
 
 import hydra
 import jax
@@ -16,14 +17,14 @@ from tensorboardX import SummaryWriter
 
 from config import Config, TrainConfig
 from envs.pcgrl_env import gen_dummy_queued_state
-from purejaxrl.experimental.s5.wrappers import LogWrapper
+from purejaxrl.experimental.s5.wrappers import LogEnvState, LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
                    init_config)
 
 
 class RunnerState(struct.PyTreeNode):
     train_state: TrainState
-    env_state: jnp.ndarray
+    env_state: LogEnvState
     last_obs: jnp.ndarray
     # rng_act: jnp.ndarray
 #   ep_returns: jnp.ndarray
