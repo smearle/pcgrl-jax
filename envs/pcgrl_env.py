@@ -55,6 +55,7 @@ class QueuedState:
     has_queued_frz_map: bool = False
     frz_map: Optional[chex.Array] = None
 
+
 @struct.dataclass
 class PCGRLEnvState:
     env_map: chex.Array
@@ -66,6 +67,7 @@ class PCGRLEnvState:
     pct_changed: np.float32 = 0.0
     done: bool = False
     queued_state: Optional[QueuedState] = None
+
 
 @struct.dataclass
 class PCGRLObs:

@@ -164,9 +164,10 @@ class Problem:
         return lvl_img
 
 
-def draw_path(prob, lvl_img, env_map, border_size, path_coords, tile_size):
+def draw_path(prob, lvl_img, env_map, border_size, path_coords, tile_size,
+              im_idx=-1):
     # Path, if applicable
-    tile_img = prob.graphics[-1]
+    tile_img = prob.graphics[im_idx]
 
     def draw_path_tile(carry):
         path_coords, lvl_img, i = carry
@@ -174,10 +175,16 @@ def draw_path(prob, lvl_img, env_map, border_size, path_coords, tile_size):
         tile_type = env_map[y + border_size[0]][x + border_size[1]]
         empty_tile = int(Tiles.EMPTY)
 
+        # og_tile = lvl_img[(y + border_size[0]) * tile_size:(y + border_size[0] + 1) * tile_size,
+        #                     (x + border_size[1]) * tile_size:(x + border_size[1] + 1) * tile_size, :]
+        og_tile = jax.lax.dynamic_slice(lvl_img, ((y + border_size[0]) * tile_size, (x + border_size[1]) * tile_size, 0),
+                                        (tile_size, tile_size, 4))
+        new_tile_img = jnp.where(tile_img[..., -1:] == 0, og_tile, tile_img)
+
         # Only draw path tiles on top of empty tiles
         lvl_img = jax.lax.cond(
             tile_type == empty_tile,
-            lambda: jax.lax.dynamic_update_slice(lvl_img, tile_img,
+            lambda: jax.lax.dynamic_update_slice(lvl_img, new_tile_img,
                                             ((y + border_size[0]) * tile_size, (x + border_size[1]) * tile_size, 0)),
             lambda: lvl_img,)
                             

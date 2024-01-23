@@ -57,6 +57,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     )
     env_r, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     env_e, env_params_e = gymnax_pcgrl_make(config.env_name, config=config)
+    env_e = LogWrapper(env_e)
     # env = FlattenObservationWrapper(env)
     env = LogWrapper(env_r)  # Does this need to be a LogWrapper env? No(?)
     env_r.init_graphics()
@@ -180,7 +181,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             
             return rewards, states    # TODO: maybe not only return rewards but also stats?
 
-        rewards_e, eval_states = eval_episodes(train_state.params, env_state_e.queued_state)
+        rewards_e, eval_states = eval_episodes(
+            train_state.params, env_state_e.env_state.queued_state)
         last_eval_results = (rewards_e, eval_states)
 
         runner_state = RunnerState(

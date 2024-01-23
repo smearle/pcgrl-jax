@@ -234,7 +234,10 @@ def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: jnp.n
             lambda fps: jnp.logical_not(fps.done),
             flood_path_net.flood_step_trg,
             flood_state)
-    path_length = jnp.clip(flood_state.flood_count.max() - jnp.where(flood_state.flood_count == 0, 99999, flood_state.flood_count).min(), 0)
+    path_length = jnp.clip(
+        flood_state.flood_count.max() - jnp.where(
+            flood_state.flood_count == 0, jnp.inf, flood_state.flood_count).min(),
+        0)
     return path_length, flood_state.flood_count, flood_state.nearest_trg_xy
 
 
