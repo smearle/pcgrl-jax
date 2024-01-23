@@ -299,11 +299,23 @@ def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, en
     # Now we identify the furthest point from the anchor in each region.
     region_endpoint_idxs = jnp.argmin(jnp.where(region_path_floods == 0, max_path_length * 2, region_path_floods), axis=0)
     region_endpoint_idxs = jnp.unravel_index(region_endpoint_idxs, env_map.shape)
-    init_flood = jnp.zeros(env_map.shape)
+
+    # Because we likely have more region endpoint indices than actual regions,
+    # we have many empty region floods, and so many false (0, 0) region 
+    # endpoints. We'll mask these out by converting them to (-1, -1) then
+    # padding (then cropping) the bottom/right of the init flood.
+    valid_regions = region_path_floods.sum(0) > 0
+    region_endpoint_idxs = (
+            jnp.where(valid_regions, region_endpoint_idxs[0], -1),
+            jnp.where(valid_regions, region_endpoint_idxs[1], -1),
+        )
+    init_flood = jnp.zeros(np.array(env_map.shape) + 1)
+    init_flood = init_flood.at[region_endpoint_idxs].set(1)
+    init_flood = init_flood[:-1, :-1]
+
     # We can now flood out from these endpoints.
-    init_count = init_flood = init_flood.at[region_endpoint_idxs].set(1) * (1 - occupied_map)
     flood_input = jnp.stack([occupied_map, init_flood], axis=-1)
-    flood_path_state = FloodPathState(flood_input=flood_input, flood_count=init_count)
+    flood_path_state = FloodPathState(flood_input=flood_input, flood_count=init_flood)
     # flood_path_state, _ = jax.lax.scan(flood_path_net.flood_step, flood_path_state, None, max_path_length)
     flood_path_state = jax.lax.while_loop(
             lambda state: jnp.logical_not(state.done),
