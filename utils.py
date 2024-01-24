@@ -65,7 +65,7 @@ def init_config(config: Config):
     if hasattr(config, 'evo_pop_size') and hasattr(config, 'n_envs'):
         assert config.n_envs % (config.evo_pop_size * 2) == 0, "n_envs must be divisible by evo_pop_size * 2"
     if config.model == 'conv2':
-        config.arf_size = config.vrf_size = max([config.arf_size, config.vrf_size])
+        config.arf_size = config.vrf_size = min([config.arf_size, config.vrf_size])
     return config
 
 

@@ -100,6 +100,18 @@ hypers = [
     },
 ]
 
+hypers = [
+    {
+        'NAME': 'binary_conv2_rf',
+        'model': ['conv2'],
+        'arf': [5, 10, 15, 20, 25, 31],
+        'seed': [0, 1, 2],
+        'n_envs': [600],
+        'max_board_scans': [5.0],
+        'total_timesteps': [1_000_000_000],
+    },
+]
+
 # hypers = [
 #     {
 #         'NAME': 'bs_binary',
