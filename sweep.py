@@ -75,9 +75,22 @@ from train import main as main_train
 
 ### Jan. 2024 experiments ###
 
+# hypers = [
+#     {
+#         'NAME': 'cp_binary',
+#         'change_pct': [0.2, 0.4, 0.6, 0.8, 1.0],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'max_board_scans': [3.0],
+#         # 'total_timesteps': [200_000_000],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
+
 hypers = [
     {
-        'NAME': 'cp_binary',
+        'NAME': 'cp_binary_conv2',
+        'model': ['conv2'],
         'change_pct': [0.2, 0.4, 0.6, 0.8, 1.0],
         'seed': [0, 1, 2],
         'n_envs': [600],
@@ -261,6 +274,7 @@ def sweep_main(cfg: SweepConfig):
         if cfg.mode == 'enjoy':
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
+                    job_name=f"{hypers[0]['NAME']}_enjoy",
                     mem_gb=30,
                     tasks_per_node=1,
                     cpus_per_task=1,
@@ -276,6 +290,7 @@ def sweep_main(cfg: SweepConfig):
             if cfg.slurm:
                 executor = submitit.AutoExecutor(folder='submitit_logs')
                 executor.update_parameters(
+                        job_name=f"{hypers[0]['NAME']}_train",
                         mem_gb=30,
                         tasks_per_node=1,
                         cpus_per_task=1,

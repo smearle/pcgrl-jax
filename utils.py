@@ -22,8 +22,7 @@ def get_exp_dir(config: Config):
             f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
             f'{config.activation}_w-{config.map_width}_vrf-{config.vrf_size}_' +
             (f'cp-{config.change_pct}_' if config.change_pct > 0 else '') +
-            (f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' if \
-                config.model not in set('conv2') else '') + \
+            f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
             f'bs-{config.max_board_scans}_' + \
             f'fz-{config.n_freezies}_' + \
             f'act-{"x".join([str(e) for e in config.act_shape])}_' + \
@@ -66,7 +65,7 @@ def init_config(config: Config):
     if hasattr(config, 'evo_pop_size') and hasattr(config, 'n_envs'):
         assert config.n_envs % (config.evo_pop_size * 2) == 0, "n_envs must be divisible by evo_pop_size * 2"
     if config.model == 'conv2':
-        config.arf_size = config.vrf_size = config.map_width * 2 - 1
+        config.arf_size = config.vrf_size = max([config.arf_size, config.vrf_size])
     return config
 
 
