@@ -28,7 +28,8 @@ def gen_agent_coords(frz_map: chex.Array, tile_enum: Tiles,
     
     if act_shape != (1, 1):
         # This is static. Not going to be recomputed/recompiled each function
-        # call... right? TODO: Factor this out, only needs to be called once.
+        # call... right? D:
+        # TODO: Factor this out, only needs to be called once.
         agent_coords = np.argwhere(np.ones(frz_map.shape, dtype=np.uint8))
                                     # size=math.prod(frz_map.shape))
         # Filter out coordinates so that agent with larger action shapes do 

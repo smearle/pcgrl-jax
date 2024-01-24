@@ -11,7 +11,7 @@ from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, Rep
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
 from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
-from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, Dense, NCA, SeqNCA
+from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, ConvForward2, Dense, NCA, SeqNCA
 
 
 def get_exp_dir(config: Config):
@@ -22,7 +22,8 @@ def get_exp_dir(config: Config):
             f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
             f'{config.activation}_w-{config.map_width}_vrf-{config.vrf_size}_' +
             (f'cp-{config.change_pct}_' if config.change_pct > 0 else '') +
-            f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
+            (f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' if \
+                config.model not in set('conv2') else '') + \
             f'bs-{config.max_board_scans}_' + \
             f'fz-{config.n_freezies}_' + \
             f'act-{"x".join([str(e) for e in config.act_shape])}_' + \
@@ -64,6 +65,8 @@ def init_config(config: Config):
     config.exp_dir = get_exp_dir(config)
     if hasattr(config, 'evo_pop_size') and hasattr(config, 'n_envs'):
         assert config.n_envs % (config.evo_pop_size * 2) == 0, "n_envs must be divisible by evo_pop_size * 2"
+    if config.model == 'conv2':
+        config.arf_size = config.vrf_size = config.map_width * 2 - 1
     return config
 
 
@@ -94,6 +97,11 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
             action_dim=action_dim, activation=config.activation,
             arf_size=config.arf_size, act_shape=config.act_shape,
             vrf_size=config.vrf_size,
+        )
+    if config.model == "conv2":
+        network = ConvForward2(
+            action_dim=action_dim, activation=config.activation,
+            act_shape=config.act_shape,
         )
     if config.model == "seqnca":
         network = SeqNCA(

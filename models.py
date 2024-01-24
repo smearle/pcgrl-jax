@@ -65,6 +65,60 @@ class Dense(nn.Module):
         return act, jnp.squeeze(critic, axis=-1)
 
 
+class ConvForward2(nn.Module):
+    """The way we crop out actions and values in ConvForward1 results in 
+    values skipping conv layers, which is not what we intended. This matches
+    the conv-dense model in the original paper without accounting for arf or 
+    vrf."""
+    action_dim: Sequence[int]
+    act_shape: Tuple[int, int]
+    activation: str = "relu"
+
+    @nn.compact
+    def __call__(self, map_x, flat_x):
+        if self.activation == "relu":
+            activation = nn.relu
+        else:
+            activation = nn.tanh
+
+        flat_action_dim = self.action_dim * math.prod(self.act_shape)
+
+        map_x = nn.Conv(
+            features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
+        )(map_x)
+        act = activation(map_x)
+        map_x = nn.Conv(
+            features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
+        )(map_x)
+        map_x = activation(map_x)
+
+        map_x = act.reshape((act.shape[0], -1))
+        x = jnp.concatenate((map_x, flat_x), axis=-1)
+
+        x = nn.Dense(
+            256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+        )(x)
+        x = activation(x)
+
+        x = nn.Dense(
+            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+        )(x)
+        x = activation(x)
+
+        act, critic = x, x
+
+        act = nn.Dense(
+            flat_action_dim, kernel_init=orthogonal(0.01),
+            bias_init=constant(0.0)
+        )(act)
+
+        critic = nn.Dense(
+            1, kernel_init=orthogonal(1.0), bias_init=constant(0.0)
+        )(critic)
+
+        return act, jnp.squeeze(critic, axis=-1)
+
+
 class ConvForward(nn.Module):
     action_dim: Sequence[int]
     act_shape: Tuple[int, int]

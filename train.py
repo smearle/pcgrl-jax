@@ -1,3 +1,4 @@
+from functools import partial
 import os
 import shutil
 from timeit import default_timer as timer
@@ -40,6 +41,40 @@ class Transition(NamedTuple):
     obs: jnp.ndarray
     info: jnp.ndarray
     # rng_act: jnp.ndarray
+
+
+def log_callback(metric, steps_prev_complete, config, writer, train_start_time):
+    timesteps = metric["timestep"][metric["returned_episode"]
+                                    ] * config.n_envs
+    return_values = metric["returned_episode_returns"][metric["returned_episode"]]
+
+    # for t in range(len(timesteps)):
+    #     print(
+    #         f"global step={timesteps[t]}, episodic return={return_values[t]}")
+
+    if len(timesteps) > 0:
+        t = timesteps[0]
+        print(f"global step={t}; episodic return mean: {return_values.mean()} " + \
+            f"max: {return_values.max()}, min: {return_values.min()}")
+        ep_return = (metric["returned_episode_returns"]
+                        [metric["returned_episode"]].mean(
+        ))
+        ep_length = (metric["returned_episode_lengths"]
+                        [metric["returned_episode"]].mean())
+
+        # Add a row to csv with ep_return
+        with open(os.path.join(get_exp_dir(config),
+                                "progress.csv"), "a") as f:
+            f.write(f"{t},{ep_return}\n")
+
+        writer.add_scalar("ep_return", ep_return, t)
+        writer.add_scalar("ep_length", ep_length, t)
+        fps = (t - steps_prev_complete) / (timer() - train_start_time)
+        writer.add_scalar("fps", fps, t)
+
+        print(f"fps: {fps}")
+        # for k, v in zip(env.prob.metric_names, env.prob.stats):
+        #     writer.add_scalar(k, v, t)
 
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
@@ -143,6 +178,22 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 steps_remaining // config.num_steps // config.n_envs)
 
             # TODO: Overwrite certain config values
+
+        _log_callback = partial(log_callback, config=config, writer=writer,
+                               train_start_time=train_start_time,
+                               steps_prev_complete=steps_prev_complete)
+
+        # FIXME: Temporary hack for reloading binary after change to 
+        #   agent_coords generation.
+        runner_state = runner_state.replace(
+            env_state=runner_state.env_state.replace(
+                env_state=runner_state.env_state.env_state.replace(
+                    rep_state=runner_state.env_state.env_state.rep_state.replace(
+                        agent_coords=runner_state.env_state.env_state.rep_state.agent_coords[:, :config.map_width**2]
+                    )
+                )
+            )
+        )
 
         def render_frames(frames, i, env_states=None):
             if config.render_freq <= 0 or i % config.render_freq != 0:
@@ -406,39 +457,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             jax.debug.callback(save_checkpoint, runner_state,
                                metric, steps_prev_complete)
 
-            def log_callback(metric, steps_prev_complete):
-                timesteps = metric["timestep"][metric["returned_episode"]
-                                               ] * config.n_envs
-                return_values = metric["returned_episode_returns"][metric["returned_episode"]]
-
-                # for t in range(len(timesteps)):
-                #     print(
-                #         f"global step={timesteps[t]}, episodic return={return_values[t]}")
-
-                if len(timesteps) > 0:
-                    t = timesteps[0]
-                    print(f"global step={t}; episodic return mean: {return_values.mean()} " + \
-                        f"max: {return_values.max()}, min: {return_values.min()}")
-                    ep_return = (metric["returned_episode_returns"]
-                                 [metric["returned_episode"]].mean(
-                    ))
-                    ep_length = (metric["returned_episode_lengths"]
-                                  [metric["returned_episode"]].mean())
-
-                    # Add a row to csv with ep_return
-                    with open(os.path.join(get_exp_dir(config),
-                                           "progress.csv"), "a") as f:
-                        f.write(f"{t},{ep_return}\n")
-
-                    writer.add_scalar("ep_return", ep_return, t)
-                    writer.add_scalar("ep_length", ep_length, t)
-                    fps = (t - steps_prev_complete) / (timer() - train_start_time)
-                    writer.add_scalar("fps", fps, t)
-
-                    print(f"fps: {fps}")
-                    # for k, v in zip(env.prob.metric_names, env.prob.stats):
-                    #     writer.add_scalar(k, v, t)
-
             # FIXME: shouldn't assume size of render map.
             frames_shape = (config.n_render_eps * 1 * env.max_steps, 
                             env.tile_size * (env.map_shape[0] + 2),
@@ -454,8 +472,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             jax.debug.callback(render_frames, frames, runner_state.update_i, states)
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
-            jax.debug.callback(log_callback, metric,
-                               steps_prev_complete)
+            jax.debug.callback(_log_callback, metric)
 
             runner_state = RunnerState(
                 train_state, env_state, last_obs, rng,
@@ -467,8 +484,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             _update_step, runner_state, None, config.NUM_UPDATES
         )
 
-        jax.debug.callback(save_checkpoint, runner_state,
-                           metric, steps_prev_complete)
+        # One final logging/checkpointing call to ensure things finish off
+        # neatly.
+        jax.debug.callback(_log_callback, metric)
+        jax.debug.callback(save_checkpoint, runner_state, metric,
+                           steps_prev_complete)
 
         return {"runner_state": runner_state, "metrics": metric}
 

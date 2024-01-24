@@ -1,3 +1,4 @@
+import json
 import os
 
 import hydra
@@ -22,6 +23,16 @@ def main(cfg):
         # df.plot(x="timestep", y="ep_return", title="Training Progress").get_figure().savefig(plot_path)
         # Plot points instead of a line
         df.plot.scatter(x="timestep", y="ep_return", title="Training Progress").get_figure().savefig(plot_path)
+    
+    last_timestep = int(df["timestep"].iloc[-1])
+    stats = {
+        "n_timesteps_trained": last_timestep,
+    }
+    # Save stats to file
+    stats_path = os.path.join(__location__, exp_dir, "stats.json")
+    print(f"Saving stats to {stats_path}")
+    with open(stats_path, "w") as f:
+        json.dump(stats, f, indent=4)
 
 if __name__ == "__main__":
     import sched, time

@@ -6,6 +6,7 @@ from typing import Iterable
 import hydra
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from config import EvalConfig, SweepConfig, TrainConfig
 from eval_change_pct import EvalData, get_change_pcts
@@ -30,18 +31,34 @@ def cross_eval_cp(grid_hypers):
     eval_config = EvalConfig()
 
     cp_stats = {}
+    misc_stats = {}
     for sc in sweep_configs:
         log_dir = sc.exp_dir
-        sc_stats = EvalData(**json.load(open(f'{log_dir}/cp_stats.json')))
-        cp_stats[sc.exp_dir] = (sc_stats, sc)
+        sc_cp_stats = EvalData(**json.load(open(f'{log_dir}/cp_stats.json')))
+        cp_stats[sc.exp_dir] = (sc_cp_stats, sc)
+        sc_misc_stats = json.load(open(f'{log_dir}/stats.json'))
+        misc_stats[sc.exp_dir] = sc_misc_stats
+    
+    # Create a dataframe with miscellaneous stats for each experiment
+    misc_stats_df = {}
+    for exp_dir, stats in misc_stats.items():
+        misc_stats_df[exp_dir] = {}
+        for k, v in stats.items():
+            misc_stats_df[exp_dir][k] = v
+    misc_stats_df = pd.DataFrame.from_dict(misc_stats_df, orient='index')
+
+    # Save the dataframe to a csv
+    os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
+    misc_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR, 
+                                      f"{grid_hypers['NAME']}_misc_stats.csv"))
 
     # Treat change_percentage during training as the independent variable
     cps_to_rews = {}
-    for exp_dir, (sc_stats, sc) in cp_stats.items():
+    for exp_dir, (sc_cp_stats, sc) in cp_stats.items():
         print(f'Gathering stats for experiment: {exp_dir}')
         if sc.change_pct not in cps_to_rews:
             cps_to_rews[sc.change_pct] = []
-        cps_to_rews[sc.change_pct].append(sc_stats.cell_rewards)
+        cps_to_rews[sc.change_pct].append(sc_cp_stats.cell_rewards)
 
     # Training CPs to eval CPs to mean reward
     cps_to_cps_mean_rews = {k: np.mean(v, 0) for k, v in cps_to_rews.items()}
@@ -72,7 +89,6 @@ def cross_eval_cp(grid_hypers):
     ax.set_xlabel('Eval Change Percentage')
     ax.set_ylabel('Train Change Percentage')
     fig.colorbar(im)
-    os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
     plt.savefig(os.path.join(CROSS_EVAL_DIR, 
                              f"{grid_hypers['NAME']}_cp_heatmap.png"))
 
