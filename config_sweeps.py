@@ -88,6 +88,20 @@
 
 # hypers = [
 #     {
+#         'NAME': 'cp_binary_seqnca',
+#         'model': ['seqnca'],
+#         'change_pct': [0.2, 0.4, 0.6, 0.8, 1.0],
+#         'seed': [3, 4, 5],
+#         # 'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'max_board_scans': [3.0],
+#         # 'total_timesteps': [200_000_000],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
+
+# hypers = [
+#     {
 #         'NAME': 'binary_conv2_rf',
 #         'model': ['conv2'],
 #         'arf_size': [5, 10, 15, 20, 25, 31],
@@ -123,6 +137,38 @@
 
 # hypers = [
 #     {
+#         'NAME': 'fixed_arf_dungeon',
+#         'problem': ['dungeon'],
+#         'model': ['seqnca'],
+#         'arf_size': [8],
+#         'vrf_size': [8, 12, 16, 23, 31],
+#         'change_pct': [-1.0],
+#         'seed': [3, 4, 5],
+#         # 'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
+
+
+# hypers = [
+#     {   
+#         'NAME': 'fixed_arf_binary',
+#         'model': ['seqnca'],
+#         'arf_size': [8],
+#         'vrf_size': [8, 12, 16, 23, 31],
+#         'change_pct': [-1.0],
+#         'seed': [3, 4, 5],
+#         # 'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
+
+# hypers = [
+#     {
 #         'problem': ['dungeon'],
 #         'change_pct': [-1.0],
 #         'seed': [0, 1, 2],
@@ -146,36 +192,36 @@
 # ]
 
 
-hypers = [
-    {
-        'NAME': 'obss_dungeon_conv2_ctrl_path',
-        'problem': ['dungeon'],
-        'ctrl_metrics': ['path-length'],
-        'obs_size': [3, 5, 8, 16, 31],
-        'model': ['conv2'],
-        'change_pct': [-1.0],
-        'seed': [0, 1, 2],
-        'n_envs': [600],
-        'max_board_scans': [5],
-        'total_timesteps': [1_000_000_000],
-    },
-]
+# hypers = [
+#     {
+#         'NAME': 'obss_dungeon_conv2_ctrl_path',
+#         'problem': ['dungeon'],
+#         'ctrl_metrics': ['path-length'],
+#         'obs_size': [3, 5, 8, 16, 31],
+#         'model': ['conv2'],
+#         'change_pct': [-1.0],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
 
 
-hypers = [
-    {
-        'NAME': 'obss_dungeon_conv2_ctrl_path_cp',
-        'problem': ['dungeon'],
-        'ctrl_metrics': ['path-length'],
-        'obs_size': [16, 31],
-        'change_pct': [0.6, 0.8, 1.0],
-        'model': ['conv2'],
-        'seed': [0, 1, 2],
-        'n_envs': [600],
-        'max_board_scans': [5],
-        'total_timesteps': [1_000_000_000],
-    },
-]
+# hypers = [
+#     {
+#         'NAME': 'obss_dungeon_conv2_ctrl_path_cp',
+#         'problem': ['dungeon'],
+#         'ctrl_metrics': ['path-length'],
+#         'obs_size': [16, 31],
+#         'change_pct': [0.6, 0.8, 1.0],
+#         'model': ['conv2'],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
 
 # hypers = [
 #     {
