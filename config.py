@@ -95,7 +95,8 @@ class TrainAccelConfig(TrainConfig):
 class EnjoyConfig(Config):
     random_agent: bool = False
     # How many episodes to render as gifs
-    n_eps: int = 10
+    n_eps: int = 5
+    eval_map_width: int = 16
 
     
 @dataclass
@@ -106,7 +107,7 @@ class EvalConfig(Config):
     n_bins: int = 10
     n_eval_envs: int = 10
     n_eps: int = 5
-
+    eval_map_width: int = 16
 
 @dataclass
 class ProfileEnvConfig(Config):
@@ -114,7 +115,7 @@ class ProfileEnvConfig(Config):
 
 
 @dataclass
-class SweepConfig(TrainConfig):
+class SweepConfig(TrainConfig, EnjoyConfig, EvalConfig):
     mode: str = 'train'
     slurm: bool = True
 

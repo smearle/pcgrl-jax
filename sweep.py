@@ -9,6 +9,7 @@ from config_sweeps import hypers
 from enjoy import main_enjoy
 from eval import main_eval
 from eval_change_pct import main_eval_cp
+from eval_different_size import main_eval_diff_size
 from plot import main as main_plot
 from train import main as main_train
 
@@ -84,6 +85,9 @@ def sweep_main(cfg: SweepConfig):
     elif cfg.mode == 'eval_cp':
         default_config = EvalConfig()
         main_fn = main_eval_cp
+    elif cfg.mode == 'eval_diff_size':
+        default_config = EvalConfig()
+        main_fn = main_eval_diff_size
     elif cfg.mode == 'eval':
         default_config = EvalConfig()
         main_fn = main_eval
@@ -114,24 +118,36 @@ def sweep_main(cfg: SweepConfig):
             return executor.submit(seq_main, main_enjoy, sweep_configs)
 
         # TODO: Launch eval sweep on SLURM
+        if 'eval' in cfg.mode:
+            executor = submitit.AutoExecutor(folder='submitit_logs')
+            executor.update_parameters(
+                    job_name=f"{hypers[0]['NAME']}_eval",
+                    mem_gb=30,
+                    tasks_per_node=1,
+                    cpus_per_task=1,
+                    gpus_per_node=1,
+                    timeout_min=60,
+                    slurm_gres='gpu:rtx8000:1',
+                )
+            pprint.pprint(sweep_configs)
+            return executor.map_array(main_fn, sweep_configs)
 
         # Launch training sweep on SLURM
         if cfg.mode == 'train':
-            if cfg.slurm:
-                executor = submitit.AutoExecutor(folder='submitit_logs')
-                executor.update_parameters(
-                        job_name=f"{hypers[0]['NAME']}_train",
-                        mem_gb=30,
-                        tasks_per_node=1,
-                        cpus_per_task=1,
-                        # gpus_per_node=1,
-                        timeout_min=1440,
-                        slurm_gres='gpu:rtx8000:1',
-                        # partition='rtx8000',
-                    )
-                # Pretty print all configs to be executed
-                pprint.pprint(sweep_configs)
-                executor.map_array(main_fn, sweep_configs)
+            executor = submitit.AutoExecutor(folder='submitit_logs')
+            executor.update_parameters(
+                    job_name=f"{hypers[0]['NAME']}_train",
+                    mem_gb=30,
+                    tasks_per_node=1,
+                    cpus_per_task=1,
+                    # gpus_per_node=1,
+                    timeout_min=1440,
+                    slurm_gres='gpu:rtx8000:1',
+                    # partition='rtx8000',
+                )
+            # Pretty print all configs to be executed
+            pprint.pprint(sweep_configs)
+            return executor.map_array(main_fn, sweep_configs)
         
         else:
             raise Exception(
