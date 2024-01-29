@@ -91,24 +91,24 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
             action_dim, activation=config.activation,
             arf_size=config.arf_size, vrf_size=config.vrf_size,
         )
-    if config.model == "conv":
+    elif config.model == "conv":
         network = ConvForward(
             action_dim=action_dim, activation=config.activation,
             arf_size=config.arf_size, act_shape=config.act_shape,
             vrf_size=config.vrf_size,
         )
-    if config.model == "conv2":
+    elif config.model == "conv2":
         network = ConvForward2(
             action_dim=action_dim, activation=config.activation,
             act_shape=config.act_shape,
         )
-    if config.model == "seqnca":
+    elif config.model == "seqnca":
         network = SeqNCA(
             action_dim, activation=config.activation,
             arf_size=config.arf_size, act_shape=config.act_shape,
             vrf_size=config.vrf_size,
         )
-    if config.model in {"nca", "autoencoder"}:
+    elif config.model in {"nca", "autoencoder"}:
         if config.model == "nca":
             network = NCA(
                 representation=config.representation,
@@ -121,6 +121,8 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 action_dim=action_dim,
                 activation=config.activation,
             )
+    else:
+        raise Exception(f"Unknown model {config.model}")
     # if config.env_name == 'PCGRL':
     if 'PCGRL' in config.env_name:
         network = ActorCriticPCGRL(network, act_shape=config.act_shape,

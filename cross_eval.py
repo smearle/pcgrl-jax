@@ -19,26 +19,54 @@ CROSS_EVAL_DIR = 'cross_eval'
 
 def cross_eval_main():
     for grid_hypers in hypers:
+
+        default_config = TrainConfig()
+        sweep_configs = get_grid_cfgs(default_config, grid_hypers)
+        sweep_configs = [init_config(sc) for sc in sweep_configs]
+
+        # FIXME: This part is messy, we have to assume we ran the eval with the 
+        #  default params as defined in the class below. We should probably save
+        #  the eval config in the eval directory.
+        eval_config = EvalConfig()
+
         name = grid_hypers['NAME']
         if name.startswith('cp_'):
-            cross_eval_cp(grid_hypers)
+            cross_eval_cp(name=name, sweep_configs=sweep_configs,
+                          eval_config=eval_config)
+        cross_eval_basic(name=name, sweep_configs=sweep_configs,
+                         eval_config=eval_config)
+        cross_eval_misc(name=name, sweep_configs=sweep_configs,
+                        eval_config=eval_config)
 
-
-def cross_eval_cp(grid_hypers):
-    default_config = TrainConfig()
-    sweep_configs = get_grid_cfgs(default_config, grid_hypers)
-    sweep_configs = [init_config(sc) for sc in sweep_configs]
-    eval_config = EvalConfig()
-
-    cp_stats = {}
+def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
+                    eval_config: EvalConfig):
+    basic_stats = {}
+    for sc in sweep_configs:
+        log_dir = sc.exp_dir
+        sc_basic_stats = json.load(open(f'{log_dir}/stats.json'))
+        basic_stats[sc.exp_dir] = sc_basic_stats
+    
+    # Create a dataframe with basic stats for each experiment
+    basic_stats_df = {}
+    for exp_dir, stats in basic_stats.items():
+        basic_stats_df[exp_dir] = {}
+        for k, v in stats.items():
+            basic_stats_df[exp_dir][k] = v
+    basic_stats_df = pd.DataFrame.from_dict(basic_stats_df, orient='index')
+    
+    # Save the dataframe to a csv
+    os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
+    basic_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR,
+                                        f"{name}_basic_stats.csv")) 
+        
+def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
+                    eval_config: EvalConfig):
     misc_stats = {}
     for sc in sweep_configs:
         log_dir = sc.exp_dir
-        sc_cp_stats = EvalData(**json.load(open(f'{log_dir}/cp_stats.json')))
-        cp_stats[sc.exp_dir] = (sc_cp_stats, sc)
         sc_misc_stats = json.load(open(f'{log_dir}/stats.json'))
         misc_stats[sc.exp_dir] = sc_misc_stats
-    
+
     # Create a dataframe with miscellaneous stats for each experiment
     misc_stats_df = {}
     for exp_dir, stats in misc_stats.items():
@@ -50,7 +78,19 @@ def cross_eval_cp(grid_hypers):
     # Save the dataframe to a csv
     os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
     misc_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR, 
-                                      f"{grid_hypers['NAME']}_misc_stats.csv"))
+                                      f"{name}_misc_stats.csv"))
+
+
+def cross_eval_cp(sweep_name: str, sweep_configs: Iterable[SweepConfig],
+                  eval_config: EvalConfig):
+    cp_stats = {}
+    for sc in sweep_configs:
+        log_dir = sc.exp_dir
+        sc_cp_stats = EvalData(**json.load(open(f'{log_dir}/cp_stats.json')))
+        cp_stats[sc.exp_dir] = (sc_cp_stats, sc)
+    
+    # Save the dataframe to a csv
+    os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
 
     # Treat change_percentage during training as the independent variable
     cps_to_rews = {}
@@ -90,7 +130,7 @@ def cross_eval_cp(grid_hypers):
     ax.set_ylabel('Train Change Percentage')
     fig.colorbar(im)
     plt.savefig(os.path.join(CROSS_EVAL_DIR, 
-                             f"{grid_hypers['NAME']}_cp_heatmap.png"))
+                             f"{sweep_name}_cp_heatmap.png"))
 
 
 if __name__ == '__main__':

@@ -5,217 +5,12 @@ import hydra
 import submitit
 
 from config import EnjoyConfig, EvalConfig, SweepConfig, TrainConfig
+from config_sweeps import hypers
 from enjoy import main_enjoy
 from eval import main_eval
 from eval_change_pct import main_eval_cp
 from plot import main as main_plot
 from train import main as main_train
-
-
-############ baseline experiments (?) ############
-# # (-3) sweeping over action observation window without control
-# hypers = {
-#     'arf_size': [3, 5, 8, 16, 32],
-#     'seed': [0, 1, 2],
-#     'model': ['conv', 'seqnca'],
-#     'n_envs': [600],
-#     'total_timesteps': [200_000_000],
-# }
-
-# # (-2) sweeping over value branch observation window without control
-# hypers = {
-#     'vrf_size': [3, 5, 8, 16, 32],
-#     'seed': [0, 1, 2],
-#     'model': ['conv', 'seqnca'],
-#     'n_envs': [600],
-#     'total_timesteps': [200_000_000],
-# }
-
-# (-1) sweeping over observation window without control
-# hypers = {
-#     'obs_size': [3, 5, 8, 16],
-#     'seed': [0, 1, 2],
-#     'model': ['conv', 'seqnca'],
-#     'n_envs': [600],
-#     'total_timesteps': [200_000_000],
-# }
-
-############ experiments for controllability of different rf sizes ############
-# # (2) sweeping over action observation window (formerly "patch width")
-# hypers = {
-#     'ctrl_metrics': [['diameter']],
-#     'arf_size': [3, 5, 8, 16, 32],
-#     'seed': [0, 1, 2],
-#     'model': ['conv', 'seqnca'],
-#     'n_envs': [600],
-#     'total_timesteps': [200_000_000],
-# }
-
-# # (1) woops, this is actually what we meant at (0)
-# hypers = {
-#     'ctrl_metrics': [['diameter']],
-#     'obs_size': [3, 5, 8, 16],
-#     'seed': [0, 1, 2],
-#     'model': ['conv', 'seqnca'],
-#     'n_envs': [600],
-#     'total_timesteps': [200_000_000],
-# }
-
-# # (0) first sweep for ICLR
-# hypers = {
-#     'ctrl_metrics': [['diameter']],
-#     'vrf_size': [3, 5, 8, 16, 32],
-#     'seed': [0, 1, 2],
-#     'model': ['conv', 'seqnca'],
-#     'n_envs': [600],
-#     'total_timesteps': [200_000_000],
-# }
-
-
-
-### Jan. 2024 experiments ###
-
-# hypers = [
-#     {
-#         'NAME': 'cp_binary',
-#         'change_pct': [0.2, 0.4, 0.6, 0.8, 1.0],
-#         'seed': [3, 4, 5],
-#         'n_envs': [600],
-#         'max_board_scans': [3.0],
-#         # 'total_timesteps': [200_000_000],
-#         'total_timesteps': [1_000_000_000],
-#     },
-# ]
-
-# hypers = [
-#     {
-#         'NAME': 'cp_binary_conv2',
-#         'model': ['conv2'],
-#         'change_pct': [0.2, 0.4, 0.6, 0.8, 1.0],
-#         'seed': [3, 4, 5],
-#         # 'seed': [0, 1, 2],
-#         'n_envs': [600],
-#         'max_board_scans': [3.0],
-#         # 'total_timesteps': [200_000_000],
-#         'total_timesteps': [1_000_000_000],
-#     },
-# ]
-
-# hypers = [
-#     {
-#         'NAME': 'binary_conv2_rf',
-#         'model': ['conv2'],
-#         'arf_size': [5, 10, 15, 20, 25, 31],
-#         'seed': [3, 4, 5],
-#         # 'seed': [0, 1, 2],
-#         'n_envs': [600],
-#         'max_board_scans': [5.0],
-#         'total_timesteps': [1_000_000_000],
-#     },
-# ]
-
-# hypers = [
-#     {
-#         'NAME': 'bs_binary',
-#         'max_board_scans': [1, 5, 10],
-#         'change_pct': [-1.0],
-#         # 'seed': [0, 1, 2],
-#         'seed': [3, 4, 5],
-#         'n_envs': [600],
-#         # 'total_timesteps': [200_000_000],
-#         'total_timesteps': [1_000_000_000],
-#     }
-# ]
-
-# hypers = [
-#     {
-#         'arf_size': [3, 5, 8, 16, 31],
-#         'change_pct': [-1.0],
-#         # 'seed': [0, 1, 2],
-#         'seed': [3, 4, 5],
-#         'n_envs': [600],
-#         'max_board_scans': [4],
-#         'total_timesteps': [200_000_000],
-#     },
-# ]
-
-# hypers = [
-#     {
-#         'problem': ['dungeon'],
-#         'change_pct': [-1.0],
-#         # 'seed': [0, 1, 2],
-#         'seed': [3, 4, 5],
-#         'n_envs': [600],
-#         'max_board_scans': [4],
-#         'total_timesteps': [200_000_000],
-#     },
-# ]
-
-hypers = [
-    {
-        'NAME': 'dungeon_conv2',
-        'problem': ['dungeon'],
-        'model': ['conv2'],
-        'change_pct': [-1.0],
-        # 'seed': [0, 1, 2],
-        'seed': [3, 4, 5],
-        'n_envs': [600],
-        'max_board_scans': [5],
-        'total_timesteps': [200_000_000],
-    },
-]
-
-# hypers = [
-#     {
-#         'NAME': 'arf_seqnca_binary',
-#         'model': ['seqnca'],
-#         'arf_size': [3, 5, 8, 16, 31],
-#         # 'arf_size': [8],
-#         'change_pct': [-1.0],
-#         # 'seed': [0, 1, 2],
-#         'seed': [3, 4, 5],
-#         # 'seed': [2],
-#         'n_envs': [200],
-#         'max_board_scans': [5],
-#         'total_timesteps': [1_000_000_000],
-#     },
-# ]
-
-# hypers = [
-#     {
-#         'NAME': 'act_shape_seqnca_dungeon',
-#         'model': ['seqnca'],
-#         'problem': ['dungeon'],
-#         'act_shape': [(2,2), (3,3), (4,4), (5,5), (6,6)],
-#         'arf_size': [31],
-#         'change_pct': [-1.0],
-#         # 'seed': [0, 1, 2],
-#         'seed': [3, 4, 5],
-#         'n_envs': [200],
-#         'max_board_scans': [5],
-#         'total_timesteps': [1_000_000_000],
-#     },
-# ]
-
-#  hypers = [
-#     {
-#         'NAME': 'arf_seqnca_dungeon',
-#         'model': ['seqnca'],
-#         'problem': ['dungeon'],
-#         'arf_size': [3, 5, 8, 16, 31],
-#         # 'arf_size': [31],
-#         'change_pct': [-1.0],
-#         # 'seed': [0, 1, 2],
-#         'seed': [3, 4, 5],
-#         # 'seed': [2],
-#         'n_envs': [200],
-#         'max_board_scans': [5],
-#         'total_timesteps': [1_000_000_000],
-#     },
-# ]
-
-
-########################
 
 
 def get_sweep_cfgs(default_config, hypers):
@@ -234,7 +29,22 @@ def get_grid_cfgs(default_config, kwargs):
     for k, v in kwargs.items():
         if k == 'NAME':
             continue
-        if hasattr(default_config, k):
+
+        if k == 'obs_size':
+            # Break this down into `arf_size` and `vrf_size` with the same value
+            assert isinstance(v, list)
+            new_subconfigs = []
+            for vi in v:
+                assert isinstance(vi, int)
+                for sc in subconfigs:
+                    nsc = copy.deepcopy(sc)
+                    setattr(nsc, k, vi)
+                    setattr(nsc, 'arf_size', vi)
+                    setattr(nsc, 'vrf_size', vi)
+                    new_subconfigs.append(nsc)
+            subconfigs = new_subconfigs
+
+        elif hasattr(default_config, k):
             assert isinstance(v, list)
             new_subconfigs = []
             # e.g. different learning rates
@@ -244,19 +54,6 @@ def get_grid_cfgs(default_config, kwargs):
                     nsc = copy.deepcopy(sc)
                     # set the attribute k to vi
                     setattr(nsc, k, vi)
-                    new_subconfigs.append(nsc)
-            subconfigs = new_subconfigs
-
-        elif k == 'obs_size':
-            # Break this down into `arf_size` and `vrf_size` with the same value
-            assert isinstance(v, list)
-            new_subconfigs = []
-            for vi in v:
-                assert isinstance(vi, int)
-                for sc in subconfigs:
-                    nsc = copy.deepcopy(sc)
-                    setattr(nsc, 'arf_size', vi)
-                    setattr(nsc, 'vrf_size', vi)
                     new_subconfigs.append(nsc)
             subconfigs = new_subconfigs
 

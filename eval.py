@@ -27,7 +27,7 @@ class EvalData:
 
 @hydra.main(version_base=None, config_path='./', config_name='eval_pcgrl')
 def main_eval(config: EvalConfig):
-    config = init_config(config, evo=False)
+    config = init_config(config)
 
     exp_dir = get_exp_dir(config)
     if not config.random_agent:
@@ -44,10 +44,9 @@ def main_eval(config: EvalConfig):
     rng = jax.random.PRNGKey(42)
     reset_rng = jax.random.split(rng, config.n_eval_envs)
 
-    def eval(change_pct, env_params):
+    def eval(env_params):
         # obs, env_state = env.reset(reset_rng, env_params)
         queued_state = gen_dummy_queued_state(env)
-        env_params = env_params.replace(change_pct=change_pct)
         obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(
             reset_rng, env_params, queued_state)
 
@@ -77,28 +76,24 @@ def main_eval(config: EvalConfig):
 
         return _, (states, rewards, dones, infos)
 
-    def _eval(change_pct, env_params):
-        _, (states, reward, dones, infos) = eval(change_pct, env_params)
+    def _eval(env_params):
+        _, (states, reward, dones, infos) = eval(env_params)
 
         return states, reward, dones
 
-
-    json_path = os.path.join(exp_dir, 'cp_stats.json')
+    json_path = os.path.join(exp_dir, 'stats.json')
 
     # For each bin, evaluate the change pct. at the center of the bin
-    change_pcts = np.linspace(
-        0.1, 1, config.n_bins,
-    )
     
     if config.reevaluate:
-        states, reward, dones = jax.vmap(_eval, in_axes=(0, None))(change_pcts, env_params)
+        states, rewards, dones = _eval(env_params)
 
         # Everything has size (n_bins, n_steps, n_envs)
         # Mask out so we only have the final step of each episode
         ep_rews = states.returned_episode_returns * dones
         # Get mean episode reward for each bin
-        ep_rews = jnp.sum(ep_rews, axis=(1, 2))
-        mean_ep_rews = ep_rews / jnp.sum(dones, axis=(1, 2))
+        ep_rews = jnp.sum(ep_rews)
+        mean_ep_rew = ep_rews / jnp.sum(dones)
 
         # cell_loss = jnp.mean(jnp.where(dones, 
         #                         jnp.sum(
@@ -120,7 +115,7 @@ def main_eval(config: EvalConfig):
         # cell_prog = jnp.mean(cell_progs)
 
         stats = EvalData(
-            mean_ep_reward=mean_ep_rews,
+            mean_ep_reward=mean_ep_rew,
         )
 
         with open(json_path, 'w') as f:
