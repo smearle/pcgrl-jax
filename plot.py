@@ -29,7 +29,7 @@ def main(cfg):
         "n_timesteps_trained": last_timestep,
     }
     # Save stats to file
-    stats_path = os.path.join(__location__, exp_dir, "stats.json")
+    stats_path = os.path.join(__location__, exp_dir, "misc_stats.json")
     print(f"Saving stats to {stats_path}")
     with open(stats_path, "w") as f:
         json.dump(stats, f, indent=4)

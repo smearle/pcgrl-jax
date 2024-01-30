@@ -196,7 +196,7 @@
 #     {
 #         'NAME': 'obss_dungeon_conv2_ctrl_path',
 #         'problem': ['dungeon'],
-#         'ctrl_metrics': ['path-length'],
+#         'ctrl_metrics': [['path_length']],
 #         'obs_size': [3, 5, 8, 16, 31],
 #         'model': ['conv2'],
 #         'change_pct': [-1.0],
@@ -207,12 +207,11 @@
 #     },
 # ]
 
-
 # hypers = [
 #     {
-#         'NAME': 'obss_dungeon_conv2_ctrl_path_cp',
+#         'NAME': 'obss_cp_dungeon_conv2_ctrl_path',
 #         'problem': ['dungeon'],
-#         'ctrl_metrics': ['path-length'],
+#         'ctrl_metrics': [['path_length']],
 #         'obs_size': [16, 31],
 #         'change_pct': [0.6, 0.8, 1.0],
 #         'model': ['conv2'],

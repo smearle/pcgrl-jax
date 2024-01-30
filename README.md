@@ -40,3 +40,5 @@ Arguments:
     - `plot` iterates  plot the results of the sweep.
 - `slurm`, bool, default=True
     Whether to submit each job in the sweep to a SLURM cluster (using the [submitit](https://github.com/facebookincubator/submitit) package)
+
+To save a `misc_stats.json` that records the number of timesteps for which a given mmodel has trained, we hackishly run `python sweep.py mode=plot slurm=False` (we're getting this info from the last row of the `progress.csv` used for plotting). Other stats are recorded when running with `mode=eval` or the like.

@@ -115,13 +115,13 @@ def sweep_main(cfg: SweepConfig):
                     gpus_per_node=1,
                     timeout_min=60,
                 )
-            return executor.submit(seq_main, main_enjoy, sweep_configs)
+            return executor.submit(seq_main, main_fn, sweep_configs)
 
-        # TODO: Launch eval sweep on SLURM
-        if 'eval' in cfg.mode:
+        # Launch eval sweep on SLURM
+        elif cfg.mode.startswith('eval'):
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
-                    job_name=f"{hypers[0]['NAME']}_eval",
+                    slurm_job_name=f"eval_{hypers[0]['NAME']}",
                     mem_gb=30,
                     tasks_per_node=1,
                     cpus_per_task=1,
@@ -133,7 +133,7 @@ def sweep_main(cfg: SweepConfig):
             return executor.map_array(main_fn, sweep_configs)
 
         # Launch training sweep on SLURM
-        if cfg.mode == 'train':
+        elif cfg.mode == 'train':
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
                     job_name=f"{hypers[0]['NAME']}_train",
@@ -148,7 +148,7 @@ def sweep_main(cfg: SweepConfig):
             # Pretty print all configs to be executed
             pprint.pprint(sweep_configs)
             return executor.map_array(main_fn, sweep_configs)
-        
+
         else:
             raise Exception(
                 (f'Sweep jobs of mode {cfg.mode} cannot be submitted to SLURM. '
