@@ -12,8 +12,8 @@ import numpy as np
 
 from config import EvalConfig
 from envs.pcgrl_env import gen_dummy_queued_state
-from envs.probs.problem import ProblemState
-from purejaxrl.experimental.s5.wrappers import LogWrapper
+from envs.probs.problem import ProblemState, get_loss
+from purejaxrl.experimental.s5.wrappers import LogWrapper, LossLogWrapper
 from train import init_checkpointer
 from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
 
@@ -24,6 +24,8 @@ class EvalData:
     # cell_progs: chex.Array
     # cell_rewards: chex.Array
     mean_ep_reward: chex.Array
+    mean_min_ep_loss: chex.Array
+    min_min_ep_loss: chex.Array
 
 @hydra.main(version_base=None, config_path='./', config_name='eval_pcgrl')
 def main_eval(config: EvalConfig):
@@ -37,7 +39,7 @@ def main_eval(config: EvalConfig):
         os.makedirs(exp_dir)
 
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
-    env = LogWrapper(env)
+    env = LossLogWrapper(env)
     env.prob.init_graphics()
     network = get_network(env, env_params, config)
 
@@ -90,32 +92,24 @@ def main_eval(config: EvalConfig):
 
         # Everything has size (n_bins, n_steps, n_envs)
         # Mask out so we only have the final step of each episode
-        ep_rews = states.returned_episode_returns * dones
-        # Get mean episode reward for each bin
+        ep_rews = states.log_env_state.returned_episode_returns * dones
+        # Get mean episode reward
         ep_rews = jnp.sum(ep_rews)
         mean_ep_rew = ep_rews / jnp.sum(dones)
 
-        # cell_loss = jnp.mean(jnp.where(dones, 
-        #                         jnp.sum(
-        #                             jnp.abs(states.ctrl_trgs - states.stats) * env.prob.stat_weights
-        #                             , axis=-1)
-        #                         , 0))
-
-        # Compute weighted loss from targets
-        # cell_loss = jnp.mean(jnp.abs(
-        #     final_prob_states.ctrl_trgs - final_prob_states.stats) * env.prob.stat_weights
-        # )
-
-        # Compute relative progress toward target from initial metric values
-        # cell_progs = 1 - jnp.abs(final_stats[:, ctrl_metrics] - ctrl_trg) / jnp.abs(init_stats[:, ctrl_metrics] - ctrl_trg)
-        # final_prog = jnp.where(done_idxsjnp.abs(cell_states.stats - final_prob_states.ctrl_trgs)
-        # trg_prog = jnp.abs(init_prob_states.stats - init_prob_states.ctrl_trgs)
-        # trg_prog = jnp.where(trg_prog == 0, 1e4, trg_prog)
-        # cell_progs = (1 - jnp.abs(final_prog / trg_prog))
-        # cell_prog = jnp.mean(cell_progs)
+        # Get the average min. episode loss
+        min_ep_losses = states.min_episode_losses
+        # Mask out so we only have the final step of each episode
+        min_ep_losses *= dones
+        # Get mean episode loss
+        sum_min_ep_losses = jnp.sum(min_ep_losses)
+        mean_min_ep_loss = sum_min_ep_losses / jnp.sum(dones)
+        min_min_ep_loss = jnp.min(min_ep_losses)
 
         stats = EvalData(
             mean_ep_reward=mean_ep_rew,
+            mean_min_ep_loss=mean_min_ep_loss,
+            min_min_ep_loss=min_min_ep_loss,
         )
 
         with open(json_path, 'w') as f:

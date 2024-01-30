@@ -37,6 +37,26 @@ def get_reward(stats, old_stats, stat_weights, stat_trgs, ctrl_threshes):
     reward = jnp.sum(reward)
     return reward
 
+    
+def get_max_loss(stat_weights, stat_trgs, ctrl_threshes, metric_bounds):
+    stat_trgs = jnp.clip(stat_trgs, metric_bounds[:, 0], metric_bounds[:, 1])
+    loss_0 = jnp.abs(stat_trgs - metric_bounds[:, 0])
+    loss_1 = jnp.abs(stat_trgs - metric_bounds[:, 1])
+    loss = jnp.where(loss_0 < loss_1, loss_1, loss_0)
+    loss = jnp.clip(loss - ctrl_threshes, 0)
+    loss *= stat_weights
+    loss = jnp.sum(loss)
+    return loss
+
+    
+def get_loss(stats, stat_weights, stat_trgs, ctrl_threshes, metric_bounds):
+    stat_trgs = jnp.clip(stat_trgs, metric_bounds[:, 0], metric_bounds[:, 1])
+    loss = jnp.abs(stat_trgs - stats)
+    loss = jnp.clip(loss - ctrl_threshes, 0)
+    loss *= stat_weights
+    loss = jnp.sum(loss)
+    return loss
+
 
 def gen_ctrl_trgs(metric_bounds, rng):
     rng, _ = jax.random.split(rng)
@@ -66,6 +86,9 @@ class Problem:
 
         if self.ctrl_threshes is None:
             self.ctrl_threshes = np.zeros(len(self.stat_trgs))
+
+        self.max_loss = get_max_loss(self.stat_weights, self.stat_trgs, 
+                                     self.ctrl_threshes, self.metric_bounds)
 
         # Dummy control observation to placate jax tree map during minibatch creation (FIXME?)
         self.ctrl_metric_obs_idxs = np.array([0]) if len(self.ctrl_metrics) == 0 else self.ctrl_metrics

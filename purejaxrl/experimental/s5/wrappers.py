@@ -6,6 +6,8 @@ from flax import struct
 from functools import partial
 from typing import Optional, Tuple, Union, Any
 from gymnax.environments import environment, spaces
+
+from envs.probs.problem import get_loss
 # from brax import envs
 
 class GymnaxWrapper(object):
@@ -100,6 +102,58 @@ class LogWrapper(GymnaxWrapper):
         info["timestep"] = state.timestep
         info["returned_episode"] = done
         return obs, state, reward, done, info
+
+
+@struct.dataclass
+class LossLogEnvState:
+    log_env_state: LogEnvState
+    losses: float
+    min_episode_losses: float
+
+class LossLogWrapper(LogWrapper):
+    """Log the episode returns and lengths."""
+
+    def __init__(self, env: environment.Environment):
+        super().__init__(env)
+
+    @partial(jax.jit, static_argnums=(0, 2))
+    def reset(
+        self, key: chex.PRNGKey, params: Optional[environment.EnvParams] = None, queued_state = None,
+    ) -> Tuple[chex.Array, environment.EnvState]:
+        obs, log_env_state = super().reset(key, params, queued_state)
+        state = LossLogEnvState(log_env_state, jnp.inf, jnp.inf)
+        return obs, state
+
+    @partial(jax.jit, static_argnums=(0, 4))
+    def step(
+        self,
+        key: chex.PRNGKey,
+        state: environment.EnvState,
+        action: Union[int, float],
+        params: Optional[environment.EnvParams] = None,
+    ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
+        obs, log_env_state, reward, done, info = super().step(
+            key, state.log_env_state, action, params)
+        loss = get_loss(log_env_state.env_state.prob_state.stats, 
+                        self._env.prob.stat_weights, 
+                        self._env.prob.stat_trgs,
+                        self._env.prob.ctrl_threshes, 
+                        self._env.prob.metric_bounds)
+        # Normalize the loss to be in [0, 1]
+        loss = loss / self._env.prob.max_loss
+
+        new_best_loss = jnp.minimum(loss, state.losses)
+        state = LossLogEnvState(
+            log_env_state = log_env_state,
+            losses = jax.lax.select(
+                done,
+                jnp.inf,
+                new_best_loss,
+            ),
+            min_episode_losses = new_best_loss,
+        )
+        return obs, state, reward, done, info
+
 
 # class BraxGymnaxWrapper:
 #     def __init__(self, env_name, backend="positional"):

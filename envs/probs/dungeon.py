@@ -11,7 +11,7 @@ from PIL import Image
 import numpy as np
 
 from envs.pathfinding import FloodPath, FloodPathState, FloodRegions, FloodRegionsState, calc_diameter, calc_n_regions, calc_path_length, get_max_n_regions, get_max_path_length, get_path_coords
-from envs.probs.problem import Problem, ProblemState, draw_path, get_reward
+from envs.probs.problem import Problem, ProblemState, draw_path, get_max_loss, get_reward
 from envs.utils import idx_dict_to_arr, Tiles
 
 
