@@ -19,8 +19,7 @@ CROSS_EVAL_DIR = 'cross_eval'
 
 def cross_eval_main():
     for grid_hypers in hypers:
-
-        default_config = TrainConfig()
+        default_config = SweepConfig()
         sweep_configs = get_grid_cfgs(default_config, grid_hypers)
         sweep_configs = [init_config(sc) for sc in sweep_configs]
 
@@ -29,14 +28,19 @@ def cross_eval_main():
         #  the eval config in the eval directory.
         eval_config = EvalConfig()
 
-        name = grid_hypers.pop('NAME')
-        cross_eval_basic(name=name, sweep_configs=sweep_configs,
-                         eval_config=eval_config, hypers=grid_hypers)
-        cross_eval_misc(name=name, sweep_configs=sweep_configs,
-                        eval_config=eval_config)
-        if name.startswith('cp_'):
-            cross_eval_cp(sweep_name=name, sweep_configs=sweep_configs,
-                          eval_config=eval_config)
+        name = grid_hypers.pop('NAME') if 'NAME' in grid_hypers else 'default'
+        if 'eval_map_width' in grid_hypers:      # if we are sweeping over eval_map_width
+            cross_eval_diff_size(name=name, sweep_configs=sweep_configs,
+                          eval_config=eval_config, hypers=grid_hypers)
+        else:
+            cross_eval_basic(name=name, sweep_configs=sweep_configs,
+                            eval_config=eval_config, hypers=grid_hypers)
+            cross_eval_misc(name=name, sweep_configs=sweep_configs,
+                            eval_config=eval_config)
+            
+            if name.startswith('cp_'):
+                cross_eval_cp(sweep_name=name, sweep_configs=sweep_configs,
+                            eval_config=eval_config)
 
 
 # Function to bold the maximum value in a column for LaTeX
@@ -219,6 +223,72 @@ def cross_eval_cp(sweep_name: str, sweep_configs: Iterable[SweepConfig],
     fig.colorbar(im)
     plt.savefig(os.path.join(CROSS_EVAL_DIR, 
                              f"{sweep_name}_cp_heatmap.png"))
+
+
+def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
+                    eval_config: EvalConfig, hypers):
+
+    row_headers = list(hypers.keys())
+    row_indices = []
+    row_vals = []
+
+    # Create a dataframe with basic stats for each experiment
+    basic_stats_df = {}
+    # for exp_dir, stats in basic_stats.items():
+    for sc in sweep_configs:
+        sc_stats = json.load(open(f'{sc.exp_dir}/eval_map_size_{sc.eval_map_width}_stats.json'))
+        row_tpl = tuple(getattr(sc, k) for k in row_headers)
+        row_indices.append(row_tpl)
+        vals = {}
+        for k, v in sc_stats.items():
+            vals[k] = v
+        row_vals.append(vals)
+    
+    row_index = pd.MultiIndex.from_tuples(row_indices, names=row_headers)
+    basic_stats_df = pd.DataFrame(row_vals, index=row_index)
+    
+    # Save the dataframe to a csv
+    os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
+    basic_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR,
+                                        f"{name}_diff_size_stats.csv")) 
+
+    # Save the dataframe as a latex table
+    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_stats.tex"), 'w') as f:
+        f.write(basic_stats_df.to_latex())
+
+    # Take averages of stats across seeds, keeping the original row indices
+    group_row_indices = [col for col in basic_stats_df.index.names if col != 'seed']
+    basic_stats_mean_df = basic_stats_df.groupby(group_row_indices).mean()
+
+    # Save the dataframe to a csv
+    basic_stats_mean_df.to_csv(os.path.join(CROSS_EVAL_DIR,
+                                        f"{name}_diff_size_stats_mean.csv"))
+    
+    # Save the dataframe as a latex table
+    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_stats_mean.tex"), 'w') as f:
+        f.write(basic_stats_mean_df.to_latex())
+
+    # Now, remove all row indices that have the same value across all rows
+    levels_to_drop = \
+        [level for level in basic_stats_mean_df.index.names if 
+         basic_stats_mean_df.index.get_level_values(level).nunique() == 1]
+    
+    # Drop these rows
+    basic_stats_concise_df = basic_stats_mean_df.droplevel(levels_to_drop)
+
+    # Save the dataframe to a csv
+    basic_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
+                                        f"{name}_diff_size_stats_concise.csv"))
+
+    basic_stats_concise_df = clean_df_strings(basic_stats_concise_df)
+
+    # Bold the maximum value in each column
+    styled_basic_stats_concise_df = basic_stats_concise_df.apply(format_num)
+
+    # Save the dataframe as a latex table
+    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_stats_concise.tex"), 'w') as f:
+        f.write(styled_basic_stats_concise_df.to_latex())
+
 
 
 if __name__ == '__main__':

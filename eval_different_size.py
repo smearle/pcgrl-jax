@@ -12,8 +12,8 @@ import numpy as np
 
 from config import EvalConfig
 from envs.pcgrl_env import gen_dummy_queued_state
-from envs.probs.problem import ProblemState
-from purejaxrl.experimental.s5.wrappers import LogWrapper
+from envs.probs.problem import ProblemState, get_loss
+from purejaxrl.experimental.s5.wrappers import LogWrapper, LossLogWrapper
 from train import init_checkpointer
 from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
 
@@ -24,6 +24,8 @@ class EvalData:
     # cell_progs: chex.Array
     # cell_rewards: chex.Array
     mean_ep_reward: chex.Array
+    mean_min_ep_loss: chex.Array
+    min_min_ep_loss: chex.Array
 
 @hydra.main(version_base=None, config_path='./', config_name='eval_pcgrl')
 def main_eval_diff_size(config: EvalConfig):
@@ -41,7 +43,7 @@ def main_eval_diff_size(config: EvalConfig):
         config.map_width = config.eval_map_width
 
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
-    env = LogWrapper(env)
+    env = LossLogWrapper(env)
     env.prob.init_graphics()
     network = get_network(env, env_params, config)
 
@@ -85,20 +87,31 @@ def main_eval_diff_size(config: EvalConfig):
 
         return states, reward, dones
 
-    json_path = os.path.join(exp_dir, 'diff_size_stats.json')
+    json_path = os.path.join(exp_dir, f'eval_map_size_{config.eval_map_width}_loss_stats.json')
 
     if config.reevaluate:
         states, reward, dones = _eval(env_params)
 
         # Everything has size (n_bins, n_steps, n_envs)
         # Mask out so we only have the final step of each episode
-        ep_rews = states.returned_episode_returns * dones
+        ep_rews = states.log_env_state.returned_episode_returns * dones
         # Get mean episode reward for each bin
         ep_rews = jnp.sum(ep_rews)
         mean_ep_rews = ep_rews / jnp.sum(dones)
 
+        # Get the average min. episode loss
+        min_ep_losses = states.min_episode_losses
+        # Mask out so we only have the final step of each episode
+        min_ep_losses *= dones
+        # Get mean episode loss
+        sum_min_ep_losses = jnp.sum(min_ep_losses)
+        mean_min_ep_loss = sum_min_ep_losses / jnp.sum(dones)
+        min_min_ep_loss = jnp.min(min_ep_losses)
+
         stats = EvalData(
             mean_ep_reward=mean_ep_rews,
+            mean_min_ep_loss=mean_min_ep_loss,
+            min_min_ep_loss=min_min_ep_loss,
         )
 
         with open(json_path, 'w') as f:

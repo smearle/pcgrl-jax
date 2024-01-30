@@ -14,3 +14,4 @@ submitit
 imageio
 tensorboard
 tensorboardX
+jinja2
