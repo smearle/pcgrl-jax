@@ -59,7 +59,10 @@ class LegoProblem(Problem):
         bounds[LegoMetrics.AVG_HEIGHT] = [0, map_shape[1]]
         bounds[LegoMetrics.FOOTPRINT] = [1, map_shape[0] * map_shape[2]]
         bounds[LegoMetrics.AVG_EUCLIDEAN] = [1, (map_shape[0]**2+map_shape[2]**2)**(0.5)]
-        bounds[LegoMetrics.DIST_TO_CENTER] = [0, (map_shape[0]**2+map_shape[2]**2)**(0.5)]
+
+        cntr_x, cntr_z = (map_shape[0]-1)//2, (map_shape[2]-1)//2        
+
+        bounds[LegoMetrics.DIST_TO_CENTER] = [0, ((cntr_x+1)**2+(cntr_z+1)**2)**(0.5)]
         return np.array(bounds)
 
     def get_curr_stats(self, blocks: chex.Array, env_map: chex.Array):

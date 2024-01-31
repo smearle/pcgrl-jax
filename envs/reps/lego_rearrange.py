@@ -45,7 +45,7 @@ class LegoRearrangeRepresentation(Representation):
         self.max_steps = max_steps_multiple*self.num_blocks
 
         self.moves = jnp.array([
-            (0,0),
+            #(0,0),
             (0,1),
             (0,-1),
             (1,0),
@@ -60,7 +60,7 @@ class LegoRearrangeRepresentation(Representation):
 
     def observation_shape(self):
         # Always observe static tile channel
-        obs_shape = (2*(self.env_shape[0])-1, 2*(self.env_shape[1])-1, 2*(self.env_shape[2])-1)
+        obs_shape = (2*(self.env_shape[0])+1, 2*(self.env_shape[1])+1, 2*(self.env_shape[2])+1)
         return (*obs_shape, len(self.tile_enum)+1)
 
 
@@ -69,7 +69,7 @@ class LegoRearrangeRepresentation(Representation):
         """Observation space of the environment."""
         observation_shape = self.observation_shape()
         low = 0
-        high = 1
+        high = 2        
         return spaces.Box(
             low, high, observation_shape, jnp.float32
         )
@@ -117,25 +117,31 @@ class LegoRearrangeRepresentation(Representation):
         return perturbed_obs
 
 
+
+
     def get_obs(self, rep_state: LegoRearrangeRepresentationState) -> chex.Array:
         blocks = rep_state.blocks
         curr_block = rep_state.curr_block
         rotation = rep_state.rotation
 
-        #curr_x, curr_y, curr_z = blocks[curr_block]
-        x_offset = self.env_shape[0]-1-blocks[curr_block, 0]
-        y_offset = self.env_shape[1]-1-blocks[curr_block, 1]
-        z_offset = self.env_shape[2]-1-blocks[curr_block, 2]
+        obs_shape_x, obs_shape_y, obs_shape_z = self.observation_shape()[:3]
 
-        obs = jnp.zeros((2*self.env_shape[0]-1, 2*self.env_shape[1]-1, 2*self.env_shape[2]-1))
+        #curr_x, curr_y, curr_z = blocks[curr_block]
+        x_offset = obs_shape_x//2-blocks[curr_block, 0]
+        y_offset = obs_shape_y//2-blocks[curr_block, 1]
+        z_offset = obs_shape_z//2-blocks[curr_block, 2]
+
+        obs = jnp.zeros((obs_shape_x, obs_shape_y, obs_shape_z))
+
+        #set obs
         for x in range(self.env_shape[0]):
             for y in range(self.env_shape[1]):
                 for z in range(self.env_shape[2]):
                     obs = obs.at[x+x_offset, y+y_offset, z+z_offset].set(1)
+
         for block in blocks:
             block_x, block_y, block_z = block
             obs = obs.at[block_x + x_offset, block_y + y_offset, block_z + z_offset].set(2)
-        
         obs = self.perturb_obs(rotation, obs)
 
         return jax.nn.one_hot(obs, num_classes=len(self.tile_enum)+1, axis=-1)
