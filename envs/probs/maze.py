@@ -10,7 +10,9 @@ import jax.numpy as jnp
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from envs.pathfinding import FloodPath, FloodPathState, FloodRegions, calc_n_regions, calc_path_length, get_max_n_regions, get_max_path_length, get_path_coords
+from envs.pathfinding import (FloodPath, FloodRegions, calc_n_regions, 
+                              calc_path_length, get_max_n_regions, 
+                              get_max_path_length, get_path_coords)
 from envs.probs.problem import Problem, ProblemState
 from envs.utils import Tiles
 

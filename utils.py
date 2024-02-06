@@ -92,7 +92,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         action_dim = env.action_space(env_params).n
 
     elif 'PCGRL' in config.env_name:
-        action_dim = env.rep.action_space.n
+        action_dim = env.rep.action_space().n
         # First consider number of possible tiles
         # action_dim = env.action_space(env_params).n
         # action_dim = env.rep.per_tile_action_dim

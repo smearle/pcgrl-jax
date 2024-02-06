@@ -125,8 +125,8 @@ def sweep_main(cfg: SweepConfig):
                     mem_gb=30,
                     tasks_per_node=1,
                     cpus_per_task=1,
-                    gpus_per_node=1,
                     timeout_min=60,
+                    # gpus_per_node=1,
                     slurm_gres='gpu:rtx8000:1',
                 )
             pprint.pprint(sweep_configs)
@@ -140,8 +140,8 @@ def sweep_main(cfg: SweepConfig):
                     mem_gb=30,
                     tasks_per_node=1,
                     cpus_per_task=1,
-                    # gpus_per_node=1,
                     timeout_min=1440,
+                    # gpus_per_node=1,
                     slurm_gres='gpu:rtx8000:1',
                     # partition='rtx8000',
                 )

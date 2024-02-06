@@ -47,7 +47,6 @@ def main_eval(config: EvalConfig):
     reset_rng = jax.random.split(rng, config.n_eval_envs)
 
     def eval(env_params):
-        # obs, env_state = env.reset(reset_rng, env_params)
         queued_state = gen_dummy_queued_state(env)
         obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(
             reset_rng, env_params, queued_state)
@@ -58,17 +57,12 @@ def main_eval(config: EvalConfig):
             if config.random_agent:
                 action = env.action_space(env_params).sample(rng_act)
             else:
-                # obs = jax.tree_map(lambda x: x[None, ...], obs)
                 action = network.apply(network_params, obs)[0].sample(seed=rng_act)
 
             rng_step = jax.random.split(rng, config.n_eval_envs)
             obs, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
                 rng_step, env_state, action, env_params
             )
-            # frame = env.render(env_state)
-            # Can't concretize these values inside jitted function (?)
-            # So we add the stats on cpu later (below)
-            # frame = render_stats(env, env_state, frame)
             return (rng, obs, env_state), (env_state, reward, done, info)
 
         print('Scanning episode steps:')
