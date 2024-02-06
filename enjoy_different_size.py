@@ -9,7 +9,7 @@ import numpy as np
 from config import EnjoyConfig
 from envs.pcgrl_env import PCGRLEnv, render_stats, gen_dummy_queued_state
 from train import init_checkpointer
-from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
+from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 
 
 @hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
@@ -29,7 +29,7 @@ def main_enjoy(config: EnjoyConfig):
         config.map_width = config.eval_map_width
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     env.prob.init_graphics()
-    network = get_network(env, env_params, config)
+    network = init_network(env, env_params, config)
 
     rng = jax.random.PRNGKey(42)
     rng_reset = jax.random.split(rng, config.n_eps)

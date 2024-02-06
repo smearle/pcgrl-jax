@@ -4,6 +4,7 @@ from typing import Tuple
 
 import chex
 from flax import struct
+from gymnax.environments import spaces
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -91,5 +92,9 @@ class NarrowRepresentation(Representation):
             pos=pos,
             agent_coords=agent_coords,
             n_valid_agent_coords=n_valid_agent_coords)
+    
+    def action_space(self) -> spaces.Discrete:
+        # return spaces.Discrete(len(self.tile_enum) - 1)
+        return spaces.Discrete((len(self.tile_enum)-1))
 
     get_obs = get_ego_obs

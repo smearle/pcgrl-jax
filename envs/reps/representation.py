@@ -54,7 +54,7 @@ class Representation(ABC):
         raise NotImplementedError
 
     @property
-    def per_tile_action_dim(self):
+    def tile_action_dim(self):
         return len(self.tile_enum) - 1
 
 

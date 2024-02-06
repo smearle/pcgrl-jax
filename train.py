@@ -18,7 +18,7 @@ from tensorboardX import SummaryWriter
 from config import Config, TrainConfig
 from envs.pcgrl_env import gen_dummy_queued_state
 from purejaxrl.experimental.s5.wrappers import LogWrapper
-from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
+from utils import (get_ckpt_dir, get_exp_dir, init_network, gymnax_pcgrl_make,
                    init_config)
 
 
@@ -105,7 +105,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         writer = SummaryWriter(get_exp_dir(config))
 
         # INIT NETWORK
-        network = get_network(env, env_params, config)
+        network = init_network(env, env_params, config)
 
         rng, _rng = jax.random.split(rng)
         init_x = env.gen_dummy_obs(env_params)
@@ -185,15 +185,16 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         # FIXME: Temporary hack for reloading binary after change to 
         #   agent_coords generation.
-        runner_state = runner_state.replace(
-            env_state=runner_state.env_state.replace(
-                env_state=runner_state.env_state.env_state.replace(
-                    rep_state=runner_state.env_state.env_state.rep_state.replace(
-                        agent_coords=runner_state.env_state.env_state.rep_state.agent_coords[:, :config.map_width**2]
+        if config.representation == 'narrow':
+            runner_state = runner_state.replace(
+                env_state=runner_state.env_state.replace(
+                    env_state=runner_state.env_state.env_state.replace(
+                        rep_state=runner_state.env_state.env_state.rep_state.replace(
+                            agent_coords=runner_state.env_state.env_state.rep_state.agent_coords[:, :config.map_width**2]
+                        )
                     )
                 )
             )
-        )
 
         def render_frames(frames, i, env_states=None):
             if config.render_freq <= 0 or i % config.render_freq != 0:
@@ -514,7 +515,7 @@ def init_checkpointer(config: Config):
     # env = FlattenObservationWrapper(env)
     env = LogWrapper(env)
     rng, _rng = jax.random.split(rng)
-    network = get_network(env, env_params, config)
+    network = init_network(env, env_params, config)
     init_x = env.gen_dummy_obs(env_params)
     # init_x = env.observation_space(env_params).sample(_rng)[None, ]
     network_params = network.init(_rng, init_x)
@@ -552,6 +553,7 @@ def init_checkpointer(config: Config):
     if checkpoint_manager.latest_step() is None:
         restored_ckpt = None
     else:
+        print(f"Restoring checkpoint from {ckpt_dir}")
         steps_prev_complete = checkpoint_manager.latest_step()
         restored_ckpt = checkpoint_manager.restore(
             steps_prev_complete, items=target)

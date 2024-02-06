@@ -21,7 +21,7 @@ from config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from evo_accel import EvoState, apply_evo, gen_discount_factors_matrix
 from purejaxrl.experimental.s5.wrappers import LogWrapper
-from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
+from utils import (get_ckpt_dir, get_exp_dir, init_network, gymnax_pcgrl_make,
                    init_config)
 
 
@@ -78,7 +78,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
     def train(rng, config: TrainConfig):
         # INIT NETWORK
-        network = get_network(env, env_params, config)
+        network = init_network(env, env_params, config)
 
         rng, _rng = jax.random.split(rng)
         init_x = env.gen_dummy_obs(env_params)
@@ -592,7 +592,7 @@ def init_checkpointer(config: Config):
     # env = FlattenObservationWrapper(env)
     env = LogWrapper(env)
     rng, _rng = jax.random.split(rng)
-    network = get_network(env, env_params, config)
+    network = init_network(env, env_params, config)
     init_x = env.gen_dummy_obs(env_params)
     # init_x = env.observation_space(env_params).sample(_rng)[None, ]
     network_params = network.init(_rng, init_x)

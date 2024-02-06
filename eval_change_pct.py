@@ -15,7 +15,7 @@ from envs.pcgrl_env import gen_dummy_queued_state
 from envs.probs.problem import ProblemState
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from train import init_checkpointer
-from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
+from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 
 
 # When we evaluate without enforcing change percentage, we allow this many board scans
@@ -54,7 +54,7 @@ def main_eval_cp(config: EvalConfig):
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     env = LogWrapper(env)
     env.prob.init_graphics()
-    network = get_network(env, env_params, config)
+    network = init_network(env, env_params, config)
 
     rng = jax.random.PRNGKey(42)
     reset_rng = jax.random.split(rng, config.n_eval_envs)

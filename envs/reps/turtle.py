@@ -41,7 +41,7 @@ class TurtleRepresentation(Representation):
         self.center_position = jnp.array([center, center])
 
     @property
-    def per_tile_action_dim(self):
+    def tile_action_dim(self):
         return len(self.tile_enum) - 1 + 4
 
     def step(self, env_map: chex.Array, action: chex.Array,

@@ -37,7 +37,7 @@ class PlayerRepresentation(Representation):
         self.center_position = jnp.array([center, center])
 
     @property
-    def per_tile_action_dim(self):
+    def tile_action_dim(self):
         return 4
 
     def step(self, env_map: chex.Array, action: chex.Array,
@@ -85,7 +85,7 @@ class PlayerRepresentation(Representation):
 
     def action_space(self) -> spaces.Discrete:
         # Cannot build border tiles. Can move in 4 directions.
-        return spaces.Discrete(self.per_tile_action_dim)
+        return spaces.Discrete(self.tile_action_dim)
 
     get_obs = get_ego_obs
 

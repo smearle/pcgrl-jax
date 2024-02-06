@@ -10,7 +10,7 @@ import numpy as np
 from config import EvalCtrlsConfig
 from envs.pcgrl_env import render_stats
 from train import init_checkpointer
-from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
+from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 
 
 @hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
@@ -26,7 +26,7 @@ def main_enjoy_ctrls(config: EvalCtrlsConfig):
 
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     env.prob.init_graphics()
-    network = get_network(env, env_params, config)
+    network = init_network(env, env_params, config)
 
     rng = jax.random.PRNGKey(42)
     reset_rng = jax.random.split(rng, config.n_envs)

@@ -6,7 +6,7 @@ import jax
 
 from config import EnjoyConfig
 from train import init_checkpointer
-from utils import get_exp_dir, get_network, gymnax_pcgrl_make, init_config
+from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 
 
 N_EPS = 1
@@ -26,7 +26,7 @@ def enjoy(config: EnjoyConfig):
 
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     env.prob.init_graphics()
-    network = get_network(env, env_params, config)
+    network = init_network(env, env_params, config)
 
     rng = jax.random.PRNGKey(42)
 

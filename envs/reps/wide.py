@@ -45,7 +45,8 @@ class WideRepresentation(Representation):
     def step(self, env_map: chex.Array, action: chex.Array,
              rep_state: WideRepresentationState, step_idx: int):
         action = action[0,0]  # The x and y dimensions are ignored
-        action = jnp.unravel_index(action, self.map_shape)
+        build_map_shape = (*env_map.shape, len(self.tile_enum) - 1)
+        action = jnp.unravel_index(action, build_map_shape)
         x, y, b = action
         b = self.builds[b]
         new_env_map = env_map.at[x, y].set(b)

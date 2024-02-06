@@ -225,24 +225,31 @@ class SeqNCA(nn.Module):
 
 class NCA(nn.Module):
     representation: str
-    action_dim: Sequence[int]
+    tile_action_dim: Sequence[int]
     activation: str = "relu"
 
     @nn.compact
-    def __call__(self, x):
+    def __call__(self, map_x, flat_x):
         if self.activation == "relu":
             activation = nn.relu
         else:
             activation = nn.tanh
-        act = nn.Conv(features=256, kernel_size=(9, 9), padding="SAME")(x)
-        act = activation(act)
-        act = nn.Conv(features=256, kernel_size=(5, 5), padding="SAME")(act)
-        act = activation(act)
-        act = nn.Conv(features=self.action_dim,
-                      kernel_size=(3, 3), padding="SAME")(act)
+
+        # Tile the flat observations to match the map dimensions
+        flat_x = jnp.tile(flat_x[:, None, None, :], (1, map_x.shape[1], map_x.shape[2], 1))
+
+        # Concatenate the map and flat observations along the channel dimension
+        x = jnp.concatenate((map_x, flat_x), axis=-1)
+
+        x = nn.Conv(features=256, kernel_size=(9, 9), padding="SAME")(x)
+        x = activation(x)
+        x = nn.Conv(features=256, kernel_size=(5, 5), padding="SAME")(x)
+        x = activation(x)
+        x = nn.Conv(features=self.tile_action_dim,
+                      kernel_size=(3, 3), padding="SAME")(x)
 
         if self.representation == 'wide':
-            act = act.reshape((x.shape[0], -1))
+            act = x.reshape((x.shape[0], -1))
 
         # Generate random binary mask
         # mask = jax.random.uniform(rng[0], shape=actor_mean.shape) > 0.9
@@ -263,10 +270,12 @@ class NCA(nn.Module):
 
         # return act, critic
 
-        critic = x.reshape((x.shape[0], -1))
-        critic = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-        )(critic)
+        critic = x
+        critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(x)
+        critic = activation(critic)
+        critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(x)
+        critic = activation(critic)
+        critic = critic.reshape((critic.shape[0], -1))
         critic = activation(critic)
         critic = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)

@@ -57,15 +57,16 @@ def init_config(config: Config):
         config.exp_dir = get_exp_dir(config)
         return config
 
-    config.arf_size = (2 * config.map_width -
-                      1 if config.arf_size==-1 else config.arf_size)
-    config.arf_size = config.arf_size if config.arf_size==-1 \
-        else config.arf_size
+    if config.representation == 'wide':
+        # TODO: Technically, may arf/vrf size should affect kernel widths in model?
+        config.arf_size = config.vrf_size = config.map_width
     
-    config.vrf_size = (2 * config.map_width -
-                      1 if config.vrf_size==-1 else config.vrf_size)
-    config.vrf_size = config.vrf_size if config.vrf_size==-1 \
-        else config.vrf_size
+    else:
+        config.arf_size = (2 * config.map_width -
+                        1 if config.arf_size==-1 else config.arf_size)
+        
+        config.vrf_size = (2 * config.map_width -
+                        1 if config.vrf_size==-1 else config.vrf_size)
 
 
     assert max([config.arf_size, config.vrf_size]) <= config.map_width * 2 - 1, f"arf_size {config.arf_size} or vrf_size {config.vrf_size} too big,\
@@ -85,15 +86,16 @@ def get_ckpt_dir(config: Config):
     return os.path.join(get_exp_dir(config), 'ckpts')
 
 
-def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
+def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     if config.env_name == 'Candy':
         # In the candy-player environment, action space is flat discrete space over all candy-direction combos.
         action_dim = env.action_space(env_params).n
 
     elif 'PCGRL' in config.env_name:
+        action_dim = env.rep.action_space.n
         # First consider number of possible tiles
         # action_dim = env.action_space(env_params).n
-        action_dim = env.rep.per_tile_action_dim
+        # action_dim = env.rep.per_tile_action_dim
     
     else:
         action_dim = env.num_actions
@@ -124,7 +126,7 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         if config.model == "nca":
             network = NCA(
                 representation=config.representation,
-                action_dim=action_dim,
+                tile_action_dim=env.rep.tile_action_dim,
                 activation=config.activation,
             )
         elif config.model == "autoencoder":
