@@ -39,9 +39,9 @@ class Config:
     # ctrl_metrics: Tuple[str] = ('diameter', 'n_regions')
     ctrl_metrics: Tuple[str] = ()
     # Size of the receptive field to be fed to the action subnetwork.
-    vrf_size: Optional[int] = 31
+    vrf_size: Optional[int] = -1  # -1 means 2 * map_width - 1, i.e. full observation, 31 if map_width=16
     # Size of the receptive field to be fed to the value subnetwork.
-    arf_size: Optional[int] = 31
+    arf_size: Optional[int] = -1  # -1 means 2 * map_width - 1, i.e. full observation, 31 if map_width=16
     # TODO: actually take arf and vrf into account in models, where possible
 
     change_pct: float = -1.0
@@ -69,7 +69,7 @@ class TrainConfig(Config):
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e6)
     # Render after this many update steps
-    render_freq: int = 100
+    render_freq: int = 1000
     n_render_eps: int = 3
 
     # eval the model on pre-made eval freezie maps to see how it's doing

@@ -58,14 +58,26 @@ def init_config(config: Config):
         return config
 
     config.arf_size = (2 * config.map_width -
-                      1 if config.arf_size is None else config.arf_size)
-    config.arf_size = config.arf_size if config.arf_size is None \
+                      1 if config.arf_size==-1 else config.arf_size)
+    config.arf_size = config.arf_size if config.arf_size==-1 \
         else config.arf_size
-    config.exp_dir = get_exp_dir(config)
+    
+    config.vrf_size = (2 * config.map_width -
+                      1 if config.vrf_size==-1 else config.vrf_size)
+    config.vrf_size = config.vrf_size if config.vrf_size==-1 \
+        else config.vrf_size
+
+
+    assert max([config.arf_size, config.vrf_size]) <= config.map_width * 2 - 1, f"arf_size {config.arf_size} or vrf_size {config.vrf_size} too big,\
+          not necessary, hack to kill the unnecessary jobs when sweeping over too large arf_size and vrf_size"
     if hasattr(config, 'evo_pop_size') and hasattr(config, 'n_envs'):
         assert config.n_envs % (config.evo_pop_size * 2) == 0, "n_envs must be divisible by evo_pop_size * 2"
     if config.model == 'conv2':
+        assert config.arf_size == config.vrf_size, "arf_size and vrf_size must be equal for conv2 model,\
+              a hack to kill the job when sweeping over arf_size and vrf_size"
         config.arf_size = config.vrf_size = min([config.arf_size, config.vrf_size])
+
+    config.exp_dir = get_exp_dir(config)    
     return config
 
 

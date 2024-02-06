@@ -128,10 +128,12 @@
 #     {
 #         'arf_size': [3, 5, 8, 16, 31],
 #         'change_pct': [-1.0],
-#         'seed': [0, 1, 2],
+#         # 'seed': [0, 1, 2],
+#         'seed': [3, 4, 5],
 #         'n_envs': [600],
 #         'max_board_scans': [4],
 #         'total_timesteps': [200_000_000],
+#      #  'eval_map_width': [16, 18, 20],
 #     },
 # ]
 
@@ -229,10 +231,12 @@
 #         'arf_size': [3, 5, 8, 16, 31],
 #         # 'arf_size': [8],
 #         'change_pct': [-1.0],
-#         'seed': [0, 1, 2],
+#         'seed': [3, 4, 5],
+#         # 'seed': [0, 1, 2],
 #         'n_envs': [200],
 #         'max_board_scans': [5],
 #         'total_timesteps': [1_000_000_000],
+#      #  'eval_map_width': [16, 18, 20],
 #     },
 # ]
 
@@ -244,10 +248,12 @@
 #         'act_shape': [(1,1), (2,2), (3,3), (4,4), (5,5), (6,6)],
 #         'arf_size': [31],
 #         'change_pct': [-1.0],
-#         'seed': [0, 1, 2],
+#         'seed': [3, 4, 5],
+#         # 'seed': [0, 1, 2],
 #         'n_envs': [200],
 #         'max_board_scans': [5],
 #         'total_timesteps': [1_000_000_000],
+#      #  'eval_map_width': [16, 18, 20],
 #     },
 # ]
 
@@ -259,14 +265,16 @@
 #         'act_shape': [(2,2), (3,3), (4,4), (5,5), (6,6)],
 #         'arf_size': [31],
 #         'change_pct': [-1.0],
-#         'seed': [0, 1, 2],
+#         # 'seed': [0, 1, 2],
+#         'seed': [3, 4, 5],
 #         'n_envs': [200],
 #         'max_board_scans': [5],
 #         'total_timesteps': [1_000_000_000],
+#       # 'eval_map_width': [16, 18, 20],
 #     },
 # ]
 
-#  hypers = [
+# hypers = [
 #     {
 #         'NAME': 'arf_seqnca_dungeon',
 #         'model': ['seqnca'],
@@ -274,10 +282,11 @@
 #         'arf_size': [3, 5, 8, 16, 31],
 #         # 'arf_size': [31],
 #         'change_pct': [-1.0],
-#         'seed': [0, 1, 2],
-#         # 'seed': [2],
+#         # 'seed': [0, 1, 2],
+#         'seed': [3, 4, 5],
 #         'n_envs': [200],
 #         'max_board_scans': [5],
+#         # 'eval_map_width': [16, 18, 20],
 #         'total_timesteps': [1_000_000_000],
 #     },
 # ]
@@ -297,5 +306,37 @@
 #     },
 # ]
 
+
+###### add some experiment to train on smaller/bigger map size for comparison #######
+# hypers = [
+#     {
+#         'NAME': 'diff_size_dungeon',
+#         'model': ['conv2', 'seqnca'],
+#         'problem': ['dungeon'],
+#         'map_width': [8, 10, 18, 20],
+#         'arf_size': [3, 5, 8, 16, 31, -1],
+#         'change_pct': [-1.0],
+#         'seed': [3, 4, 5],
+#         # 'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
+
+# hypers = [
+#     {
+#         'NAME': 'diff_size_binary',
+#         'model': ['conv2', 'seqnca'],
+#         'map_width': [8, 10, 18, 20],
+#         'arf_size': [3, 5, 8, 16, 31, -1],
+#         'change_pct': [-1.0],
+#         'seed': [3, 4, 5],
+#         # 'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
 
 ########################

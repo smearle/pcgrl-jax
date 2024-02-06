@@ -236,7 +236,7 @@ def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
     basic_stats_df = {}
     # for exp_dir, stats in basic_stats.items():
     for sc in sweep_configs:
-        sc_stats = json.load(open(f'{sc.exp_dir}/eval_map_size_{sc.eval_map_width}_stats.json'))
+        sc_stats = json.load(open(f'{sc.exp_dir}/eval_map_size_{sc.eval_map_width}_loss_stats.json'))
         row_tpl = tuple(getattr(sc, k) for k in row_headers)
         row_indices.append(row_tpl)
         vals = {}
@@ -250,10 +250,10 @@ def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
     # Save the dataframe to a csv
     os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
     basic_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_diff_size_stats.csv")) 
+                                        f"{name}_diff_size_size_{eval_config.eval_map_width}_stats.csv")) 
 
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_stats.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_size_{eval_config.eval_map_width}_stats.tex"), 'w') as f:
         f.write(basic_stats_df.to_latex())
 
     # Take averages of stats across seeds, keeping the original row indices
@@ -262,10 +262,10 @@ def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
 
     # Save the dataframe to a csv
     basic_stats_mean_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_diff_size_stats_mean.csv"))
+                                        f"{name}_diff_size_stats_size_{eval_config.eval_map_width}_mean.csv"))
     
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_stats_mean.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_stats_size_{eval_config.eval_map_width}_mean.tex"), 'w') as f:
         f.write(basic_stats_mean_df.to_latex())
 
     # Now, remove all row indices that have the same value across all rows
@@ -278,7 +278,7 @@ def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
 
     # Save the dataframe to a csv
     basic_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_diff_size_stats_concise.csv"))
+                                        f"{name}_diff_size_stats_size_{eval_config.eval_map_width}_concise.csv"))
 
     basic_stats_concise_df = clean_df_strings(basic_stats_concise_df)
 
@@ -286,7 +286,7 @@ def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
     styled_basic_stats_concise_df = basic_stats_concise_df.apply(format_num)
 
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_stats_concise.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_stats_size_{eval_config.eval_map_width}_concise.tex"), 'w') as f:
         f.write(styled_basic_stats_concise_df.to_latex())
 
 
