@@ -33,6 +33,7 @@ class LegoProblem(Problem):
     stat_weights = stat_weights.at[LegoMetrics.AVG_HEIGHT].set(0)
     stat_weights = stat_weights.at[LegoMetrics.FOOTPRINT].set(0)
     stat_weights = stat_weights.at[LegoMetrics.AVG_EUCLIDEAN].set(0)
+    #stat_weights = stat_weights.at[LegoMetrics.DIST_TO_CENTER].set(0)
     metrics_enum = LegoMetrics
 
     def __init__(self, map_shape, ctrl_metrics):

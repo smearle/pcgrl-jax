@@ -134,17 +134,23 @@ class LegoRearrangeRepresentation(Representation):
         obs = jnp.zeros((obs_shape_x, obs_shape_y, obs_shape_z))
 
         #set obs
-        for x in range(self.env_shape[0]):
-            for y in range(self.env_shape[1]):
-                for z in range(self.env_shape[2]):
-                    obs = obs.at[x+x_offset, y+y_offset, z+z_offset].set(1)
-
-        for block in blocks:
-            block_x, block_y, block_z = block
-            obs = obs.at[block_x + x_offset, block_y + y_offset, block_z + z_offset].set(2)
-        obs = self.perturb_obs(rotation, obs)
-
-        return jax.nn.one_hot(obs, num_classes=len(self.tile_enum)+1, axis=-1)
+        # obs = obs.at[x_offset: x_offset+self.env_shape[0], y_offset: y_offset+self.env_shape[1], z_offset: z_offset+self.env_shape[2]].set(1)
+        obs = jax.lax.dynamic_update_slice(
+            obs,
+            jnp.ones(self.env_shape),
+            (x_offset, y_offset, z_offset),
+        )
+        # for x in range(self.env_shape[0]):
+        #     for y in range(self.env_shape[1]):
+        #         for z in range(self.env_shape[2]):
+        #             obs = obs.at[x+x_offset, y+y_offset, z+z_offset].set(1)
+        obs = obs.at[blocks[:, 0]+x_offset, blocks[:, 1]+y_offset, blocks[:, 2]+z_offset].set(2)
+        # for block in blocks:
+        #     block_x, block_y, block_z = block
+        #     obs = obs.at[block_x + x_offset, block_y + y_offset, block_z + z_offset].set(2)
+        # obs = self.perturb_obs(rotation, obs)
+        obs = jax.nn.one_hot(obs, num_classes=len(self.tile_enum)+1, axis=-1)
+        return obs
 
     #@property
     #def per_tile_action_dim(self):

@@ -152,31 +152,31 @@ class ConvForward3d(nn.Module):
 
         flat_action_dim = self.action_dim * math.prod(self.act_shape)
 
-        act, critic = crop_arf_vrf(map_x, self.arf_size, self.vrf_size)
+        # act, critic = crop_arf_vrf(map_x, self.arf_size, self.vrf_size)
 
         
 
-        act = nn.Conv(
+        map_x = nn.Conv(
             features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(3, 3,3)
-        )(act)
-        act = activation(act)
-        act = nn.Conv(
+        )(map_x)
+        map_x = activation(map_x)
+        map_x = nn.Conv(
             features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(3, 3,3)
-        )(act)
-        act = activation(act)
+        )(map_x)
+        map_x = activation(map_x)
 
-        act = act.reshape((act.shape[0], -1))
-        act = jnp.concatenate((act, flat_x), axis=-1)
+        map_x = map_x.reshape((map_x.shape[0], -1))
+        x = jnp.concatenate((map_x, flat_x), axis=-1)
 
-        act = nn.Dense(
+        x = nn.Dense(
             64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-        )(act)
-        act = activation(act)
+        )(x)
+        x = activation(x)
 
         act = nn.Dense(
             flat_action_dim, kernel_init=orthogonal(0.01),
             bias_init=constant(0.0)
-        )(act)
+        )(map_x)
         """
         critic = critic.reshape((critic.shape[0], -1))
         critic = jnp.concatenate((critic, flat_x), axis=-1)
@@ -193,27 +193,27 @@ class ConvForward3d(nn.Module):
             1, kernel_init=orthogonal(1.0), bias_init=constant(0.0)
         )(critic)
         """
-        critic = nn.Conv(
-            features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(3, 3,3)
-        )(critic)
-        critic = activation(critic)
-        critic = nn.Conv(
-            features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(3, 3,3)
-        )(critic)
-        critic = activation(critic)
+        # critic = nn.Conv(
+        #     features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(3, 3,3)
+        # )(critic)
+        # critic = activation(critic)
+        # critic = nn.Conv(
+        #     features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(3, 3,3)
+        # )(critic)
+        # critic = activation(critic)
 
-        critic = critic.reshape((critic.shape[0], -1))
-        critic = jnp.concatenate((critic, flat_x), axis=-1)
+        # critic = critic.reshape((critic.shape[0], -1))
+        # critic = jnp.concatenate((critic, flat_x), axis=-1)
 
-        critic = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
-        )(critic)
-        critic = activation(critic)
+        # critic = nn.Dense(
+        #     64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+        # )(critic)
+        # critic = activation(critic)
 
         critic = nn.Dense(
             1, kernel_init=orthogonal(0.01),
             bias_init=constant(0.0)
-        )(critic)
+        )(x)
 
         return act, jnp.squeeze(critic, axis=-1)
 
