@@ -55,6 +55,19 @@ def get_grid_cfgs(default_config, kwargs):
                     nsc = copy.deepcopy(sc)
                     # set the attribute k to vi
                     setattr(nsc, k, vi)
+
+                    # filter out the invalid combinations
+                    if max([nsc.arf_size, nsc.vrf_size]) >= nsc.map_width * 2 - 1:
+                        print(f"arf_size {nsc.arf_size} or vrf_size {nsc.vrf_size} too big for map size {nsc.map_width}, not necessary, skipping this config.")
+                        # Note: assuming we already run arf/vrf_size == -1, so we can skip this (>=) case
+                        continue
+                    if nsc.model == 'conv2' and nsc.arf_size != nsc.vrf_size:
+                        print(f"arf_size {nsc.arf_size} and vrf_size {nsc.vrf_size} must be equal for conv2 model, skipping this config.")
+                        continue
+                    if nsc.model == 'conv' and nsc.arf_size != nsc.vrf_size:
+                        print(f"arf_size {nsc.arf_size} and vrf_size {nsc.vrf_size} must be equal for conv model, skipping this config.")
+                        continue
+
                     new_subconfigs.append(nsc)
             subconfigs = new_subconfigs
 

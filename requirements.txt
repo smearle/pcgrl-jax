@@ -1,7 +1,10 @@
 # NOTE: Install jax manually from online instructions, after installing these requirements
 # jax>=0.2.26
 # jaxlib>=0.1.74
-# jax[cuda12_pip] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# cuda 12:
+# pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# cuda 11:
+# pip install --upgrade "jax[cuda11_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 gymnax
 evosax
 distrax
