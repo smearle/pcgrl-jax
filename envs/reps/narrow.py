@@ -93,6 +93,7 @@ class NarrowRepresentation(Representation):
             agent_coords=agent_coords,
             n_valid_agent_coords=n_valid_agent_coords)
     
+    @property
     def action_space(self) -> spaces.Discrete:
         # return spaces.Discrete(len(self.tile_enum) - 1)
         return spaces.Discrete((len(self.tile_enum)-1))
