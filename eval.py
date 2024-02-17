@@ -94,11 +94,11 @@ def main_eval(config: EvalConfig):
         # Get the average min. episode loss
         min_ep_losses = states.min_episode_losses
         # Mask out so we only have the final step of each episode
-        min_ep_losses *= dones
+        min_ep_losses = jnp.where(dones, min_ep_losses, jnp.nan)
         # Get mean episode loss
-        sum_min_ep_losses = jnp.sum(min_ep_losses)
-        mean_min_ep_loss = sum_min_ep_losses / jnp.sum(dones)
-        min_min_ep_loss = jnp.min(min_ep_losses)
+        sum_min_ep_losses = jnp.nansum(min_ep_losses)
+        mean_min_ep_loss = sum_min_ep_losses / jnp.nansum(dones)
+        min_min_ep_loss = jnp.nanmin(min_ep_losses)
 
         stats = EvalData(
             mean_ep_reward=mean_ep_rew,

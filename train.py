@@ -16,7 +16,8 @@ import orbax
 from tensorboardX import SummaryWriter
 
 from config import Config, TrainConfig
-from envs.pcgrl_env import gen_dummy_queued_state
+from envs.pcgrl_env import (gen_dummy_queued_state, gen_dummy_queued_state_old,
+                            OldQueuedState)
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, init_network, gymnax_pcgrl_make,
                    init_config)
@@ -140,7 +141,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # Reshape reset_rng and other per-environment states to (n_devices, -1, ...)
         # reset_rng = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
 
-        dummy_queued_state = gen_dummy_queued_state(env)
+        dummy_queued_state = gen_dummy_queued_state(env, empty_start=config.empty_start)
 
         # Apply pmap
         vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, None))
@@ -555,9 +556,36 @@ def init_checkpointer(config: Config):
     else:
         print(f"Restoring checkpoint from {ckpt_dir}")
         steps_prev_complete = checkpoint_manager.latest_step()
-        restored_ckpt = checkpoint_manager.restore(
-            steps_prev_complete, items=target)
+
+        try:
+            restored_ckpt = checkpoint_manager.restore(
+                steps_prev_complete, items=target)
+        except KeyError:
+            # HACK
+            runner_state = runner_state.replace(
+                env_state=runner_state.env_state.replace(
+                    env_state=runner_state.env_state.env_state.replace(
+                                queued_state=gen_dummy_queued_state_old(env)
+                    )
+                )
+            )     
+            target = {'runner_state': runner_state, 'step_i': 0}
+            restored_ckpt = checkpoint_manager.restore(
+                steps_prev_complete, items=target)
+            
         restored_ckpt['steps_prev_complete'] = steps_prev_complete
+
+        # HACK
+        if isinstance(runner_state.env_state.env_state.queued_state, OldQueuedState):
+            runner_state = restored_ckpt['runner_state']
+            runner_state = runner_state.replace(
+                env_state=runner_state.env_state.replace(
+                    env_state=runner_state.env_state.env_state.replace(
+                        queued_state=gen_dummy_queued_state(env, empty_start=False)
+                    )
+                )
+            )
+            restored_ckpt['runner_state'] = runner_state
 
         # # Load the csv as a dataframe and delete all rows after the last checkpoint
         # progress_csv_path = os.path.join(get_exp_dir(config), "progress.csv")

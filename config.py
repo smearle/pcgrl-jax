@@ -61,6 +61,9 @@ class Config:
     exp_dir: Optional[str] = None
     n_gpus: int = 1
 
+    # To make the task simpler, always start with an empty map
+    empty_start: bool = False
+
 
 @dataclass
 class TrainConfig(Config):

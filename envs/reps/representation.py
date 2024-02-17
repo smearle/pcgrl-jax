@@ -45,6 +45,7 @@ class Representation(ABC):
             low, high, observation_shape, jnp.float32
         )
 
+    @property
     def action_space(self) -> spaces.Discrete:
         # return spaces.Discrete(len(self.tile_enum) - 1)
         return spaces.Discrete((len(self.tile_enum)-1)

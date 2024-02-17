@@ -48,12 +48,27 @@ class RepEnum(IntEnum):
     NCA = 3
     PLAYER = 4
 
+
+# FIXME: This is a hack to allow backward compatibility, reloading models from
+#   before we added the option to queue maps for use at env reset.
+@struct.dataclass
+class OldQueuedState:
+    has_queued_ctrl_trgs: bool = False
+    ctrl_trgs: Optional[chex.Array] = None
+    has_queued_frz_map: bool = False
+    frz_map: Optional[chex.Array] = None
+    # has_queued_map: Optional[bool] = False
+    # map: Optional[chex.Array] = None
+
 @struct.dataclass
 class QueuedState:
     has_queued_ctrl_trgs: bool = False
     ctrl_trgs: Optional[chex.Array] = None
     has_queued_frz_map: bool = False
     frz_map: Optional[chex.Array] = None
+    has_queued_map: bool = False
+    map: Optional[chex.Array] = None
+### END FIXME ##################################################################
 
 
 @struct.dataclass
@@ -238,7 +253,11 @@ class PCGRLEnv(Environment):
     @partial(jax.jit, static_argnums=(0, 2))
     def reset_env(self, rng, env_params: PCGRLEnvParams, queued_state: QueuedState) \
             -> Tuple[chex.Array, PCGRLEnvState]:
-        env_map = self.prob.gen_init_map(rng)
+        env_map = jax.lax.select(
+            queued_state.has_queued_map,
+            queued_state.map,
+            self.prob.gen_init_map(rng),
+        )
         # frz_map = jax.lax.cond(
         #     self.static_tile_prob is not None or self.n_freezies > 0,
         #     lambda rng: gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape),
@@ -366,10 +385,29 @@ class PCGRLEnv(Environment):
         return jax.random.randint(rng, act_window_shape, 0, n_tile_types)[None, ...]
 
 
-def gen_dummy_queued_state(env):
+def gen_dummy_queued_state(env, empty_start=False):
+    """ Generated a QueuedState object to be passed to environments whenever 
+    they reset. Normally these are a bunch of empty/None values which indicate
+    to the environment to generate its own random initial state as necessary.
+    If empty_start=True, then we also pass a map full of EMPTY tiles which
+    will serve as the initial starting state.
+    """
     queued_state = QueuedState(
         ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)),
-        frz_map=jnp.zeros(env.map_shape, dtype=bool)
+        frz_map=jnp.zeros(env.map_shape, dtype=bool),
+        map=jnp.zeros(env.map_shape, dtype=jnp.int32),
+    )
+    if empty_start:
+        map = jnp.full(env.map_shape, dtype=jnp.int32, fill_value=Tiles.EMPTY)
+        queued_state = queued_state.replace(
+            map=map, has_queued_map=True)
+    return queued_state
+
+
+def gen_dummy_queued_state_old(env):
+    queued_state = OldQueuedState(
+        ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)),
+        frz_map=jnp.zeros(env.map_shape, dtype=bool),
     )
     return queued_state
 

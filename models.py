@@ -251,6 +251,9 @@ class NCA(nn.Module):
         if self.representation == 'wide':
             act = x.reshape((x.shape[0], -1))
 
+        else:
+            act = x
+
         # Generate random binary mask
         # mask = jax.random.uniform(rng[0], shape=actor_mean.shape) > 0.9
         # Apply mask to logits

@@ -27,6 +27,7 @@ def get_exp_dir(config: Config):
             f'fz-{config.n_freezies}_' + \
             f'act-{"x".join([str(e) for e in config.act_shape])}_' + \
             f'nag-{config.n_agents}_' + \
+            ('empty-start_' if config.empty_start else '') + \
             f'{config.seed}_{config.exp_name}')
     elif config.env_name == 'PlayPCGRL':
         exp_dir = os.path.join(

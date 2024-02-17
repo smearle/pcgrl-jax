@@ -159,7 +159,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     # Create a list of lists to show curves of metrics (e.g. reward) over the 
     # course of training (i.e. as would be logged by tensorboard)
     row_vals_curves = []
-    timesteps = []
+    all_timesteps = []
 
     for sc in sweep_configs:
         exp_dir = sc.exp_dir
@@ -182,8 +182,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
         ep_returns = train_metrics['ep_return']
         row_vals_curves.append(ep_returns)
         sc_timesteps = train_metrics['timestep']
-        if len(sc_timesteps) > len(timesteps):
-            timesteps = sc_timesteps 
+        all_timesteps.append(sc_timesteps)
 
     row_index = pd.MultiIndex.from_tuples(row_indices, names=row_headers)
     misc_stats_df = pd.DataFrame(row_vals, index=row_index)
@@ -231,13 +230,35 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
         f.write(styled_misc_stats_concise_df.to_latex())
 
 
-    # Now deal with metric curves
+    # Instead of padding, interpolate the episode returns
+    def interpolate_returns(ep_returns, timesteps, all_timesteps):
+        # Create a Series with the index set to the timesteps of the ep_returns
 
-    row_vals_curves = np.array([
-        np.pad(v, (0, len(timesteps) - len(v)), constant_values=np.nan) 
-        for v in row_vals_curves])
+        # Wherever there are duplicate `timesteps` values, take the average of the corresponding `ep_returns` values
+        ep_returns = ep_returns.groupby(timesteps).mean()
+        timesteps = np.unique(timesteps)
 
-    metric_curves_df = pd.DataFrame(row_vals_curves, index=row_index, columns=timesteps)
+        indexed_returns = pd.Series(ep_returns.values, index=timesteps)
+        # Reindex the series to the full range of timesteps, interpolating missing values
+        interpolated_returns = indexed_returns.reindex(all_timesteps).interpolate(method='linear', limit_direction='forward', axis=0)
+        return interpolated_returns
+
+    all_timesteps = np.sort(np.unique(np.concatenate(all_timesteps)))
+
+    row_vals_curves = []
+    for sc in sweep_configs:
+        exp_dir = sc.exp_dir
+        train_metrics = pd.read_csv(f'{exp_dir}/progress.csv')
+        train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
+        ep_returns = train_metrics['ep_return']
+        sc_timesteps = train_metrics['timestep']
+        interpolated_returns = interpolate_returns(ep_returns, sc_timesteps, all_timesteps)
+        row_vals_curves.append(interpolated_returns)
+
+    # Now, each element in row_vals_curves is a Series of interpolated returns
+    metric_curves_df = pd.DataFrame({i: vals for i, vals in enumerate(row_vals_curves)}).T
+    metric_curves_df.columns = all_timesteps
+    metric_curves_df.index = row_index
     metric_curves_mean = metric_curves_df.groupby(group_row_indices).mean()
     metric_curves_mean = metric_curves_mean.droplevel(levels_to_drop)
 
