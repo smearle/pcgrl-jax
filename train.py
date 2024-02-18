@@ -55,20 +55,22 @@ def log_callback(metric, steps_prev_complete, config, writer, train_start_time):
 
     if len(timesteps) > 0:
         t = timesteps[0]
-        print(f"global step={t}; episodic return mean: {return_values.mean()} " + \
-            f"max: {return_values.max()}, min: {return_values.min()}")
-        ep_return = (metric["returned_episode_returns"]
-                        [metric["returned_episode"]].mean(
-        ))
+        ep_return_mean = return_values.mean()
+        ep_return_max = return_values.max()
+        ep_return_min = return_values.min()
+        print(f"global step={t}; episodic return mean: {ep_return_mean} " + \
+            f"max: {ep_return_max}, min: {ep_return_min}")
         ep_length = (metric["returned_episode_lengths"]
                         [metric["returned_episode"]].mean())
 
         # Add a row to csv with ep_return
         with open(os.path.join(get_exp_dir(config),
                                 "progress.csv"), "a") as f:
-            f.write(f"{t},{ep_return}\n")
+            f.write(f"{t},{ep_return_mean}\n")
 
-        writer.add_scalar("ep_return", ep_return, t)
+        writer.add_scalar("ep_return", ep_return_mean, t)
+        writer.add_scalar("ep_return_max", ep_return_max, t)
+        writer.add_scalar("ep_return_min", ep_return_min, t)
         writer.add_scalar("ep_length", ep_length, t)
         fps = (t - steps_prev_complete) / (timer() - train_start_time)
         writer.add_scalar("fps", fps, t)
