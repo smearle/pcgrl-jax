@@ -20,7 +20,9 @@ def get_exp_dir(config: Config):
         exp_dir = os.path.join(
             'saves',
             f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
-            f'{config.activation}_w-{config.map_width}_vrf-{config.vrf_size}_' +
+            f'{config.activation}_w-{config.map_width}_' + \
+            ('random-size_' if config.randomize_map_size else '') + \
+            f'vrf-{config.vrf_size}_' + \
             (f'cp-{config.change_pct}_' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
             f'bs-{config.max_board_scans}_' + \
@@ -171,6 +173,7 @@ def get_env_params_from_config(config: Config):
         max_board_scans=config.max_board_scans,
         ctrl_metrics=ctrl_metrics,
         change_pct=config.change_pct,
+        randomize_map_size=config.randomize_map_size,
     )
     return env_params
 

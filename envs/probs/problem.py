@@ -63,9 +63,21 @@ def gen_ctrl_trgs(metric_bounds, rng):
     return jax.random.randint(rng, (len(metric_bounds),), metric_bounds[:, 0], metric_bounds[:, 1])
 
 
-def gen_init_map(rng, tile_enum, map_shape, tile_probs):
+def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_size=False):
     init_map = jax.random.choice(
         rng, len(tile_enum), shape=map_shape, p=tile_probs)
+    
+    if randomize_map_size:
+        # only keep the top-left corner of the map for convenience
+        # randomize the actual map size and replace the rest with tile_enum.BORDER
+        # smallest map size is 3x3, largest is map_shape by map_shape, here map_shape is a tuple with same value
+        actual_map_shape = jax.random.randint(rng, (2,), 3, max(map_shape)) 
+        # Create a mask to select the top-left corner of the map
+        mask = jnp.zeros(map_shape)
+        mask = mask.at[:actual_map_shape[0], :actual_map_shape[1]].set(1)
+        # Replace the rest with tile_enum.BORDER
+        init_map = jnp.where(mask == 1, init_map, tile_enum.BORDER)
+    
     return init_map
 
 
@@ -98,9 +110,9 @@ class Problem:
         self.queued_ctrl_trgs = jnp.zeros(len(self.metric_bounds))  # dummy value to placate jax
         self.has_queued_ctrl_trgs = False
 
-    def gen_init_map(self, rng):
+    def gen_init_map(self, rng, randomize_map_size=False):
         return gen_init_map(rng, self.tile_enum, self.map_shape,
-                               self.tile_probs)
+                               self.tile_probs, randomize_map_size=randomize_map_size)
 
     def get_metric_bounds(self, map_shape):
         raise NotImplementedError

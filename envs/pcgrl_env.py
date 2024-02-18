@@ -103,6 +103,7 @@ class PCGRLEnvParams:
     max_board_scans: float = 3.0
     ctrl_metrics: Tuple = ()
     change_pct: float = -1.0
+    randomize_map_size: bool = False
 
 
 def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
@@ -181,6 +182,7 @@ class PCGRLEnv(Environment):
         has_queued_frz_map = False
         self.n_freezies = np.int32(n_freezies)
         self.n_agents = n_agents
+        self.randomize_map_size = env_params.randomize_map_size
 
         prob_cls = PROB_CLASSES[problem]
         self.prob = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics)
@@ -188,7 +190,7 @@ class PCGRLEnv(Environment):
         self.tile_enum = self.prob.tile_enum
         self.tile_probs = self.prob.tile_probs
         rng = jax.random.PRNGKey(0)  # Dummy random key
-        env_map = self.prob.gen_init_map(rng)
+        env_map = self.prob.gen_init_map(rng, randomize_map_size=self.randomize_map_size)
 
         self.rep: Representation
         self.rep = representation

@@ -35,6 +35,7 @@ class Config:
     model: str = "conv"
 
     map_width: int = 16
+    randomize_map_size: bool = False
     is_3d: bool = False
     # ctrl_metrics: Tuple[str] = ('diameter', 'n_regions')
     ctrl_metrics: Tuple[str] = ()
