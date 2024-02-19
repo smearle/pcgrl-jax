@@ -67,6 +67,17 @@ class Config:
 
 
 @dataclass
+class EvoMapConfig(Config):
+    n_generations: int = 100_000
+    evo_pop_size: int = 100
+    n_parents: int = 50
+    mut_rate: float = 0.3
+    render_freq: int = 1000
+    log_freq: int = 100
+    callbacks: bool = True
+
+
+@dataclass
 class TrainConfig(Config):
     overwrite: bool = False
 
@@ -126,6 +137,7 @@ class SweepConfig(TrainConfig, EnjoyConfig, EvalConfig):
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
+cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)

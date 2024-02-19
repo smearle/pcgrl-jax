@@ -4,13 +4,25 @@ import gymnax
 import jax
 import numpy as np
 
-from config import Config, TrainConfig
+from config import Config, EvoMapConfig, TrainConfig
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
 from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
 from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, ConvForward2, Dense, NCA, SeqNCA
+
+
+def get_exp_dir_evo_map(config: EvoMapConfig):
+    exp_dir = os.path.join(
+        'saves_evo_map',
+        config.problem,
+        f'pop-{config.evo_pop_size}_' + 
+        f'parents-{config.n_parents}_' +
+        f'mut-{config.mut_rate}_' +
+        f'{config.seed}_{config.exp_name}',
+    )
+    return exp_dir
 
 
 def get_exp_dir(config: Config):
@@ -79,6 +91,20 @@ def init_config(config: Config):
         config.arf_size = config.vrf_size = min([config.arf_size, config.vrf_size])
 
     config.exp_dir = get_exp_dir(config)    
+    return config
+
+    
+def init_config_evo_map(config: EvoMapConfig):
+
+    # FIXME: This is meaningless, should remove it eventually.
+    config.arf_size = (2 * config.map_width -
+                    1 if config.arf_size==-1 else config.arf_size)
+    
+    config.vrf_size = (2 * config.map_width -
+                    1 if config.vrf_size==-1 else config.vrf_size)
+
+    config.n_gpus = jax.local_device_count()
+    config.exp_dir = get_exp_dir_evo_map(config)
     return config
 
 
