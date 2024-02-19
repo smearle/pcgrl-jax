@@ -5,7 +5,6 @@ import jax
 import numpy as np
 
 from config import Config, TrainConfig
-from envs.binary_0 import Binary0
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
@@ -21,7 +20,7 @@ def get_exp_dir(config: Config):
             'saves',
             f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
             f'{config.activation}_w-{config.map_width}_' + \
-            ('random-size_' if config.randomize_map_size else '') + \
+            ('random-shape_' if config.randomize_map_shape else '') + \
             f'vrf-{config.vrf_size}_' + \
             (f'cp-{config.change_pct}_' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
@@ -176,7 +175,8 @@ def get_env_params_from_config(config: Config):
         max_board_scans=config.max_board_scans,
         ctrl_metrics=ctrl_metrics,
         change_pct=config.change_pct,
-        randomize_map_size=config.randomize_map_size,
+        randomize_map_shape=config.randomize_map_shape,
+        empty_start=config.empty_start,
     )
     return env_params
 
@@ -202,9 +202,6 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
     elif env_name == 'PlayPCGRL':
         env_params = get_play_env_params_from_config(config)
         env = PlayPCGRLEnv(env_params)
-
-    elif env_name == 'Binary0':
-        env = Binary0(**env_kwargs)
 
     elif env_name == 'Candy':
         env_params = CandyParams()

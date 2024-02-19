@@ -33,10 +33,10 @@ def main_enjoy(config: EnjoyConfig):
     rng_reset = jax.random.split(rng, config.n_eps)
 
     # Can manually define frozen tiles here, e.g. to set an OOD task
-    frz_map = jnp.zeros(env.map_shape, dtype=bool)
+    # frz_map = jnp.zeros(env.map_shape, dtype=bool)
     # frz_map = frz_map.at[7, 3:-3].set(1)
     queued_state = gen_dummy_queued_state(env)
-    queued_state = env.queue_frz_map(queued_state, frz_map)
+    # queued_state = env.queue_frz_map(queued_state, frz_map)
 
     # obs, env_state = env.reset(rng, env_params)
     obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(

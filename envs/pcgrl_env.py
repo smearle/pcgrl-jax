@@ -103,7 +103,8 @@ class PCGRLEnvParams:
     max_board_scans: float = 3.0
     ctrl_metrics: Tuple = ()
     change_pct: float = -1.0
-    randomize_map_size: bool = False
+    randomize_map_shape: bool = False
+    empty_start: bool = False
 
 
 def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
@@ -169,7 +170,7 @@ def get_prob_cls(problem: str):
 
 
 class PCGRLEnv(Environment):
-    prob: Problem
+
     def __init__(self, env_params: PCGRLEnvParams):
         map_shape, act_shape, rf_shape, problem, representation, static_tile_prob, n_freezies, n_agents = (
             env_params.map_shape, env_params.act_shape, env_params.rf_shape, env_params.problem,
@@ -182,15 +183,16 @@ class PCGRLEnv(Environment):
         has_queued_frz_map = False
         self.n_freezies = np.int32(n_freezies)
         self.n_agents = n_agents
-        self.randomize_map_size = env_params.randomize_map_size
+        self.randomize_map_shape = env_params.randomize_map_shape
+        self.empty_start = env_params.empty_start
 
         prob_cls = PROB_CLASSES[problem]
-        self.prob = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics)
+        self.prob: Problem = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics)
 
         self.tile_enum = self.prob.tile_enum
         self.tile_probs = self.prob.tile_probs
         rng = jax.random.PRNGKey(0)  # Dummy random key
-        env_map = self.prob.gen_init_map(rng, randomize_map_size=self.randomize_map_size)
+        env_map = self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, empty_start=self.empty_start)
 
         self.rep: Representation
         self.rep = representation
@@ -252,13 +254,14 @@ class PCGRLEnv(Environment):
         queued_state = queued_state.replace(frz_map=frz_map, has_queued_frz_map=True)
         return queued_state
 
-    @partial(jax.jit, static_argnums=(0, 2))
+    @partial(jax.jit, static_argnames=('self',))
     def reset_env(self, rng, env_params: PCGRLEnvParams, queued_state: QueuedState) \
             -> Tuple[chex.Array, PCGRLEnvState]:
         env_map = jax.lax.select(
             queued_state.has_queued_map,
             queued_state.map,
-            self.prob.gen_init_map(rng),
+            self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, 
+                                   empty_start=self.empty_start),
         )
         # frz_map = jax.lax.cond(
         #     self.static_tile_prob is not None or self.n_freezies > 0,
@@ -272,6 +275,7 @@ class PCGRLEnv(Environment):
             queued_state.frz_map,
             gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape),
         )
+        frz_map = frz_map | jnp.where(env_map == Tiles.BORDER, 1, 0)
         # env_map = jnp.where(frz_map == 1, self.tile_enum.WALL, self.tile_enum.WALL) # FIXME: dumdum Debugging evo
         env_map = jnp.where(frz_map == 1, self.tile_enum.WALL, env_map)  
 
@@ -387,27 +391,27 @@ class PCGRLEnv(Environment):
         return jax.random.randint(rng, act_window_shape, 0, n_tile_types)[None, ...]
 
 
-def gen_dummy_queued_state(env, empty_start=False):
+def gen_dummy_queued_state(env):
     """ Generated a QueuedState object to be passed to environments whenever 
     they reset. Normally these are a bunch of empty/None values which indicate
     to the environment to generate its own random initial state as necessary.
-    If empty_start=True, then we also pass a map full of EMPTY tiles which
-    will serve as the initial starting state.
     """
     queued_state = QueuedState(
+        has_queued_ctrl_trgs=False,
+        has_queued_frz_map=False,
+        has_queued_map=False,
         ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)),
         frz_map=jnp.zeros(env.map_shape, dtype=bool),
         map=jnp.zeros(env.map_shape, dtype=jnp.int32),
     )
-    if empty_start:
-        map = jnp.full(env.map_shape, dtype=jnp.int32, fill_value=Tiles.EMPTY)
-        queued_state = queued_state.replace(
-            map=map, has_queued_map=True)
     return queued_state
 
 
+# HACK for backward compat
 def gen_dummy_queued_state_old(env):
     queued_state = OldQueuedState(
+        has_queued_ctrl_trgs=False,
+        has_queued_frz_map=False,
         ctrl_trgs=jnp.zeros(len(env.prob.stat_trgs)),
         frz_map=jnp.zeros(env.map_shape, dtype=bool),
     )
@@ -420,6 +424,7 @@ def flatten_obs(obs: PCGRLObs) -> chex.Array:
     return obs
 
 
+@partial(jax.jit, static_argnums=(0,))
 def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
                path_coords_tpl: chex.Array):
     tile_size = env.prob.tile_size
@@ -471,12 +476,20 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
     clr = (255, 0, 0, 255)
     x_border = x_border.at[:, :, :].set(clr)
     y_border = y_border.at[:, :, :].set(clr)
-    if env.static_tile_prob is not None or env.n_freezies > 0 or env.queued_frz_map is not None:
+    # if env.static_tile_prob > 0 or env.n_freezies > 0 or env_state.queued_state.has_queued_frz_map:
+
+    def render_frozen_tiles(lvl_img):
         static_map = env_state.static_map
+
+        # Don't render the frozenness of BORDER tiles when using them to crop the map to some smaller size with
+        # randomize_map_shape
+        borderless_env_map = env_map[border_size[0]:-border_size[0], border_size[1]:-border_size[1]]
+        static_map = jnp.where(borderless_env_map == Tiles.BORDER, 0, static_map)
+
         static_coords = jnp.argwhere(static_map,
-                                     size=(
-                                         env_map.shape[0]-border_size[0])*(env_map.shape[1]-border_size[1]),
-                                     fill_value=-1)
+                                    size=(
+                                        env_map.shape[0]-border_size[0])*(env_map.shape[1]-border_size[1]),
+                                    fill_value=-1)
 
         def draw_static_tile(carry):
             static_coords, lvl_img, i = carry
@@ -500,6 +513,15 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
         i = 0
         _, lvl_img, _ = jax.lax.while_loop(
             cond, draw_static_tile, (static_coords, lvl_img, i))
+
+        return lvl_img
+
+    lvl_img = jax.lax.cond(
+        env.static_tile_prob > 0 or env.n_freezies > 0 or env_state.queued_state.has_queued_frz_map,
+        lambda lvl_img: render_frozen_tiles(lvl_img),
+        lambda lvl_img: lvl_img,
+        lvl_img
+    )
 
     return lvl_img
 

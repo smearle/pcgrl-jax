@@ -61,6 +61,9 @@ class Representation(ABC):
 
 def get_ego_obs(self, env_map: chex.Array, static_map: chex.Array,
                 rep_state: RepresentationState):
+    # Do not observe the frozenness of BORDER tiles used to crop the map with `randomize_map_shape`
+    static_map = jnp.where(env_map == self.tile_enum.BORDER, 0, static_map)
+
     padded_env_map = jnp.pad(
         env_map, self.rf_off, mode='constant',
         constant_values=self.tile_enum.BORDER)
@@ -85,6 +88,9 @@ def get_ego_obs(self, env_map: chex.Array, static_map: chex.Array,
 
 def get_global_obs(self, env_map: chex.Array, static_map: chex.Array,
                    rep_state: RepresentationState):
+    # Do not observe the frozenness of BORDER tiles used to crop the map with `randomize_map_shape`
+    static_map = jnp.where(env_map == self.tile_enum.BORDER, 0, static_map)
+
     # Convert to one-hot encoding
     rf_obs = jax.nn.one_hot(env_map - 1, self.num_tiles - 1)
     if static_map is not None:
