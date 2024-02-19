@@ -251,8 +251,11 @@ class NCA(nn.Module):
         if self.representation == 'wide':
             act = x.reshape((x.shape[0], -1))
 
-        else:
+        elif self.representation == 'nca':
             act = x
+
+        else:
+            raise NotImplementedError(f"Representation {self.representation} not implemented for NCA model.")
 
         # Generate random binary mask
         # mask = jax.random.uniform(rng[0], shape=actor_mean.shape) > 0.9
@@ -273,7 +276,7 @@ class NCA(nn.Module):
 
         # return act, critic
 
-        critic = x
+        critic = activation(x)
         critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(x)
         critic = activation(critic)
         critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(x)

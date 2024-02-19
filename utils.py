@@ -60,9 +60,12 @@ def init_config(config: Config):
         config.exp_dir = get_exp_dir(config)
         return config
 
-    if config.representation == 'wide':
-        # TODO: Technically, may arf/vrf size should affect kernel widths in model?
+    if config.representation in set({'wide', 'nca'}):
+        # TODO: Technically, maybe arf/vrf size should affect kernel widths in (we're assuming here) the NCA model?
         config.arf_size = config.vrf_size = config.map_width
+
+    if config.representation == 'nca':
+        config.act_shape = (config.map_width, config.map_width)
     
     else:
         config.arf_size = (2 * config.map_width -
