@@ -27,7 +27,7 @@ class Representation(ABC):
         if self.pinpoints:
             self.editable_tile_enum = [t for t, num in zip(self.tile_enum, self.tile_nums) if num == 0 and t != self.tile_enum.BORDER]
         else:
-            self.editable_tile_enum = self.tile_enum
+            self.editable_tile_enum = [t for t in self.tile_enum if t != self.tile_enum.BORDER]
         self.n_editable_tiles = len(self.editable_tile_enum)
 
     def observation_shape(self):

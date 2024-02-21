@@ -69,6 +69,7 @@ def gen_ctrl_trgs(metric_bounds, rng):
                                    "tile_nums", "pinpoints"))
 def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=False, empty_start=False, tile_nums=None,
                  pinpoints=False):
+    tile_probs = np.array(tile_probs, dtype=np.float32)
 
     if empty_start:
         init_map = jnp.full(map_shape, dtype=jnp.int32, fill_value=tile_enum.EMPTY)
@@ -95,23 +96,14 @@ def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=Fals
 
         def add_num_tiles(carry, tile_idx):
             rng, init_map = carry
-            modifiable_map = jnp.isin(init_map, non_num_tiles) & (init_map != tile_enum.BORDER)
+            tiles_to_add = tile_nums[tile_idx]
 
-            tile_num = tile_nums[tile_idx]
-            
-            # Calculate tiles to add or remove
-            tiles_to_add = tile_num
-            
-            # Generate new random indices for adding or removing tiles
-            rng, rng_add, rng_remove = jax.random.split(rng, 3)
-            add_indices = jax.random.choice(
-                rng_add, 
-                jnp.where(modifiable_map.ravel(), size=n_map_cells)[0],
-                shape=(n_map_cells,),
-                replace=False)
+            modifiable_map = (jnp.isin(init_map, non_num_tiles) & (init_map != tile_enum.BORDER)).ravel()
+            probs = modifiable_map / jnp.sum(modifiable_map)
+            add_idxs = jax.random.choice(rng, n_map_cells, shape=(tiles_to_add,), p=probs, replace=False)
             
             # Adjust the map
-            init_map = init_map.ravel().at[add_indices[:tiles_to_add]].set(tile_idx).reshape(map_shape)
+            init_map = init_map.ravel().at[add_idxs].set(tile_idx).reshape(map_shape)
 
             return (rng, init_map), None
 
@@ -153,14 +145,14 @@ class Problem:
         self.has_queued_ctrl_trgs = False
 
         # Make sure we don't generate pinpoint tiles if they are being treated as such
+        tile_probs = np.array(self.tile_probs, dtype=np.float32)
         if self.tile_nums is not None and pinpoints:
-            tile_probs = np.array(self.tile_probs)
             for tile in self.tile_enum:
                 if self.tile_nums[tile] > 0:
                     tile_probs[tile] = 0
                 # Normalize to make tile_probs sum to 1
             tile_probs = tile_probs / np.sum(tile_probs)
-            self.tile_probs = tuple(tile_probs)
+        self.tile_probs = tuple(tile_probs)
 
     @partial(jax.jit, static_argnames=("self", "randomize_map_shape", "empty_start", "pinpoints"))
     def gen_init_map(self, rng, randomize_map_shape=False, empty_start=False, pinpoints=False):
