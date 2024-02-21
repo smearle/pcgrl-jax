@@ -164,7 +164,7 @@ class DungeonProblem(Problem):
         n_keys = jnp.sum(env_map == DungeonTiles.KEY)
         n_enemies = jnp.sum(
             (env_map == DungeonTiles.BAT) | (env_map == DungeonTiles.SCORPION) | (env_map == DungeonTiles.SPIDER))
-        n_regions = calc_n_regions(self.flood_regions_net, env_map, self.passable_tiles)
+        n_regions, _ = calc_n_regions(self.flood_regions_net, env_map, self.passable_tiles)
         is_playable: bool = (n_players == 1) & (n_doors == 1) & (n_keys == 1) & (5 >= n_enemies) & (n_enemies >= 2) & (n_regions == 1)
 
         # Get path from player to key and from key to door

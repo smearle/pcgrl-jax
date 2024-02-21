@@ -95,7 +95,7 @@ class MazeProblem(Problem):
     def get_curr_stats(self, env_map: chex.Array):
         n_players = jnp.sum(env_map == MazeTiles.PLAYER)
         n_doors = jnp.sum(env_map == MazeTiles.DOOR)
-        n_regions = calc_n_regions(self.flood_regions_net, env_map, self.passable_tiles)
+        n_regions, _ = calc_n_regions(self.flood_regions_net, env_map, self.passable_tiles)
         path_length, flood_count, _ = jax.lax.cond(
             jnp.logical_and(jnp.logical_and(n_players == 1, n_doors == 1), n_regions == 1),
             lambda: calc_path_length(

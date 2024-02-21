@@ -219,7 +219,7 @@ def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passabl
         jnp.unique(regions_flood_count, size=max_n_regions, fill_value=0), 
         0, 1).sum()
 
-    return n_regions
+    return n_regions, regions_flood_count[..., 0]
 
 
 def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: jnp.ndarray, src: int, trg: chex.Array):
@@ -236,7 +236,7 @@ def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: jnp.n
             flood_state)
     path_length = jnp.clip(
         flood_state.flood_count.max() - jnp.where(
-            flood_state.flood_count == 0, jnp.inf, flood_state.flood_count).min(),
+            (flood_state.flood_count == 0) | (env_map != trg), jnp.inf, flood_state.flood_count).min(),
         0)
     return path_length, flood_state.flood_count, flood_state.nearest_trg_xy
 

@@ -15,6 +15,7 @@ from gymnax.environments.environment import Environment as GymnaxEnvironment
 from envs.env import Environment
 from envs.probs.binary import BinaryMetrics, BinaryProblem
 from envs.probs.dungeon import DungeonProblem
+from envs.probs.dungeon2 import Dungeon2Problem
 from envs.probs.maze import MazeProblem
 from envs.probs.maze_play import MazePlayProblem
 from envs.probs.problem import Problem, ProblemState
@@ -33,11 +34,13 @@ class ProbEnum(IntEnum):
     MAZE = 1
     DUNGEON = 2
     MAZE_PLAY = 3
+    DUNGEON2 = 4
 
 PROB_CLASSES = {
     ProbEnum.BINARY: BinaryProblem,
     ProbEnum.MAZE: MazeProblem,
     ProbEnum.DUNGEON: DungeonProblem,
+    ProbEnum.DUNGEON2: Dungeon2Problem,
     ProbEnum.MAZE_PLAY: MazePlayProblem,
 }
 
