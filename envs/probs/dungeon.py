@@ -67,7 +67,13 @@ class DungeonProblem(Problem):
         DungeonTiles.SCORPION: 0.02,
         DungeonTiles.SPIDER: 0.02,
     }
-    tile_probs = idx_dict_to_arr(tile_probs)
+    tile_probs = tuple(idx_dict_to_arr(tile_probs))
+
+    tile_nums = [0 for _ in range(len(tile_enum))]
+    tile_nums[DungeonTiles.PLAYER] = 1
+    tile_nums[DungeonTiles.DOOR] = 1
+    tile_nums[DungeonTiles.KEY] = 1
+    tile_nums = tuple(tile_nums)
 
     stat_weights = {
         DungeonMetrics.N_REGIONS: 5,
@@ -95,7 +101,7 @@ class DungeonProblem(Problem):
                                 # DungeonTiles.SCORPION, DungeonTiles.SPIDER,
                                 # DungeonTiles.BAT])
 
-    def __init__(self, map_shape, ctrl_metrics):
+    def __init__(self, map_shape, ctrl_metrics, pinpoints):
         self.flood_path_net = FloodPath()
         self.flood_path_net.init_params(map_shape)
         self.flood_regions_net = FloodRegions()
@@ -124,7 +130,7 @@ class DungeonProblem(Problem):
         self.ctrl_threshes[DungeonMetrics.N_ENEMIES] = 3
         self.ctrl_threshes[DungeonMetrics.NEAREST_ENEMY] = self.n_tiles - 2
 
-        super().__init__(map_shape=map_shape, ctrl_metrics=ctrl_metrics)
+        super().__init__(map_shape=map_shape, ctrl_metrics=ctrl_metrics, pinpoints=pinpoints)
 
     def get_metric_bounds(self, map_shape):
         bounds = [None] * len(DungeonMetrics)
@@ -148,9 +154,9 @@ class DungeonProblem(Problem):
         kd_flood_count = prob_state.key_door_flood_count
         pe_flood_count = prob_state.player_enemy_flood_count
         pk_coords = get_path_coords(pk_flood_count, max_path_len=self.max_path_len, coord1=k_xy)
-        kd_cords = get_path_coords(kd_flood_count, max_path_len=self.max_path_len, coord1=d_xy)
+        kd_coords = get_path_coords(kd_flood_count, max_path_len=self.max_path_len, coord1=d_xy)
         pe_coords = get_path_coords(pe_flood_count, max_path_len=self.max_path_len, coord1=e_xy) 
-        return (pk_coords, kd_cords, pe_coords)
+        return (pk_coords, kd_coords, pe_coords)
 
     def get_curr_stats(self, env_map: chex.Array):
         n_players = jnp.sum(env_map == DungeonTiles.PLAYER)
@@ -169,7 +175,7 @@ class DungeonProblem(Problem):
                 env_map=env_map, 
                 passable_tiles=self.passable_tiles, 
                 src=DungeonTiles.PLAYER, trg=DungeonTiles.KEY),
-            lambda: (0.0, jnp.zeros(env_map.shape, dtype=jnp.float32), jnp.zeros(2, dtype=jnp.int32))
+            lambda: (0.0, jnp.zeros(env_map.shape, dtype=jnp.float32), jnp.full(2, dtype=jnp.int32, fill_value=-1))
         )
         kd_passable_tiles = jnp.concatenate((self.passable_tiles, jnp.array([DungeonTiles.DOOR])))
         kd_path_length, kd_flood_count, d_xy = jax.lax.cond(
@@ -179,7 +185,7 @@ class DungeonProblem(Problem):
                 env_map=env_map, 
                 passable_tiles=kd_passable_tiles, 
                 src=DungeonTiles.KEY, trg=DungeonTiles.DOOR),
-            lambda: (0.0, jnp.zeros(env_map.shape, dtype=jnp.float32), jnp.zeros(2, dtype=jnp.int32))
+            lambda: (0.0, jnp.zeros(env_map.shape, dtype=jnp.float32), jnp.full(2, dtype=jnp.int32, fill_value=-1))
         )
         path_length = pk_path_length + kd_path_length
 
@@ -197,7 +203,7 @@ class DungeonProblem(Problem):
                 env_map=env_map_uni_enemy, 
                 passable_tiles=pe_passable_tiles, 
                 src=DungeonTiles.PLAYER, trg=DungeonTiles.BAT),
-            lambda: (0.0, jnp.zeros(env_map.shape, dtype=jnp.float32), jnp.zeros(2, dtype=jnp.int32))
+            lambda: (0.0, jnp.zeros(env_map.shape, dtype=jnp.float32), jnp.full(2, dtype=jnp.int32, fill_value=-1))
         )
 
         stats = jnp.zeros(len(DungeonMetrics))

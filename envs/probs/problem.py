@@ -1,5 +1,6 @@
 from enum import IntEnum
 from functools import partial
+import math
 from typing import Optional
 
 import chex
@@ -64,8 +65,11 @@ def gen_ctrl_trgs(metric_bounds, rng):
     return jax.random.randint(rng, (len(metric_bounds),), metric_bounds[:, 0], metric_bounds[:, 1])
 
 
-@partial(jax.jit, static_argnames=("tile_enum", "map_shape", "randomize_map_shape", "empty_start"))
-def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=False, empty_start=False):
+@partial(jax.jit, static_argnames=("tile_enum", "map_shape", "tile_probs", "randomize_map_shape", "empty_start", 
+                                   "tile_nums", "pinpoints"))
+def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=False, empty_start=False, tile_nums=None,
+                 pinpoints=False):
+
     if empty_start:
         init_map = jnp.full(map_shape, dtype=jnp.int32, fill_value=tile_enum.EMPTY)
     else:
@@ -84,6 +88,38 @@ def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=Fals
         # Replace the rest with tile_enum.BORDER
         init_map = jnp.where(mask, init_map, tile_enum.BORDER)
 
+    if tile_nums is not None and pinpoints:
+
+        non_num_tiles = jnp.array([tile_idx for tile_idx, tile_num in enumerate(tile_nums) if tile_num == 0])
+        n_map_cells = math.prod(map_shape)
+
+        def add_num_tiles(carry, tile_idx):
+            rng, init_map = carry
+            modifiable_map = jnp.isin(init_map, non_num_tiles) & (init_map != tile_enum.BORDER)
+
+            tile_num = tile_nums[tile_idx]
+            
+            # Calculate tiles to add or remove
+            tiles_to_add = tile_num
+            
+            # Generate new random indices for adding or removing tiles
+            rng, rng_add, rng_remove = jax.random.split(rng, 3)
+            add_indices = jax.random.choice(
+                rng_add, 
+                jnp.where(modifiable_map.ravel(), size=n_map_cells)[0],
+                shape=(n_map_cells,),
+                replace=False)
+            
+            # Adjust the map
+            init_map = init_map.ravel().at[add_indices[:tiles_to_add]].set(tile_idx).reshape(map_shape)
+
+            return (rng, init_map), None
+
+        tile_idxs = np.arange(len(tile_enum))
+        # _, init_map = jax.lax.scan(adjust_tile_nums, (rng, init_map), tile_idxs)[0]
+        for tile_idx in tile_idxs:
+            (rng, init_map), _ = add_num_tiles((rng, init_map), tile_idx)
+
     return init_map
 
 
@@ -96,7 +132,7 @@ class Problem:
     ctrl_threshes: chex.Array = None
     queued_ctrl_trgs: chex.Array = None
 
-    def __init__(self, map_shape, ctrl_metrics):
+    def __init__(self, map_shape, ctrl_metrics, pinpoints):
         self.map_shape = map_shape
         self.metric_bounds = self.get_metric_bounds(map_shape)
         self.ctrl_metrics = np.array(ctrl_metrics, dtype=int)
@@ -116,10 +152,21 @@ class Problem:
         self.queued_ctrl_trgs = jnp.zeros(len(self.metric_bounds))  # dummy value to placate jax
         self.has_queued_ctrl_trgs = False
 
-    @partial(jax.jit, static_argnames=("self", "randomize_map_shape", "empty_start"))
-    def gen_init_map(self, rng, randomize_map_shape=False, empty_start=False):
-        return gen_init_map(rng, self.tile_enum, self.map_shape,
-                               self.tile_probs, randomize_map_shape=randomize_map_shape, empty_start=empty_start)
+        # Make sure we don't generate pinpoint tiles if they are being treated as such
+        if self.tile_nums is not None and pinpoints:
+            tile_probs = np.array(self.tile_probs)
+            for tile in self.tile_enum:
+                if self.tile_nums[tile] > 0:
+                    tile_probs[tile] = 0
+                # Normalize to make tile_probs sum to 1
+            tile_probs = tile_probs / np.sum(tile_probs)
+            self.tile_probs = tuple(tile_probs)
+
+    @partial(jax.jit, static_argnames=("self", "randomize_map_shape", "empty_start", "pinpoints"))
+    def gen_init_map(self, rng, randomize_map_shape=False, empty_start=False, pinpoints=False):
+        return gen_init_map(rng, self.tile_enum, self.map_shape, self.tile_probs,
+                            randomize_map_shape=randomize_map_shape, empty_start=empty_start, tile_nums=self.tile_nums,
+                            pinpoints=pinpoints)
 
     def get_metric_bounds(self, map_shape):
         raise NotImplementedError
@@ -200,6 +247,7 @@ class Problem:
         raise NotImplementedError
 
     def draw_path(self, lvl_img, env_map, border_size, path_coords_tpl, tile_size):
+        # path_coords_tpl is a tuple of (1) array of of path coordinates
         assert len(path_coords_tpl) == 1
         lvl_img = draw_path(prob=self, lvl_img=lvl_img, env_map=env_map, border_size=border_size, 
                   path_coords=path_coords_tpl[0], tile_size=tile_size)

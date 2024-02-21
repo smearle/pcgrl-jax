@@ -20,18 +20,17 @@ class WideRepresentationState(RepresentationState):
 class WideRepresentation(Representation):
     def __init__(self, env_map: chex.Array, rf_shape: Tuple[int, int],
                  act_shape: Tuple[int, int], tile_enum: Tiles,
-                 max_board_scans: float,
+                 max_board_scans: float, pinpoints: bool, tile_nums: Tuple[int],
                  ):
         super().__init__(tile_enum=tile_enum, rf_shape=rf_shape,
-                         act_shape=act_shape
+                         act_shape=act_shape, pinpoints=pinpoints, tile_nums=tile_nums
                          )
         self.rf_shape = np.array(env_map.shape)
         self.rf_off = int(max(np.ceil(self.rf_shape - 1) / 2))
         self.max_steps = np.uint32(env_map.shape[0] * env_map.shape[1] * max_board_scans)
         self.num_tiles = len(tile_enum)
         self.map_shape = (*env_map.shape, self.num_tiles)
-        self.builds = jnp.array(
-            [tile for tile in tile_enum if tile != tile_enum.BORDER])
+        self.builds = jnp.array(self.editable_tile_enum)
 
     def observation_shape(self):
         # Always observe static tile channel. Do not observe border tiles.
@@ -39,7 +38,7 @@ class WideRepresentation(Representation):
 
     @property
     def action_space(self) -> spaces.Discrete:
-        return spaces.Discrete((len(self.tile_enum) - 1) *
+        return spaces.Discrete(self.n_editable_tiles *
                                math.prod(self.map_shape))
 
     def step(self, env_map: chex.Array, action: chex.Array,

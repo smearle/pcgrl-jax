@@ -105,6 +105,7 @@ class PCGRLEnvParams:
     change_pct: float = -1.0
     randomize_map_shape: bool = False
     empty_start: bool = False
+    pinpoints: bool = False
 
 
 def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
@@ -170,14 +171,15 @@ def get_prob_cls(problem: str):
 
 
 class PCGRLEnv(Environment):
+    pinpoints = False
 
     def __init__(self, env_params: PCGRLEnvParams):
         map_shape, act_shape, rf_shape, problem, representation, static_tile_prob, n_freezies, n_agents = (
             env_params.map_shape, env_params.act_shape, env_params.rf_shape, env_params.problem,
             env_params.representation, env_params.static_tile_prob, env_params.n_freezies, env_params.n_agents)
 
-        self.map_shape = map_shape
-        self.act_shape = act_shape
+        self.map_shape = env_params.map_shape
+        self.act_shape = env_params.act_shape
         self.static_tile_prob = np.float32(static_tile_prob)
         queued_frz_map = jnp.zeros(map_shape, dtype=bool)
         has_queued_frz_map = False
@@ -185,14 +187,17 @@ class PCGRLEnv(Environment):
         self.n_agents = n_agents
         self.randomize_map_shape = env_params.randomize_map_shape
         self.empty_start = env_params.empty_start
+        self.pinpoints = env_params.pinpoints
 
         prob_cls = PROB_CLASSES[problem]
-        self.prob: Problem = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics)
+        self.prob: Problem = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics,
+                                      pinpoints=self.pinpoints)
 
         self.tile_enum = self.prob.tile_enum
         self.tile_probs = self.prob.tile_probs
         rng = jax.random.PRNGKey(0)  # Dummy random key
-        env_map = self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, empty_start=self.empty_start)
+        env_map = self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, 
+                                         empty_start=self.empty_start, pinpoints=self.pinpoints)
 
         self.rep: Representation
         self.rep = representation
@@ -201,18 +206,24 @@ class PCGRLEnv(Environment):
                                             tile_enum=self.tile_enum,
                                             act_shape=act_shape,
                                             max_board_scans=env_params.max_board_scans,
+                                            pinpoints=self.pinpoints,
+                                            tile_nums=self.prob.tile_nums,
             )
         elif representation == RepEnum.NCA:
             self.rep = NCARepresentation(env_map=env_map, rf_shape=rf_shape,
                                          tile_enum=self.tile_enum,
                                          act_shape=act_shape,
                                          max_board_scans=env_params.max_board_scans,
+                                        pinpoints=self.pinpoints,
+                                        tile_nums=self.prob.tile_nums,
             )
         elif representation == RepEnum.WIDE:
             self.rep = WideRepresentation(env_map=env_map, rf_shape=rf_shape,
                                           tile_enum=self.tile_enum,
                                           act_shape=act_shape,
                                           max_board_scans=env_params.max_board_scans,
+                                          pinpoints=self.pinpoints,
+                                          tile_nums=self.prob.tile_nums,
             )
         elif representation == RepEnum.TURTLE:
             if n_agents > 1:
@@ -223,16 +234,23 @@ class PCGRLEnv(Environment):
                     map_shape=map_shape,
                     n_agents=n_agents,
                     max_board_scans=env_params.max_board_scans,
+                    pinpoints=self.pinpoints,
+                    tile_nums=self.prob.tile_nums,
                     )
 
             else:
                 self.rep = TurtleRepresentation(env_map=env_map, rf_shape=rf_shape,
                                                 tile_enum=self.tile_enum,
-                                                act_shape=act_shape, map_shape=map_shape)
+                                                act_shape=act_shape, map_shape=map_shape,
+                                                pinpoints=self.pinpoints,
+                                                tile_nums=self.prob.tile_nums,
+                                                )
         elif representation == RepEnum.PLAYER:
             self.rep = PlayerRepresentation(env_map=env_map, rf_shape=rf_shape,
                                             tile_enum=self.tile_enum,
-                                            act_shape=act_shape, map_shape=map_shape)
+                                            act_shape=act_shape, map_shape=map_shape,
+                                            pinpoints=self.pinpoints,
+                                            tile_nums=self.prob.tile_nums,)
         else:
             raise Exception(f'Representation {representation} not implemented')
 
@@ -261,7 +279,7 @@ class PCGRLEnv(Environment):
             queued_state.has_queued_map,
             queued_state.map,
             self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, 
-                                   empty_start=self.empty_start),
+                                   empty_start=self.empty_start, pinpoints=self.pinpoints),
         )
         # frz_map = jax.lax.cond(
         #     self.static_tile_prob is not None or self.n_freezies > 0,
@@ -275,9 +293,16 @@ class PCGRLEnv(Environment):
             queued_state.frz_map,
             gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape),
         )
+        # Always freeze the border (in particular when using it to crop the map to some smaller size with
+        # randomize_map_shape)
         frz_map = frz_map | jnp.where(env_map == Tiles.BORDER, 1, 0)
-        # env_map = jnp.where(frz_map == 1, self.tile_enum.WALL, self.tile_enum.WALL) # FIXME: dumdum Debugging evo
-        env_map = jnp.where(frz_map == 1, self.tile_enum.WALL, env_map)  
+
+        if self.pinpoints:
+            pinpoint_tiles = jnp.array([tile for tile, num in zip(self.tile_enum, self.prob.tile_nums) if num > 0])
+            pinpoint_cells = jnp.isin(env_map, pinpoint_tiles)
+            frz_map = jnp.where(pinpoint_cells, 1, frz_map)
+
+        # env_map = jnp.where(frz_map == 1, self.tile_enum.WALL, env_map)  
 
         # if self.static_tile_prob is not None or self.n_freezies > 0:
         #     frz_map = gen_static_tiles(
@@ -517,7 +542,12 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
         return lvl_img
 
     lvl_img = jax.lax.cond(
-        env.static_tile_prob > 0 or env.n_freezies > 0 or env_state.queued_state.has_queued_frz_map,
+        # env.static_tile_prob > 0 or env.n_freezies > 0 or env_state.queued_state.has_queued_frz_map,
+
+        # The order matters here. If we have concrete_bool, traced_bool, then concrete_bool, there is an issue,
+        # but concrete_bool, concrete_bool, traced_bool is fine. LMAO.
+        env.static_tile_prob > 0 or env.n_freezies > 0 or env.pinpoints or env_state.queued_state.has_queued_frz_map,
+
         lambda lvl_img: render_frozen_tiles(lvl_img),
         lambda lvl_img: lvl_img,
         lvl_img

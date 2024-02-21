@@ -13,7 +13,7 @@ import numpy as np
 
 from config import EvoMapConfig
 from envs.pcgrl_env import PCGRLEnv, PCGRLEnvState
-from envs.probs.problem import get_loss
+from envs.probs.problem import ProblemState, get_loss
 from utils import gymnax_pcgrl_make, init_config_evo_map
 
 
@@ -21,7 +21,7 @@ from utils import gymnax_pcgrl_make, init_config_evo_map
 class EvoMapState:
     maps: chex.Array
     map_losses: chex.Array
-    map_stats: chex.Array
+    map_prob_states: ProblemState
     gen_i: int
     rng: jax.random.PRNGKey
 
@@ -76,7 +76,7 @@ def make_evolve(config: EvoMapConfig):
 
 
         def evolve_step(state: EvoMapState, _):
-            maps, map_losses, map_stats, gen_i, rng = state.maps, state.map_losses, state.map_stats, state.gen_i, state.rng
+            maps, map_losses, map_prob_states, gen_i, rng = state.maps, state.map_losses, state.map_prob_states, state.gen_i, state.rng
 
             rng, _ = jax.random.split(rng)
 
@@ -90,32 +90,35 @@ def make_evolve(config: EvoMapConfig):
             children = jax.vmap(mutate_map, in_axes=(0, 0, None, None, None))(mut_rng, parents, config.mut_rate, env.prob.tile_enum, env.prob.tile_probs)
 
             # Evaluate the maps
-            children_stats = jax.vmap(env.prob.get_curr_stats, in_axes=(0,))(children)
+            children_states = jax.vmap(env.prob.get_curr_stats, in_axes=(0,))(children)
             # Get the loss for each map
             mut_map_losses = jax.vmap(get_loss, in_axes=(0, None, None, None, None))(
-                children_stats.stats, env.prob.stat_weights, env.prob.stat_trgs, env.prob.ctrl_threshes, env.prob.metric_bounds)
+                children_states.stats, env.prob.stat_weights, env.prob.stat_trgs, env.prob.ctrl_threshes, env.prob.metric_bounds)
 
             maps = jnp.concatenate([maps, children])
             map_losses = jnp.concatenate([map_losses, mut_map_losses])
-            map_stats = jax.tree_map(lambda x, y: jnp.concatenate([x, y]), map_stats, children_stats)
+            map_prob_states = jax.tree_map(
+                lambda x, y: jnp.concatenate([x, y]),
+                map_prob_states,
+                children_states)
 
             # Get the top evo_pop_size maps
             top_idxs = jnp.argpartition(map_losses, config.evo_pop_size)[:config.evo_pop_size]
             maps = maps[top_idxs]
             map_losses = map_losses[top_idxs]
-            map_stats = jax.tree_map(lambda x: x[top_idxs], map_stats)
+            map_prob_states = jax.tree_map(lambda x: x[top_idxs], map_prob_states)
 
-            state = EvoMapState(maps, map_losses, map_stats, gen_i + 1, rng)
+            state = EvoMapState(maps, map_losses, map_prob_states, gen_i + 1, rng)
 
             # Log and render conditionally
             if config.callbacks:
-                should_log = (state.gen_i % config.log_freq == 0)
+                should_log = (gen_i % config.log_freq == 0)
                 jax.lax.cond(
                     should_log, 
                     partial(jax.debug.callback, log), 
                     lambda _: None, 
                     state)
-                should_render = (state.gen_i % config.render_freq == 0)
+                should_render = (gen_i % config.render_freq == 0)
                 jax.lax.cond(
                     should_render, 
                     partial(jax.debug.callback, _render), 
@@ -134,8 +137,9 @@ def make_evolve(config: EvoMapConfig):
 
 @partial(jax.jit, static_argnames=("tile_enum",))
 def mutate_map(rng, map, mut_rate, tile_enum, tile_probs):
-    mut_rng, tile_rng = jax.random.split(rng)
+    mut_rng, _ = jax.random.split(rng)
     mut_rate = jax.random.uniform(mut_rng, minval=0.0, maxval=mut_rate, shape=(1,))
+    mut_rng, tile_rng = jax.random.split(rng)
     mut_map = jax.random.bernoulli(mut_rng, mut_rate, map.shape)
     mut_map = jnp.where(mut_map, jax.random.choice(tile_rng, tile_probs, map.shape), map)
     mut_map = mut_map.astype(jnp.int32)
@@ -150,15 +154,14 @@ def log(evo_state: EvoMapState):
 
 def render(evo_state: EvoMapState, env_state: PCGRLEnvState, env: PCGRLEnv,
            config: EvoMapConfig):
-    maps, map_losses, map_stats = (evo_state.maps, evo_state.map_losses,
-                                    evo_state.map_stats)
+    maps, map_prob_states = evo_state.maps, evo_state.map_prob_states
     i = evo_state.gen_i - 1
 
     # Manually batching our single env state to make it compatible with render FIXME
     env_states = jax.tree_util.tree_map(lambda x: jnp.repeat(x[None], maps.shape[0], axis=0), env_state)
     env_states = env_states.replace(env_map=maps)
     env_states = env_states.replace(
-        prob_state=env_states.prob_state.replace(stats=map_stats)
+        prob_state=map_prob_states
     )
     frames = jax.vmap(env.render, in_axes=(0))(env_states)
 

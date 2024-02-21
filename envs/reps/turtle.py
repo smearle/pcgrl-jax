@@ -23,26 +23,25 @@ class TurtleRepresentationState(RepresentationState):
 class TurtleRepresentation(Representation):
     def __init__(self, env_map: chex.Array, rf_shape: Tuple[int, int],
                  tile_enum: Tiles, act_shape: Tuple[int, int], map_shape: Tuple[int, int],
-                 max_board_scans: float = 3.0
+                 max_board_scans: float, pinpoints: bool, tile_nums: Tuple[int],
                  ):
         super().__init__(tile_enum=tile_enum, rf_shape=rf_shape,
-                         act_shape=act_shape)
+                         act_shape=act_shape, pinpoints=pinpoints, tile_nums=tile_nums)
         self.rf_shape = np.array(rf_shape)
         self.rf_off = int(max(np.ceil(self.rf_shape - 1) / 2))
         self.max_steps = np.uint32((env_map.shape[0] * env_map.shape[1]) * 2 * max_board_scans)
         self.num_tiles = len(tile_enum)
-        self.tile_enum = tile_enum
         self.directions = np.array([[0, 0] for _ in range(
             self.num_tiles - 1)] + [[-1, 0], [0, 1], [1, 0], [0, -1]])
-        self.builds = np.array(
-            [tile for tile in tile_enum if tile != tile_enum.BORDER] + [-1] * 4
+        self.builds = jnp.array(
+            [self.editable_tile_enum] + [-1] * 4
         )
         center = jnp.int32((env_map.shape[0] - 1) / 2)
         self.center_position = jnp.array([center, center])
 
     @property
     def tile_action_dim(self):
-        return len(self.tile_enum) - 1 + 4
+        return self.n_editable_tiles + 4
 
     def step(self, env_map: chex.Array, action: chex.Array,
              rep_state: TurtleRepresentationState, step_idx: int):
@@ -81,9 +80,10 @@ class TurtleRepresentation(Representation):
     def reset(self, static_tiles: chex.Array, rng: chex.PRNGKey):
         return TurtleRepresentationState(pos=self.center_position)
 
+    @property
     def action_space(self) -> spaces.Discrete:
         # Cannot build border tiles. Can move in 4 directions.
-        return spaces.Discrete(self.num_tiles - 1 + 4)
+        return spaces.Discrete(self.n_editable_tiles + 4)
 
     get_obs = get_ego_obs
 

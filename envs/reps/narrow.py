@@ -50,17 +50,15 @@ def gen_agent_coords(frz_map: chex.Array, tile_enum: Tiles,
 
 class NarrowRepresentation(Representation):
     def __init__(self, env_map: chex.Array, rf_shape: Tuple[int, int],
-                 act_shape: Tuple[int, int], tile_enum: Tiles, max_board_scans: int
+                 act_shape: Tuple[int, int], tile_enum: Tiles, max_board_scans: int, pinpoints: bool, tile_nums: Tuple[int]
                  ):
         super().__init__(tile_enum=tile_enum, rf_shape=rf_shape,
-                         act_shape=act_shape
-                         )
+                         act_shape=act_shape, pinpoints=pinpoints, tile_nums=tile_nums)
         self.rf_shape = np.array(rf_shape)
         self.rf_off = int(max(np.ceil(self.rf_shape - 1) / 2))
         self.max_steps = np.uint32(np.prod(env_map.shape) * max_board_scans)
         self.num_tiles = len(tile_enum)
-        self.builds = jnp.array(
-            [tile for tile in tile_enum if tile != tile_enum.BORDER])
+        self.builds = jnp.array(self.editable_tile_enum)
 
         # agent_coords, self.n_valid_agent_coords = gen_agent_coords(
         #     env_map, tile_enum, act_shape)
@@ -96,6 +94,6 @@ class NarrowRepresentation(Representation):
     @property
     def action_space(self) -> spaces.Discrete:
         # return spaces.Discrete(len(self.tile_enum) - 1)
-        return spaces.Discrete((len(self.tile_enum)-1))
+        return spaces.Discrete(self.n_editable_tiles)
 
     get_obs = get_ego_obs

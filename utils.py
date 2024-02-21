@@ -41,6 +41,7 @@ def get_exp_dir(config: Config):
             f'act-{"x".join([str(e) for e in config.act_shape])}_' + \
             f'nag-{config.n_agents}_' + \
             ('empty-start_' if config.empty_start else '') + \
+            ('pinpoints_' if config.pinpoints else '') + \
             f'{config.seed}_{config.exp_name}')
     elif config.env_name == 'PlayPCGRL':
         exp_dir = os.path.join(
@@ -203,6 +204,7 @@ def get_env_params_from_config(config: Config):
         change_pct=config.change_pct,
         randomize_map_shape=config.randomize_map_shape,
         empty_start=config.empty_start,
+        pinpoints=config.pinpoints,
     )
     return env_params
 

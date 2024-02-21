@@ -19,10 +19,12 @@ class NCARepresentation(Representation):
     def __init__(self, env_map: chex.Array, rf_shape: Tuple[int, int],
                  act_shape: Tuple[int, int],
                  tile_enum: Tiles,
-                 max_board_scans: int = 3.0
+                 max_board_scans: int,
+                 pinpoints: bool,
+                 tile_nums: Tuple[int],
                  ):
         super().__init__(tile_enum=tile_enum, rf_shape=rf_shape,
-                         act_shape=act_shape)
+                         act_shape=act_shape, pinpoints=pinpoints, tile_nums=tile_nums)
         self.env_map_shape = tuple(np.array(env_map.shape))
         self.max_steps = np.uint32((env_map.shape[0] + env_map.shape[1]) * max_board_scans)
         self.num_tiles = np.uint32(len(tile_enum))

@@ -39,7 +39,9 @@ class BinaryProblem(Problem):
     tile_probs = np.zeros(len(tile_enum))
     tile_probs[BinaryTiles.EMPTY] = 0.5
     tile_probs[BinaryTiles.WALL] = 0.5
-    tile_probs = jnp.array(tile_probs)
+    tile_probs = tuple(tile_probs)
+
+    tile_nums = tuple([0 for _ in range(len(tile_enum))])
 
     stat_weights = np.zeros(len(BinaryMetrics))
     stat_weights[BinaryMetrics.DIAMETER] = 1.0
@@ -55,13 +57,13 @@ class BinaryProblem(Problem):
 
     passable_tiles = jnp.array([BinaryTiles.EMPTY])
 
-    def __init__(self, map_shape, ctrl_metrics):
+    def __init__(self, map_shape, ctrl_metrics, pinpoints):
         self.flood_path_net = FloodPath()
         self.flood_path_net.init_params(map_shape)
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
         self.max_path_len = get_max_path_length(map_shape)
-        super().__init__(map_shape=map_shape, ctrl_metrics=ctrl_metrics)
+        super().__init__(map_shape=map_shape, ctrl_metrics=ctrl_metrics, pinpoints=pinpoints)
 
     def get_metric_bounds(self, map_shape):
         bounds = [None] * len(BinaryMetrics)

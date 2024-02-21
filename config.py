@@ -65,6 +65,10 @@ class Config:
     # To make the task simpler, always start with an empty map
     empty_start: bool = False
 
+    # In problems with tile-types with specified valid numbers, fix/freeze their random placement at the beginning of 
+    # each episode.
+    pinpoints: bool = False
+
 
 @dataclass
 class EvoMapConfig(Config):
@@ -72,8 +76,8 @@ class EvoMapConfig(Config):
     evo_pop_size: int = 100
     n_parents: int = 50
     mut_rate: float = 0.3
-    render_freq: int = 1000
-    log_freq: int = 100
+    render_freq: int = 10_000
+    log_freq: int = 1_000
     callbacks: bool = True
 
 

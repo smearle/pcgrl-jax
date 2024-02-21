@@ -42,12 +42,17 @@ class MazeMetrics(IntEnum):
 class MazeProblem(Problem):
     tile_enum = MazeTiles
 
-    tile_probs = np.zeros(len(tile_enum))
+    tile_probs = [0 for _ in range(len(tile_enum))]
     tile_probs[MazeTiles.EMPTY] = 0.48
     tile_probs[MazeTiles.WALL] = 0.48
     tile_probs[MazeTiles.PLAYER] = 0.02
     tile_probs[MazeTiles.DOOR] = 0.02
-    tile_probs = jnp.array(tile_probs)
+    tile_probs = tuple(tile_probs)
+
+    tile_nums = [0 for _ in range(len(tile_enum))]
+    tile_nums[MazeTiles.PLAYER] = 1
+    tile_nums[MazeTiles.DOOR] = 1
+    tile_nums = tuple(tile_nums)
 
     stat_weights = np.zeros(len(MazeMetrics))
     stat_weights[MazeMetrics.PATH_LENGTH] = 1.0
@@ -67,13 +72,13 @@ class MazeProblem(Problem):
 
     passable_tiles = jnp.array([MazeTiles.EMPTY, MazeTiles.PLAYER, MazeTiles.DOOR])
 
-    def __init__(self, map_shape, ctrl_metrics):
+    def __init__(self, map_shape, ctrl_metrics, pinpoints):
         self.flood_path_net = FloodPath()
         self.flood_path_net.init_params(map_shape)
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
         self.max_path_len = get_max_path_length(map_shape)
-        super().__init__(map_shape, ctrl_metrics)
+        super().__init__(map_shape, ctrl_metrics, pinpoints)
 
     def get_metric_bounds(self, map_shape):
         bounds = [None] * len(MazeMetrics)
@@ -85,7 +90,7 @@ class MazeProblem(Problem):
 
     def get_path_coords(self, env_map: chex.Array, prob_state: MazeState):
         coord1 = jnp.argwhere(env_map == MazeTiles.DOOR, size=1, fill_value=-1)[0]
-        return get_path_coords(prob_state.flood_count, max_path_len=self.max_path_len, coord1=coord1)
+        return (get_path_coords(prob_state.flood_count, max_path_len=self.max_path_len, coord1=coord1),)
 
     def get_curr_stats(self, env_map: chex.Array):
         n_players = jnp.sum(env_map == MazeTiles.PLAYER)

@@ -17,12 +17,18 @@ class RepresentationState:
 
 
 class Representation(ABC):
-    pre_tile_action_dim: int
     def __init__(self, tile_enum: Tiles, rf_shape: Tuple[int, int],
-                 act_shape: Tuple[int, int]):
+                 act_shape: Tuple[int, int], pinpoints: bool, tile_nums: Tuple[int]):
         self.tile_enum = tile_enum
         self.act_shape = act_shape
         self.max_steps = None
+        self.pinpoints = pinpoints
+        self.tile_nums = tile_nums
+        if self.pinpoints:
+            self.editable_tile_enum = [t for t, num in zip(self.tile_enum, self.tile_nums) if num == 0 and t != self.tile_enum.BORDER]
+        else:
+            self.editable_tile_enum = self.tile_enum
+        self.n_editable_tiles = len(self.editable_tile_enum)
 
     def observation_shape(self):
         # Always observe static tile channel
@@ -48,7 +54,7 @@ class Representation(ABC):
     @property
     def action_space(self) -> spaces.Discrete:
         # return spaces.Discrete(len(self.tile_enum) - 1)
-        return spaces.Discrete((len(self.tile_enum)-1)
+        return spaces.Discrete(self.n_editable_tiles
                                * math.prod(self.act_shape))
 
     def get_obs(self) -> chex.Array:
@@ -56,7 +62,7 @@ class Representation(ABC):
 
     @property
     def tile_action_dim(self):
-        return len(self.tile_enum) - 1
+        return self.n_editable_tiles
 
 
 def get_ego_obs(self, env_map: chex.Array, static_map: chex.Array,
