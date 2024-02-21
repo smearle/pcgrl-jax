@@ -68,7 +68,6 @@
 #         'seed': [0, 1, 2],
 #         'n_envs': [600],
 #         'max_board_scans': [3.0],
-#         # 'total_timesteps': [200_000_000],
 #         'total_timesteps': [1_000_000_000],
 #     },
 # ]
@@ -81,7 +80,6 @@
 #         'seed': [0, 1, 2],
 #         'n_envs': [600],
 #         'max_board_scans': [3.0],
-#         # 'total_timesteps': [200_000_000],
 #         'total_timesteps': [1_000_000_000],
 #     },
 # ]
@@ -91,8 +89,8 @@
 #         'NAME': 'cp_binary_seqnca',
 #         'model': ['seqnca'],
 #         'change_pct': [0.2, 0.4, 0.6, 0.8, 1.0],
-#         'seed': [3, 4, 5],
-#         # 'seed': [0, 1, 2],
+#         # 'seed': [3, 4, 5],
+#         'seed': [0, 1, 2],
 #         'n_envs': [600],
 #         'max_board_scans': [3.0],
 #         # 'total_timesteps': [200_000_000],
@@ -104,7 +102,7 @@
 #     {
 #         'NAME': 'binary_conv2_rf',
 #         'model': ['conv2'],
-#         'arf_size': [5, 10, 15, 20, 25, 31],
+#         'obs_size': [5, 10, 15, 20, 25, 31],
 #         'seed': [0, 1, 2],
 #         'n_envs': [600],
 #         'max_board_scans': [5.0],
@@ -126,10 +124,11 @@
 
 # hypers = [
 #     {
+#         'NAME': 'arf_binary',
 #         'arf_size': [3, 5, 8, 16, 31],
 #         'change_pct': [-1.0],
-#         # 'seed': [0, 1, 2],
-#         'seed': [3, 4, 5],
+#         'seed': [0, 1, 2],
+#         # 'seed': [3, 4, 5],
 #         'n_envs': [600],
 #         'max_board_scans': [4],
 #         'total_timesteps': [200_000_000],
@@ -214,11 +213,26 @@
 #         'NAME': 'obss_cp_dungeon_conv2_ctrl_path',
 #         'problem': ['dungeon'],
 #         'ctrl_metrics': [['path_length']],
-#         'obs_size': [16, 31],
+#         # 'obs_size': [16, 31],
+#         'obs_size': [31],
 #         'change_pct': [0.6, 0.8, 1.0],
 #         'model': ['conv2'],
 #         'seed': [0, 1, 2],
 #         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
+
+# hypers = [
+#     {
+#         'NAME': 'wide_nca_binary_cp',
+#         'model': ['nca'],
+#         'representation': ['wide'],
+#         'problem': ['binary'],
+#         'change_pct': [0.6, 0.8, 1.0, -1],
+#         'seed': [0, 1, 2],
+#         'n_envs': [100],
 #         'max_board_scans': [5],
 #         'total_timesteps': [1_000_000_000],
 #     },
@@ -231,8 +245,8 @@
 #         'arf_size': [3, 5, 8, 16, 31],
 #         # 'arf_size': [8],
 #         'change_pct': [-1.0],
-#         'seed': [3, 4, 5],
-#         # 'seed': [0, 1, 2],
+#         # 'seed': [3, 4, 5],
+#         'seed': [0, 1, 2],
 #         'n_envs': [200],
 #         'max_board_scans': [5],
 #         'total_timesteps': [1_000_000_000],
@@ -282,8 +296,8 @@
 #         'arf_size': [3, 5, 8, 16, 31],
 #         # 'arf_size': [31],
 #         'change_pct': [-1.0],
-#         # 'seed': [0, 1, 2],
-#         'seed': [3, 4, 5],
+#         'seed': [0, 1, 2],
+#         # 'seed': [3, 4, 5],
 #         'n_envs': [200],
 #         'max_board_scans': [5],
 #         # 'eval_map_width': [16, 18, 20],
@@ -338,5 +352,23 @@
 #         'total_timesteps': [1_000_000_000],
 #     },
 # ]
+
+hypers = [
+    {
+        'NAME': 'diffshape_pinpoint_maze_emptystart',
+        'model': ['conv2'],
+        'problem': ['maze'],
+        'map_width': [16],
+        'obs_size': [8, 16, 24, -1],
+        'change_pct': [-1.0],
+        'seed': [0, 1, 2],
+        'n_envs': [600],
+        'randomize_map_shape': [True, False],
+        'empty_start': [True],
+        'pinpoints': [True, False],
+        'max_board_scans': [5],
+        'total_timesteps': [1_000_000_000],
+    },
+]
 
 ########################
