@@ -295,7 +295,7 @@ class PCGRLEnv(Environment):
         )
         # Always freeze the border (in particular when using it to crop the map to some smaller size with
         # randomize_map_shape)
-        frz_map = frz_map | jnp.where(env_map == Tiles.BORDER, 1, 0)
+        frz_map = frz_map | jnp.where(env_map == Tiles.BORDER, True, False)
 
         if self.pinpoints:
             pinpoint_tiles = jnp.array([tile for tile, num in zip(self.tile_enum, self.prob.tile_nums) if num > 0])
@@ -317,7 +317,7 @@ class PCGRLEnv(Environment):
         _, prob_state = self.prob.reset(env_map=env_map, rng=rng, queued_state=queued_state)
 
         obs = self.get_obs(
-            env_map=env_map, static_map=frz_map, rep_state=rep_state, prob_state=prob_state)
+            env_map=env_map, frz_map=frz_map, rep_state=rep_state, prob_state=prob_state)
 
         env_state = PCGRLEnvState(env_map=env_map, static_map=frz_map,
                                   rep_state=rep_state, prob_state=prob_state,
@@ -325,8 +325,8 @@ class PCGRLEnv(Environment):
 
         return obs, env_state
 
-    def get_obs(self, env_map, static_map, rep_state, prob_state):
-        rep_obs = self.rep.get_obs(env_map, static_map, rep_state)
+    def get_obs(self, env_map, frz_map, rep_state, prob_state):
+        rep_obs = self.rep.get_obs(env_map, frz_map, rep_state)
         prob_obs = self.prob.observe_ctrls(prob_state)
         obs = PCGRLObs(map_obs=rep_obs, flat_obs=prob_obs)
         return obs
@@ -353,7 +353,7 @@ class PCGRLEnv(Environment):
             env_map,
         )
         obs = self.get_obs(
-            env_map=env_map, static_map=env_state.static_map,
+            env_map=env_map, frz_map=env_state.static_map,
             rep_state=rep_state, prob_state=prob_state)
         done = self.is_terminal(env_state, env_params)
         step_idx = env_state.step_idx + 1

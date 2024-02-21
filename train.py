@@ -579,11 +579,17 @@ def init_checkpointer(config: Config):
 
         # HACK
         if isinstance(runner_state.env_state.env_state.queued_state, OldQueuedState):
+            dummy_queued_state = gen_dummy_queued_state(env)
+
+            # Now add leading dimension with sizeto match the shape of the original queued_state
+            dummy_queued_state = jax.tree_map(lambda x: jnp.array(x, dtype=bool) if isinstance(x, bool) else x, dummy_queued_state)
+            dummy_queued_state = jax.tree_map(lambda x: jnp.repeat(x[None], config.n_envs, axis=0), dummy_queued_state)
+            
             runner_state = restored_ckpt['runner_state']
             runner_state = runner_state.replace(
                 env_state=runner_state.env_state.replace(
                     env_state=runner_state.env_state.env_state.replace(
-                        queued_state=gen_dummy_queued_state(env)
+                        queued_state=dummy_queued_state,
                     )
                 )
             )

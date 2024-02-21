@@ -117,14 +117,13 @@
 #         'change_pct': [-1.0],
 #         'seed': [0, 1, 2],
 #         'n_envs': [600],
-#         # 'total_timesteps': [200_000_000],
 #         'total_timesteps': [1_000_000_000],
 #     }
 # ]
 
 # hypers = [
 #     {
-#         'NAME': 'arf_binary',
+#         'NAME': 'arf_conv_binary',
 #         'arf_size': [3, 5, 8, 16, 31],
 #         'change_pct': [-1.0],
 #         'seed': [0, 1, 2],
@@ -243,7 +242,6 @@
 #         'NAME': 'arf_seqnca_binary',
 #         'model': ['seqnca'],
 #         'arf_size': [3, 5, 8, 16, 31],
-#         # 'arf_size': [8],
 #         'change_pct': [-1.0],
 #         # 'seed': [3, 4, 5],
 #         'seed': [0, 1, 2],
@@ -276,7 +274,7 @@
 #         'NAME': 'act_shape_conv2_dungeon',
 #         'model': ['conv2'],
 #         'problem': ['dungeon'],
-#         'act_shape': [(2,2), (3,3), (4,4), (5,5), (6,6)],
+#         'act_shape': [(1, 1), (2,2), (3,3), (4,4), (5,5), (6,6)],
 #         'arf_size': [31],
 #         'change_pct': [-1.0],
 #         # 'seed': [0, 1, 2],
