@@ -220,7 +220,7 @@ class Dungeon2Problem(Problem):
             return p_region_idx != t_region_idx
 
         treasure_in_room = jax.lax.cond(
-            jnp.logical_and(n_treasures == 1, n_regions > 1),
+            jnp.logical_and(n_treasures == 1, jnp.logical_and(n_regions > 1, n_players == 1)),
             lambda: is_treasure_in_room(),
             lambda: False,
         )

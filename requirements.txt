@@ -15,6 +15,7 @@ pandas
 hydra-core
 submitit
 imageio
+tabulate==0.9.0
 tensorboard
 tensorboardX
 jinja2

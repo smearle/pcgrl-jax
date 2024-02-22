@@ -1,0 +1,23 @@
+NAME: arf_seqnca_dungeon
+arf_size:
+- 3
+- 5
+- 8
+- 16
+- -1
+change_pct:
+- -1.0
+max_board_scans:
+- 5
+model:
+- seqnca
+n_envs:
+- 200
+problem:
+- dungeon
+seed:
+- 0
+- 1
+- 2
+total_timesteps:
+- 1000000000

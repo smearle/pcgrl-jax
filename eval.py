@@ -26,6 +26,7 @@ class EvalData:
     mean_ep_reward: chex.Array
     mean_min_ep_loss: chex.Array
     min_min_ep_loss: chex.Array
+    n_parameters: int
 
 @hydra.main(version_base=None, config_path='./', config_name='eval_pcgrl')
 def main_eval(config: EvalConfig):
@@ -42,8 +43,14 @@ def main_eval(config: EvalConfig):
     env = LossLogWrapper(env)
     env.prob.init_graphics()
     network = init_network(env, env_params, config)
-
     rng = jax.random.PRNGKey(42)
+
+    init_x = env.gen_dummy_obs(env_params)
+    # init_x = env.observation_space(env_params).sample(_rng)[None]
+    network_params = network.init(rng, init_x)
+    # model_summary = network.subnet.tabulate(rng, init_x.map_obs, init_x.flat_obs)
+    n_parameters = sum(np.prod(p.shape) for p in jax.tree_leaves(network_params) if isinstance(p, jnp.ndarray))
+
     reset_rng = jax.random.split(rng, config.n_eval_envs)
 
     def eval(env_params):
@@ -104,6 +111,7 @@ def main_eval(config: EvalConfig):
             mean_ep_reward=mean_ep_rew,
             mean_min_ep_loss=mean_min_ep_loss,
             min_min_ep_loss=min_min_ep_loss,
+            n_parameters=n_parameters,
         )
 
         with open(json_path, 'w') as f:

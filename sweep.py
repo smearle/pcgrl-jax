@@ -6,6 +6,7 @@ import submitit
 
 from config import EnjoyConfig, EvalConfig, SweepConfig, TrainConfig
 from config_sweeps import hypers
+from utils import load_sweep_hypers
 from enjoy import main_enjoy
 from eval import main_eval
 from eval_change_pct import main_eval_cp
@@ -64,9 +65,6 @@ def get_grid_cfgs(default_config, kwargs):
                     if nsc.model == 'conv2' and nsc.arf_size != nsc.vrf_size:
                         print(f"arf_size {nsc.arf_size} and vrf_size {nsc.vrf_size} must be equal for conv2 model, skipping this config.")
                         continue
-                    if nsc.model == 'conv' and nsc.arf_size != nsc.vrf_size:
-                        print(f"arf_size {nsc.arf_size} and vrf_size {nsc.vrf_size} must be equal for conv model, skipping this config.")
-                        continue
 
                     new_subconfigs.append(nsc)
             subconfigs = new_subconfigs
@@ -83,6 +81,14 @@ def seq_main(main_fn, sweep_configs):
 
 @hydra.main(version_base=None, config_path='./', config_name='batch_pcgrl')
 def sweep_main(cfg: SweepConfig):
+    cfg.slurm = False if cfg.mode == 'plot' else cfg.slurm
+
+    if cfg.name is not None:
+        _hypers = [load_sweep_hypers(cfg)]
+        sweep_name = cfg.name
+    else:
+        _hypers = hypers
+        sweep_name = _hypers[0]['NAME']
 
     # This is a hack. Would mean that we can't overwrite trial-specific settings
     # via hydra yamls or command line arguments...
@@ -111,7 +117,7 @@ def sweep_main(cfg: SweepConfig):
     for k, v in dict(cfg).items():
         setattr(default_config, k, v)
 
-    sweep_configs = get_sweep_cfgs(default_config, hypers)
+    sweep_configs = get_sweep_cfgs(default_config, _hypers)
 
     # sweep_configs = [(sc,) for sc in sweep_configs]
 
@@ -121,7 +127,7 @@ def sweep_main(cfg: SweepConfig):
         if cfg.mode == 'enjoy':
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
-                    job_name=f"{hypers[0]['NAME']}_enjoy",
+                    job_name=f"{sweep_name}_enjoy",
                     mem_gb=30,
                     tasks_per_node=1,
                     cpus_per_task=1,
@@ -134,7 +140,7 @@ def sweep_main(cfg: SweepConfig):
         elif cfg.mode.startswith('eval'):
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
-                    slurm_job_name=f"eval_{hypers[0]['NAME']}",
+                    slurm_job_name=f"eval_{sweep_name}",
                     mem_gb=30,
                     tasks_per_node=1,
                     cpus_per_task=1,
@@ -149,7 +155,7 @@ def sweep_main(cfg: SweepConfig):
         elif cfg.mode == 'train':
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
-                    job_name=f"{hypers[0]['NAME']}_train",
+                    job_name=f"{sweep_name}_train",
                     mem_gb=30,
                     tasks_per_node=1,
                     cpus_per_task=1,

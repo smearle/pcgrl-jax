@@ -1,10 +1,12 @@
+import json
 import os
 
 import gymnax
 import jax
 import numpy as np
+import yaml
 
-from config import Config, EvoMapConfig, TrainConfig
+from config import Config, EvoMapConfig, SweepConfig, TrainConfig
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
@@ -236,3 +238,19 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
         env = Candy(env_params)
 
     return env, env_params
+
+
+def load_sweep_hypers(cfg: SweepConfig):
+    conf_sweeps_dir = os.path.join('conf', 'sweeps')
+    sweep_conf_path_yaml = os.path.join(conf_sweeps_dir, f'{cfg.name}.yaml')
+    sweep_conf_path = sweep_conf_path_yaml
+    # sweep_conf_path_json = os.path.join(conf_sweeps_dir, f'{cfg.name}.json')
+    if os.path.exists(sweep_conf_path_yaml):
+        grid_hypers = yaml.load(open(sweep_conf_path), Loader=yaml.FullLoader)
+    # if os.path.exists(sweep_conf_path_json):
+    #     sweep_conf_path = sweep_conf_path_json
+    #     grid_hypers = json.load(open(sweep_conf_path))
+    else:
+        raise FileNotFoundError(f"Could not find sweep config file {sweep_conf_path}")
+    return grid_hypers
+

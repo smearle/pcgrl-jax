@@ -2,6 +2,7 @@ import json
 import os
 
 import hydra
+from matplotlib import pyplot as plt
 import pandas as pd
 
 from utils import get_exp_dir, init_config
@@ -33,6 +34,8 @@ def main(cfg):
     print(f"Saving stats to {stats_path}")
     with open(stats_path, "w") as f:
         json.dump(stats, f, indent=4)
+
+    plt.close()
 
 if __name__ == "__main__":
     import sched, time

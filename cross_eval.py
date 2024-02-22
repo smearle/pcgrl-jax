@@ -7,40 +7,66 @@ import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import yaml
 
 from config import EvalConfig, SweepConfig, TrainConfig
 from eval_change_pct import EvalData, get_change_pcts
 from sweep import get_grid_cfgs, hypers
-from utils import init_config
+from utils import init_config, load_sweep_hypers
 
 
 CROSS_EVAL_DIR = 'cross_eval'
 
 
-def cross_eval_main():
-    for grid_hypers in hypers:
-        default_config = SweepConfig()
-        sweep_configs = get_grid_cfgs(default_config, grid_hypers)
-        sweep_configs = [init_config(sc) for sc in sweep_configs]
+@hydra.main(version_base=None, config_path='./', config_name='batch_pcgrl')
+def cross_eval_main(cfg: SweepConfig):
+    conf_sweeps_dir = os.path.join('conf', 'sweeps')
+    sweep_conf_path_json = os.path.join(conf_sweeps_dir, f'{cfg.name}.json')
+    sweep_conf_json_exists = os.path.exists(sweep_conf_path_json)
 
-        # FIXME: This part is messy, we have to assume we ran the eval with the 
-        #  default params as defined in the class below. We should probably save
-        #  the eval config in the eval directory.
-        eval_config = EvalConfig()
+    if cfg.name is not None and sweep_conf_json_exists:
+        _hypers = [load_sweep_hypers(cfg)]
+    else:
+        _hypers = hypers
 
-        name = grid_hypers.pop('NAME') if 'NAME' in grid_hypers else 'default'
-        if 'eval_map_width' in grid_hypers:      # if we are sweeping over eval_map_width
-            cross_eval_diff_size(name=name, sweep_configs=sweep_configs,
-                          eval_config=eval_config, hypers=grid_hypers)
-        else:
-            cross_eval_misc(name=name, sweep_configs=sweep_configs,
-                            eval_config=eval_config, hypers=grid_hypers)
-            cross_eval_basic(name=name, sweep_configs=sweep_configs,
-                            eval_config=eval_config, hypers=grid_hypers)
-            
-            if name.startswith('cp_'):
-                cross_eval_cp(sweep_name=name, sweep_configs=sweep_configs,
-                            eval_config=eval_config)
+    for grid_hypers in _hypers:
+        if not sweep_conf_json_exists:
+            conf_sweeps_dir = os.path.join('conf', 'sweeps')
+            name = grid_hypers['NAME']
+            os.makedirs(conf_sweeps_dir, exist_ok=True)
+            with open(os.path.join(conf_sweeps_dir, f'{name}.yaml'), 'w') as f:
+                f.write(yaml.dump(grid_hypers))
+            # with open(os.path.join(conf_sweeps_dir, f'{name}.json'), 'w') as f:
+            #     f.write(json.dumps(grid_hypers, indent=4))
+        sweep_grid(cfg, grid_hypers)
+
+
+def sweep_grid(cfg, grid_hypers):
+    default_cfg = TrainConfig()
+    sweep_configs = get_grid_cfgs(default_cfg, grid_hypers)
+    sweep_configs = [init_config(sc) for sc in sweep_configs]
+
+    # FIXME: This part is messy, we have to assume we ran the eval with the 
+    #  default params as defined in the class below. We should probably save
+    #  the eval config in the eval directory.
+    eval_config = EvalConfig()
+
+    name = grid_hypers.pop('NAME') if 'NAME' in grid_hypers else 'default'
+
+    # Save the eval config to a yaml at `conf/sweeps/{name}.yaml`        
+
+    if 'eval_map_width' in grid_hypers:      # if we are sweeping over eval_map_width
+        cross_eval_diff_size(name=name, sweep_configs=sweep_configs,
+                        eval_config=eval_config, hypers=grid_hypers)
+    else:
+        cross_eval_misc(name=name, sweep_configs=sweep_configs,
+                        eval_config=eval_config, hypers=grid_hypers)
+        cross_eval_basic(name=name, sweep_configs=sweep_configs,
+                        eval_config=eval_config, hypers=grid_hypers)
+        
+        if name.startswith('cp_'):
+            cross_eval_cp(sweep_name=name, sweep_configs=sweep_configs,
+                        eval_config=eval_config)
 
 
 # Function to bold the maximum value in a column for LaTeX
@@ -60,11 +86,11 @@ def format_num(s):
     
     return col
 
+# Function to replace underscores with spaces in a string
+def replace_underscores(s):
+    return s.replace('_', ' ')
 
 def clean_df_strings(df):
-    # Function to replace underscores with spaces in a string
-    def replace_underscores(s):
-        return s.replace('_', ' ')
 
     # Replace underscores in index names
     if df.index.names:
@@ -104,33 +130,33 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     basic_stats_df = pd.DataFrame(row_vals, index=row_index)
     
     # Save the dataframe to a csv
-    os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
-    basic_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_basic_stats.csv")) 
+    # os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
+    # basic_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR, name,
+    #                                     "basic_stats.csv")) 
 
     # Save to markdown
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats.md"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, "basic_stats.md"), 'w') as f:
         f.write(basic_stats_df.to_markdown())
 
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats.tex"), 'w') as f:
-        f.write(basic_stats_df.to_latex())
+    # with open(os.path.join(CROSS_EVAL_DIR, name, "basic_stats.tex"), 'w') as f:
+    #     f.write(basic_stats_df.to_latex())
 
     # Take averages of stats across seeds, keeping the original row indices
     group_row_indices = [col for col in basic_stats_df.index.names if col != 'seed']
     basic_stats_mean_df = basic_stats_df.groupby(group_row_indices).mean()
 
     # Save the dataframe to a csv
-    basic_stats_mean_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_basic_stats_mean.csv"))
+    # basic_stats_mean_df.to_csv(os.path.join(CROSS_EVAL_DIR, name,
+    #                                     "basic_stats_mean.csv"))
     
     # Save to markdown
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats_mean.md"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, "basic_stats_mean.md"), 'w') as f:
         f.write(basic_stats_mean_df.to_markdown())
     
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats_mean.tex"), 'w') as f:
-        f.write(basic_stats_mean_df.to_latex())
+    # with open(os.path.join(CROSS_EVAL_DIR, name, "basic_stats_mean.tex"), 'w') as f:
+    #     f.write(basic_stats_mean_df.to_latex())
 
     # Now, remove all row indices that have the same value across all rows
     levels_to_drop = \
@@ -140,12 +166,16 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     # Drop these rows
     basic_stats_concise_df = basic_stats_mean_df.droplevel(levels_to_drop)
 
+    # Drop the column names `n_parameters`
+    if 'n_parameters' in basic_stats_concise_df.columns:
+        basic_stats_concise_df = basic_stats_concise_df.drop(columns='n_parameters')
+
     # Save the dataframe to a csv
-    basic_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_basic_stats_concise.csv"))
+    # basic_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
+    #                                     name, "basic_stats_concise.csv"))
 
     # Save to markdown
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats_concise.md"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, "basic_stats_concise.md"), 'w') as f:
         f.write(basic_stats_concise_df.to_markdown())
 
     basic_stats_concise_df = clean_df_strings(basic_stats_concise_df)
@@ -154,7 +184,7 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     styled_basic_stats_concise_df = basic_stats_concise_df.apply(format_num)
 
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats_concise.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, f"{name}_basic_stats_concise.tex"), 'w') as f:
         f.write(styled_basic_stats_concise_df.to_latex())
 
 
@@ -201,44 +231,47 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
 
     # Save the dataframe to a csv
     os.makedirs(os.path.join(CROSS_EVAL_DIR, name), exist_ok=True)
-    misc_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR, name,
-                                        "misc_stats.csv")) 
+    # misc_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR, name,
+    #                                     "misc_stats.csv")) 
 
     # Save to markdown
     with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats.md"), 'w') as f:
         f.write(misc_stats_df.to_markdown())
 
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats.tex"), 'w') as f:
-        f.write(misc_stats_df.to_latex())
+    # with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats.tex"), 'w') as f:
+    #     f.write(misc_stats_df.to_latex())
 
     # Take averages of stats across seeds, keeping the original row indices
     group_row_indices = [col for col in misc_stats_df.index.names if col != 'seed']
     misc_stats_mean_df = misc_stats_df.groupby(group_row_indices).mean()
 
     # Save the dataframe to a csv
-    misc_stats_mean_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        name, "misc_stats_mean.csv"))
+    # misc_stats_mean_df.to_csv(os.path.join(CROSS_EVAL_DIR,
+    #                                     name, "misc_stats_mean.csv"))
     
     # Save to markdown
     with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats_mean.md"), 'w') as f:
         f.write(misc_stats_mean_df.to_markdown())
     
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats_mean.tex"), 'w') as f:
-        f.write(misc_stats_mean_df.to_latex())
+    # with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats_mean.tex"), 'w') as f:
+    #     f.write(misc_stats_mean_df.to_latex())
 
     # Now, remove all row indices that have the same value across all rows
     levels_to_drop = \
         [level for level in misc_stats_mean_df.index.names if 
          misc_stats_mean_df.index.get_level_values(level).nunique() == 1]
+    levels_to_keep = \
+        [level for level in misc_stats_mean_df.index.names if
+            misc_stats_mean_df.index.get_level_values(level).nunique() > 1]
     
     # Drop these rows
     misc_stats_concise_df = misc_stats_mean_df.droplevel(levels_to_drop)
 
     # Save the dataframe to a csv
-    misc_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        name, "misc_stats_concise.csv"))
+    # misc_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
+    #                                     name, "misc_stats_concise.csv"))
 
     # Save to markdown
     with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats_concise.md"), 'w') as f:
@@ -254,17 +287,20 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
         f.write(styled_misc_stats_concise_df.to_latex())
 
 
-    # Instead of padding, interpolate the episode returns
     def interpolate_returns(ep_returns, timesteps, all_timesteps):
-        # Create a Series with the index set to the timesteps of the ep_returns
-
-        # Wherever there are duplicate `timesteps` values, take the average of the corresponding `ep_returns` values
-        ep_returns = ep_returns.groupby(timesteps).mean()
+        # Group by timesteps and take the mean for duplicate values
+        ep_returns = pd.Series(ep_returns).groupby(timesteps).mean()
         timesteps = np.unique(timesteps)
-
+        
+        # Create a Series with the index set to the unique timesteps of the ep_returns
         indexed_returns = pd.Series(ep_returns.values, index=timesteps)
-        # Reindex the series to the full range of timesteps, interpolating missing values
-        interpolated_returns = indexed_returns.reindex(all_timesteps).interpolate(method='linear', limit_direction='forward', axis=0)
+        
+        # Reindex the series to include all timesteps, introducing NaNs for missing values
+        indexed_returns = indexed_returns.reindex(all_timesteps)
+        
+        # Interpolate missing values, ensuring forward fill to handle right edge
+        interpolated_returns = indexed_returns.interpolate(method='linear', limit_direction='backward', axis=0)
+        
         return interpolated_returns
 
     all_timesteps = np.sort(np.unique(np.concatenate(all_timesteps)))
@@ -294,7 +330,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     ax.set_xlabel('Timesteps')
     ax.set_ylabel('Return')
     ax.legend()
-    plt.savefig(os.path.join(CROSS_EVAL_DIR, name, "metric_curves.png"))
+    plt.savefig(os.path.join(CROSS_EVAL_DIR, name, f"metric_curves.png"))
 
     fig, ax = plt.subplots()
     for i, row in metric_curves_mean.iterrows():
@@ -305,8 +341,9 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     # Can manually set these bounds to tweak the visualization
     ax.set_ylim(0, 1.1 * metric_curves_mean.max().max())
 
-    ax.legend()
-    plt.savefig(os.path.join(CROSS_EVAL_DIR, name, "metric_curves_mean.png"))
+    legend_title = ', '.join(levels_to_keep).replace('_', ' ')
+    ax.legend(title=legend_title)
+    plt.savefig(os.path.join(CROSS_EVAL_DIR, name, f"{name}_metric_curves_mean.png"))
 
 
 def cross_eval_cp(sweep_name: str, sweep_configs: Iterable[SweepConfig],
@@ -345,12 +382,12 @@ def cross_eval_cp(sweep_name: str, sweep_configs: Iterable[SweepConfig],
     fig, ax = plt.subplots()
     im = ax.imshow(heatmap)
     ax.set_xticks(np.arange(len(change_pcts_eval)))
-    x_labels = [f'{cp:.2f}' for cp in change_pcts_eval]
+    x_labels = [f'{cp:.1f}' for cp in change_pcts_eval]
     if x_labels[-1] == -1:
         x_labels[-1] = 'Unlimited'
     ax.set_xticklabels(x_labels)
     ax.set_yticks(np.arange(len(change_pcts_train)))
-    y_labels = [f'{cp:.2f}' for cp in change_pcts_train]
+    y_labels = [f'{cp:.1f}' for cp in change_pcts_train]
     if y_labels[-1] == -1:
         y_labels[-1] = 'Unlimited'
     ax.set_yticklabels(y_labels)
@@ -358,7 +395,7 @@ def cross_eval_cp(sweep_name: str, sweep_configs: Iterable[SweepConfig],
     ax.set_ylabel('Train Change Percentage')
     fig.colorbar(im)
     plt.savefig(os.path.join(CROSS_EVAL_DIR, sweep_name,
-                             "cp_heatmap.png"))
+                             f"{sweep_name}_cp_heatmap.png"))
 
 
 def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],

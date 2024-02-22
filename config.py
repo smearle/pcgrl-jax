@@ -86,7 +86,7 @@ class TrainConfig(Config):
     overwrite: bool = False
 
     # Save a checkpoint after (at least) this many timesteps
-    ckpt_freq: int = int(1e6)
+    ckpt_freq: int = int(1e7)
     # Render after this many update steps
     render_freq: int = 1000
     n_render_eps: int = 3
@@ -135,6 +135,7 @@ class ProfileEnvConfig(Config):
 
 @dataclass
 class SweepConfig(TrainConfig, EnjoyConfig, EvalConfig):
+    name: Optional[str] = None
     mode: str = 'train'
     slurm: bool = True
 

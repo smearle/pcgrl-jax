@@ -1,0 +1,41 @@
+NAME: act_shape_seqnca_dungeon
+act_shape:
+- !!python/tuple
+  - 1
+  - 1
+- !!python/tuple
+  - 2
+  - 2
+- !!python/tuple
+  - 3
+  - 3
+- !!python/tuple
+  - 4
+  - 4
+- !!python/tuple
+  - 5
+  - 5
+- !!python/tuple
+  - 6
+  - 6
+arf_size:
+- -1
+change_pct:
+- -1.0
+max_board_scans:
+- 5
+model:
+- seqnca
+n_envs:
+- 200
+problem:
+- dungeon
+seed:
+- 0
+- 1
+- 2
+- 3
+- 4
+- 5
+total_timesteps:
+- 1000000000
