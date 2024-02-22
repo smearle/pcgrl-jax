@@ -108,6 +108,10 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     basic_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR,
                                         f"{name}_basic_stats.csv")) 
 
+    # Save to markdown
+    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats.md"), 'w') as f:
+        f.write(basic_stats_df.to_markdown())
+
     # Save the dataframe as a latex table
     with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats.tex"), 'w') as f:
         f.write(basic_stats_df.to_latex())
@@ -119,6 +123,10 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     # Save the dataframe to a csv
     basic_stats_mean_df.to_csv(os.path.join(CROSS_EVAL_DIR,
                                         f"{name}_basic_stats_mean.csv"))
+    
+    # Save to markdown
+    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats_mean.md"), 'w') as f:
+        f.write(basic_stats_mean_df.to_markdown())
     
     # Save the dataframe as a latex table
     with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats_mean.tex"), 'w') as f:
@@ -135,6 +143,10 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     # Save the dataframe to a csv
     basic_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
                                         f"{name}_basic_stats_concise.csv"))
+
+    # Save to markdown
+    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats_concise.md"), 'w') as f:
+        f.write(basic_stats_concise_df.to_markdown())
 
     basic_stats_concise_df = clean_df_strings(basic_stats_concise_df)
 
@@ -188,12 +200,16 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     misc_stats_df = pd.DataFrame(row_vals, index=row_index)
 
     # Save the dataframe to a csv
-    os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
-    misc_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_basic_stats.csv")) 
+    os.makedirs(os.path.join(CROSS_EVAL_DIR, name), exist_ok=True)
+    misc_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR, name,
+                                        "misc_stats.csv")) 
+
+    # Save to markdown
+    with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats.md"), 'w') as f:
+        f.write(misc_stats_df.to_markdown())
 
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats.tex"), 'w') as f:
         f.write(misc_stats_df.to_latex())
 
     # Take averages of stats across seeds, keeping the original row indices
@@ -202,10 +218,14 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
 
     # Save the dataframe to a csv
     misc_stats_mean_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_basic_stats_mean.csv"))
+                                        name, "misc_stats_mean.csv"))
+    
+    # Save to markdown
+    with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats_mean.md"), 'w') as f:
+        f.write(misc_stats_mean_df.to_markdown())
     
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats_mean.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats_mean.tex"), 'w') as f:
         f.write(misc_stats_mean_df.to_latex())
 
     # Now, remove all row indices that have the same value across all rows
@@ -218,7 +238,11 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
 
     # Save the dataframe to a csv
     misc_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_basic_stats_concise.csv"))
+                                        name, "misc_stats_concise.csv"))
+
+    # Save to markdown
+    with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats_concise.md"), 'w') as f:
+        f.write(misc_stats_concise_df.to_markdown())
 
     misc_stats_concise_df = clean_df_strings(misc_stats_concise_df)
 
@@ -226,7 +250,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     styled_misc_stats_concise_df = misc_stats_concise_df.apply(format_num)
 
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_basic_stats_concise.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, "misc_stats_concise.tex"), 'w') as f:
         f.write(styled_misc_stats_concise_df.to_latex())
 
 
@@ -270,7 +294,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     ax.set_xlabel('Timesteps')
     ax.set_ylabel('Return')
     ax.legend()
-    plt.savefig(os.path.join(CROSS_EVAL_DIR, f"{name}_metric_curves.png"))
+    plt.savefig(os.path.join(CROSS_EVAL_DIR, name, "metric_curves.png"))
 
     fig, ax = plt.subplots()
     for i, row in metric_curves_mean.iterrows():
@@ -282,7 +306,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     ax.set_ylim(0, 1.1 * metric_curves_mean.max().max())
 
     ax.legend()
-    plt.savefig(os.path.join(CROSS_EVAL_DIR, f"{name}_metric_curves_mean.png"))
+    plt.savefig(os.path.join(CROSS_EVAL_DIR, name, "metric_curves_mean.png"))
 
 
 def cross_eval_cp(sweep_name: str, sweep_configs: Iterable[SweepConfig],
@@ -333,8 +357,8 @@ def cross_eval_cp(sweep_name: str, sweep_configs: Iterable[SweepConfig],
     ax.set_xlabel('Eval Change Percentage')
     ax.set_ylabel('Train Change Percentage')
     fig.colorbar(im)
-    plt.savefig(os.path.join(CROSS_EVAL_DIR, 
-                             f"{sweep_name}_cp_heatmap.png"))
+    plt.savefig(os.path.join(CROSS_EVAL_DIR, sweep_name,
+                             "cp_heatmap.png"))
 
 
 def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
@@ -362,10 +386,10 @@ def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
     # Save the dataframe to a csv
     os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
     basic_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_diff_size_size_{eval_config.eval_map_width}_stats.csv")) 
+                                        name, f"diff_size_size_{eval_config.eval_map_width}_stats.csv")) 
 
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_size_{eval_config.eval_map_width}_stats.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, f"diff_size_size_{eval_config.eval_map_width}_stats.tex"), 'w') as f:
         f.write(basic_stats_df.to_latex())
 
     # Take averages of stats across seeds, keeping the original row indices
@@ -374,10 +398,10 @@ def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
 
     # Save the dataframe to a csv
     basic_stats_mean_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_diff_size_stats_size_{eval_config.eval_map_width}_mean.csv"))
+                                        name, f"diff_size_stats_size_{eval_config.eval_map_width}_mean.csv"))
     
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_stats_size_{eval_config.eval_map_width}_mean.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, f"diff_size_stats_size_{eval_config.eval_map_width}_mean.tex"), 'w') as f:
         f.write(basic_stats_mean_df.to_latex())
 
     # Now, remove all row indices that have the same value across all rows
@@ -390,7 +414,7 @@ def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
 
     # Save the dataframe to a csv
     basic_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
-                                        f"{name}_diff_size_stats_size_{eval_config.eval_map_width}_concise.csv"))
+                                        name, f"diff_size_stats_size_{eval_config.eval_map_width}_concise.csv"))
 
     basic_stats_concise_df = clean_df_strings(basic_stats_concise_df)
 
@@ -398,7 +422,7 @@ def cross_eval_diff_size(name: str, sweep_configs: Iterable[SweepConfig],
     styled_basic_stats_concise_df = basic_stats_concise_df.apply(format_num)
 
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, f"{name}_diff_size_stats_size_{eval_config.eval_map_width}_concise.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, f"diff_size_stats_size_{eval_config.eval_map_width}_concise.tex"), 'w') as f:
         f.write(styled_basic_stats_concise_df.to_latex())
 
 
