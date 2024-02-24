@@ -1,0 +1,28 @@
+NAME: diff_size_binary
+arf_size:
+- 3
+- 5
+- 8
+- 16
+- 31
+- -1
+change_pct:
+- -1.0
+map_width:
+- 8
+- 10
+- 18
+- 20
+max_board_scans:
+- 5
+model:
+- conv2
+- seqnca
+n_envs:
+- 600
+seed:
+- 3
+- 4
+- 5
+total_timesteps:
+- 1000000000

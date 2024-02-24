@@ -1,4 +1,5 @@
 import copy
+import json
 import pprint
 
 import hydra
@@ -13,6 +14,7 @@ from eval_change_pct import main_eval_cp
 from eval_different_size import main_eval_diff_size
 from plot import main as main_plot
 from train import main as main_train
+from gen_hid_params_per_obs_size import get_hiddims_dict_path 
 
 
 def get_sweep_cfgs(default_config, hypers):
@@ -23,10 +25,10 @@ def get_sweep_cfgs(default_config, hypers):
     return sweep_configs
 
 
-def get_grid_cfgs(default_config, kwargs):
+def get_grid_cfgs(base_config, kwargs):
     """Return set of experiment configs corresponding to the grid of 
     hyperparameter values specified by kwargs."""
-    subconfigs = [default_config]
+    subconfigs = [base_config]
     # Name of hyper, list of values
     for k, v in kwargs.items():
         if k == 'NAME':
@@ -46,7 +48,37 @@ def get_grid_cfgs(default_config, kwargs):
                     new_subconfigs.append(nsc)
             subconfigs = new_subconfigs
 
-        elif hasattr(default_config, k):
+        elif k == 'obs_size_hid_dims':
+
+            hid_params = json.load(open(get_hiddims_dict_path(base_config), 'r'))
+            # Turn the dictionary of (obs_size, hid_dims) to dict with obs_size as key
+            hid_dims_dict = {}
+            for obs_size, hid_dims, n_params in hid_params:
+                hid_dims_dict[obs_size] = hid_dims
+
+            # Break this down into `arf_size` and `vrf_size` with the same value
+            assert isinstance(v, list)
+            new_subconfigs = []
+            for vi in v:
+                obs_size = vi
+                print(f"obs_size {obs_size}")
+                if obs_size == -1:
+                    obs_size_d = base_config.map_width * 2 - 1
+                else:
+                    obs_size_d = obs_size
+                hidden_dims = hid_dims_dict[obs_size_d]
+                print(f"hidden_dims {hidden_dims}")
+                assert isinstance(obs_size, int)
+                for sc in subconfigs:
+                    nsc = copy.deepcopy(sc)
+                    setattr(nsc, k, vi)
+                    setattr(nsc, 'arf_size', obs_size)
+                    setattr(nsc, 'vrf_size', obs_size)
+                    setattr(nsc, 'hidden_dims', hidden_dims)
+                    new_subconfigs.append(nsc)
+            subconfigs = new_subconfigs
+
+        elif hasattr(base_config, k):
             assert isinstance(v, list)
             new_subconfigs = []
             # e.g. different learning rates

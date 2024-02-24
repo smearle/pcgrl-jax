@@ -13,6 +13,7 @@ import numpy as np
 from config import EvalConfig
 from envs.pcgrl_env import gen_dummy_queued_state
 from envs.probs.problem import ProblemState, get_loss
+from eval import get_eval_stats
 from purejaxrl.experimental.s5.wrappers import LogWrapper, LossLogWrapper
 from train import init_checkpointer
 from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
@@ -32,6 +33,7 @@ def main_eval_diff_size(config: EvalConfig):
     config = init_config(config)
 
     exp_dir = config.exp_dir
+    print(f"exp_dir: {exp_dir}")
 
     if not config.random_agent:
         checkpoint_manager, restored_ckpt = init_checkpointer(config)
@@ -92,27 +94,7 @@ def main_eval_diff_size(config: EvalConfig):
     if config.reevaluate:
         states, reward, dones = _eval(env_params)
 
-        # Everything has size (n_bins, n_steps, n_envs)
-        # Mask out so we only have the final step of each episode
-        ep_rews = states.log_env_state.returned_episode_returns * dones
-        # Get mean episode reward for each bin
-        ep_rews = jnp.sum(ep_rews)
-        mean_ep_rews = ep_rews / jnp.sum(dones)
-
-        # Get the average min. episode loss
-        min_ep_losses = states.min_episode_losses
-        # Mask out so we only have the final step of each episode
-        min_ep_losses *= dones
-        # Get mean episode loss
-        sum_min_ep_losses = jnp.sum(min_ep_losses)
-        mean_min_ep_loss = sum_min_ep_losses / jnp.sum(dones)
-        min_min_ep_loss = jnp.min(min_ep_losses)
-
-        stats = EvalData(
-            mean_ep_reward=mean_ep_rews,
-            mean_min_ep_loss=mean_min_ep_loss,
-            min_min_ep_loss=min_min_ep_loss,
-        )
+        stats = get_eval_stats(states, dones)
 
         with open(json_path, 'w') as f:
             json_stats = {k: v.tolist() for k, v in stats.__dict__.items()}

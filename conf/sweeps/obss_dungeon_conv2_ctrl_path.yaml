@@ -1,0 +1,25 @@
+NAME: obss_dungeon_conv2_ctrl_path
+change_pct:
+- -1.0
+ctrl_metrics:
+- - path_length
+max_board_scans:
+- 5
+model:
+- conv2
+n_envs:
+- 600
+obs_size:
+- 3
+- 5
+- 8
+- 16
+- -1
+problem:
+- dungeon
+seed:
+- 0
+- 1
+- 2
+total_timesteps:
+- 1000000000

@@ -37,7 +37,9 @@ def get_exp_dir(config: Config):
             ('random-shape_' if config.randomize_map_shape else '') + \
             f'vrf-{config.vrf_size}_' + \
             (f'cp-{config.change_pct}_' if config.change_pct > 0 else '') +
-            f'arf-{config.arf_size}_sp-{config.static_tile_prob}_' + \
+            f'arf-{config.arf_size}_' + \
+            (f"hd-{'-'.join((str(hd) for hd in config.hidden_dims))}" if config.hidden_dims != (64, 256) else '') + \
+            f'sp-{config.static_tile_prob}_'
             f'bs-{config.max_board_scans}_' + \
             f'fz-{config.n_freezies}_' + \
             f'act-{"x".join([str(e) for e in config.act_shape])}_' + \
@@ -144,6 +146,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         network = ConvForward2(
             action_dim=action_dim, activation=config.activation,
             act_shape=config.act_shape,
+            hidden_dims=config.hidden_dims,
         )
     elif config.model == "seqnca":
         network = SeqNCA(

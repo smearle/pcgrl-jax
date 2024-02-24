@@ -69,6 +69,8 @@ class Config:
     # each episode.
     pinpoints: bool = False
 
+    hidden_dims: Tuple[int] = (64, 256)
+
 
 @dataclass
 class EvoMapConfig(Config):

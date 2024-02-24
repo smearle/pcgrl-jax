@@ -22,15 +22,16 @@ CROSS_EVAL_DIR = 'cross_eval'
 def cross_eval_main(cfg: SweepConfig):
     conf_sweeps_dir = os.path.join('conf', 'sweeps')
     sweep_conf_path_json = os.path.join(conf_sweeps_dir, f'{cfg.name}.json')
-    sweep_conf_json_exists = os.path.exists(sweep_conf_path_json)
+    sweep_conf_path_yaml = os.path.join(conf_sweeps_dir, f'{cfg.name}.yaml')
+    sweep_conf_exists = os.path.exists(sweep_conf_path_yaml)
 
-    if cfg.name is not None and sweep_conf_json_exists:
+    if cfg.name is not None and sweep_conf_exists:
         _hypers = [load_sweep_hypers(cfg)]
     else:
         _hypers = hypers
 
     for grid_hypers in _hypers:
-        if not sweep_conf_json_exists:
+        if not sweep_conf_exists:
             conf_sweeps_dir = os.path.join('conf', 'sweeps')
             name = grid_hypers['NAME']
             os.makedirs(conf_sweeps_dir, exist_ok=True)
@@ -338,8 +339,11 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     ax.set_xlabel('Timesteps')
     ax.set_ylabel('Return')
 
+    # To get the ymin, drop the first timesteps where there tend to be outliers
+    ymin = metric_curves_mean.drop(columns=metric_curves_mean.columns[:100]).min().min()
+
     # Can manually set these bounds to tweak the visualization
-    ax.set_ylim(0, 1.1 * metric_curves_mean.max().max())
+    ax.set_ylim(ymin, 1.1 * metric_curves_mean.max().max())
 
     legend_title = ', '.join(levels_to_keep).replace('_', ' ')
     ax.legend(title=legend_title)

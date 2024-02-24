@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Optional
 
 import chex
 from flax import struct
@@ -26,7 +27,7 @@ class EvalData:
     mean_ep_reward: chex.Array
     mean_min_ep_loss: chex.Array
     min_min_ep_loss: chex.Array
-    n_parameters: int
+    n_parameters: Optional[int] = None
 
 @hydra.main(version_base=None, config_path='./', config_name='eval_pcgrl')
 def main_eval(config: EvalConfig):
@@ -91,26 +92,8 @@ def main_eval(config: EvalConfig):
     if config.reevaluate:
         states, rewards, dones = _eval(env_params)
 
-        # Everything has size (n_bins, n_steps, n_envs)
-        # Mask out so we only have the final step of each episode
-        ep_rews = states.log_env_state.returned_episode_returns * dones
-        # Get mean episode reward
-        ep_rews = jnp.sum(ep_rews)
-        mean_ep_rew = ep_rews / jnp.sum(dones)
-
-        # Get the average min. episode loss
-        min_ep_losses = states.min_episode_losses
-        # Mask out so we only have the final step of each episode
-        min_ep_losses = jnp.where(dones, min_ep_losses, jnp.nan)
-        # Get mean episode loss
-        sum_min_ep_losses = jnp.nansum(min_ep_losses)
-        mean_min_ep_loss = sum_min_ep_losses / jnp.nansum(dones)
-        min_min_ep_loss = jnp.nanmin(min_ep_losses)
-
-        stats = EvalData(
-            mean_ep_reward=mean_ep_rew,
-            mean_min_ep_loss=mean_min_ep_loss,
-            min_min_ep_loss=min_min_ep_loss,
+        stats = get_eval_stats(states, dones)
+        stats = stats.replace(
             n_parameters=n_parameters,
         )
 
@@ -121,6 +104,30 @@ def main_eval(config: EvalConfig):
         with open(json_path, 'r') as f:
             stats = json.load(f)
             stats = EvalData(**stats)
+
+def get_eval_stats(states, dones):
+    # Everything has size (n_bins, n_steps, n_envs)
+    # Mask out so we only have the final step of each episode
+    ep_rews = states.log_env_state.returned_episode_returns * dones
+    # Get mean episode reward
+    ep_rews = jnp.sum(ep_rews)
+    mean_ep_rew = ep_rews / jnp.sum(dones)
+
+    # Get the average min. episode loss
+    min_ep_losses = states.min_episode_losses
+    # Mask out so we only have the final step of each episode
+    min_ep_losses = jnp.where(dones, min_ep_losses, jnp.nan)
+    # Get mean episode loss
+    sum_min_ep_losses = jnp.nansum(min_ep_losses)
+    mean_min_ep_loss = sum_min_ep_losses / jnp.nansum(dones)
+    min_min_ep_loss = jnp.nanmin(min_ep_losses)
+
+    stats = EvalData(
+        mean_ep_reward=mean_ep_rew,
+        mean_min_ep_loss=mean_min_ep_loss,
+        min_min_ep_loss=min_min_ep_loss,
+    )
+    return stats
     
 if __name__ == '__main__':
     main_eval()

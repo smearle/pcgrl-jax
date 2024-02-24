@@ -72,6 +72,7 @@ class ConvForward2(nn.Module):
     vrf."""
     action_dim: Sequence[int]
     act_shape: Tuple[int, int]
+    hidden_dims: Tuple[int]
     activation: str = "relu"
 
     @nn.compact
@@ -82,13 +83,14 @@ class ConvForward2(nn.Module):
             activation = nn.tanh
 
         flat_action_dim = self.action_dim * math.prod(self.act_shape)
+        h1, h2 = self.hidden_dims
 
         map_x = nn.Conv(
-            features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
+            features=h1, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
         )(map_x)
         act = activation(map_x)
         map_x = nn.Conv(
-            features=64, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
+            features=h1, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
         )(map_x)
         map_x = activation(map_x)
 
@@ -96,12 +98,12 @@ class ConvForward2(nn.Module):
         x = jnp.concatenate((map_x, flat_x), axis=-1)
 
         x = nn.Dense(
-            256, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+            h2, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(x)
         x = activation(x)
 
         x = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+            h1, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(x)
         x = activation(x)
 
