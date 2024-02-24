@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import pprint
 
 import hydra
@@ -24,13 +25,30 @@ def get_sweep_cfgs(default_config, hypers):
         sweep_configs += get_grid_cfgs(default_config, h)
     return sweep_configs
 
+    
+def get_hiddims_dict(hiddims_dict_path):
+    hid_params = json.load(open(hiddims_dict_path, 'r'))
+    # Turn the dictionary of (obs_size, hid_dims) to dict with obs_size as key
+    hid_dims_dict = {}
+    for obs_size, hid_dims, n_params in hid_params:
+        hid_dims_dict[obs_size] = hid_dims
+    return hid_dims_dict
+
 
 def get_grid_cfgs(base_config, kwargs):
     """Return set of experiment configs corresponding to the grid of 
     hyperparameter values specified by kwargs."""
+
+    # Because this may depend on a bunch of other hyperparameters, so we need to compute hiddims last.
+    if 'obs_size_hid_dims' in kwargs:
+        obs_size_hid_dims = kwargs.pop('obs_size_hid_dims')
+    items = sorted(list(kwargs.items()))
+    items.append(('obs_size_hid_dims', obs_size_hid_dims))
+
     subconfigs = [base_config]
     # Name of hyper, list of values
-    for k, v in kwargs.items():
+    hid_dims_dicts = {}
+    for k, v in items:
         if k == 'NAME':
             continue
 
@@ -50,26 +68,32 @@ def get_grid_cfgs(base_config, kwargs):
 
         elif k == 'obs_size_hid_dims':
 
-            hid_params = json.load(open(get_hiddims_dict_path(base_config), 'r'))
-            # Turn the dictionary of (obs_size, hid_dims) to dict with obs_size as key
-            hid_dims_dict = {}
-            for obs_size, hid_dims, n_params in hid_params:
-                hid_dims_dict[obs_size] = hid_dims
+            hid_dims_base_dict_path = get_hiddims_dict_path(base_config)
+            if os.path.isfile(hid_dims_base_dict_path):
+                hid_dims_dict = get_hiddims_dict(hid_dims_base_dict_path)
+                hid_dims_dicts[hid_dims_base_dict_path] = hid_dims_dict
 
             # Break this down into `arf_size` and `vrf_size` with the same value
             assert isinstance(v, list)
             new_subconfigs = []
             for vi in v:
                 obs_size = vi
-                print(f"obs_size {obs_size}")
-                if obs_size == -1:
-                    obs_size_d = base_config.map_width * 2 - 1
-                else:
-                    obs_size_d = obs_size
-                hidden_dims = hid_dims_dict[obs_size_d]
-                print(f"hidden_dims {hidden_dims}")
                 assert isinstance(obs_size, int)
                 for sc in subconfigs:
+
+                    hid_dims_sc_dict_path = get_hiddims_dict_path(sc)
+                    if hid_dims_sc_dict_path not in hid_dims_dicts:
+                        hid_dims_dict = get_hiddims_dict(hid_dims_sc_dict_path)
+                        hid_dims_dicts[hid_dims_sc_dict_path] = hid_dims_dict
+
+                    # print(f"obs_size {obs_size}")
+                    if obs_size == -1:
+                        obs_size_d = base_config.map_width * 2 - 1
+                    else:
+                        obs_size_d = obs_size
+                    hidden_dims = hid_dims_dict[obs_size_d]
+                    # print(f"hidden_dims {hidden_dims}")
+
                     nsc = copy.deepcopy(sc)
                     setattr(nsc, k, vi)
                     setattr(nsc, 'arf_size', obs_size)

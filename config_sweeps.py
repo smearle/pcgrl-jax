@@ -204,23 +204,21 @@
 # ]
 
 
-hypers = [
-    {
-        'NAME': 'obss_hiddims_dungeon_conv2_ctrl_path',
-        'problem': ['dungeon'],
-        'ctrl_metrics': [['path_length']],
-        # 'obs_size': [3, 5, 8, 16, -1],
-        'obs_size_hid_dims': [-1, 3, 5, 8, 16],
-        # 'obs_size_hid_dims': [30, 29, 28],
-        'model': ['conv2'],
-        'change_pct': [-1.0],
-        # 'seed': list(range(6)),
-        'seed': list(range(6, 9)),
-        'n_envs': [100],
-        'max_board_scans': [5],
-        'total_timesteps': [100_000_000],
-    },
-]
+# hypers = [
+#     {
+#         'NAME': 'obss_hiddims_dungeon_conv2_ctrl_path',
+#         'problem': ['dungeon'],
+#         'ctrl_metrics': [['path_length']],
+#         # 'obs_size': [3, 5, 8, 16, -1],
+#         'obs_size_hid_dims': [3, 5, 8, 16],
+#         'model': ['conv2'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(3)),
+#         'n_envs': [100],
+#         'max_board_scans': [5],
+#         'total_timesteps': [100_000_000],
+#     },
+# ]
 
 
 # hypers = [
