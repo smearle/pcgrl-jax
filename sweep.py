@@ -6,8 +6,8 @@ import pprint
 import hydra
 import submitit
 
-from config import EnjoyConfig, EvalConfig, SweepConfig, TrainConfig
-from config_sweeps import hypers
+from conf.config import EnjoyConfig, EvalConfig, SweepConfig, TrainConfig
+from conf.config_sweeps import hypers
 from utils import load_sweep_hypers
 from enjoy import main_enjoy
 from eval import main_eval
@@ -161,9 +161,9 @@ def sweep_main(cfg: SweepConfig):
     elif cfg.mode == 'eval_cp':
         default_config = EvalConfig()
         main_fn = main_eval_cp
-    elif cfg.mode == 'eval_diff_size':
-        default_config = EvalConfig()
-        main_fn = main_eval_diff_size
+    # elif cfg.mode == 'eval_diff_size':
+    #     default_config = EvalConfig()
+    #     main_fn = main_eval_diff_size
     elif cfg.mode == 'eval':
         default_config = EvalConfig()
         main_fn = main_eval

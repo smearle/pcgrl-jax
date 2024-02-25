@@ -10,7 +10,7 @@ import jax.numpy as jnp
 from matplotlib import pyplot as plt
 import numpy as np
 
-from config import EvalConfig
+from conf.config import EvalConfig
 from envs.pcgrl_env import gen_dummy_queued_state
 from envs.probs.problem import ProblemState
 from purejaxrl.experimental.s5.wrappers import LogWrapper

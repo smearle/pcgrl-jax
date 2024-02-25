@@ -332,22 +332,23 @@
 
 
 ###### add some experiment to train on smaller/bigger map size for comparison #######
-# hypers = [
-#     {
-#         'NAME': 'diff_size_dungeon',
-#         'model': ['conv2', 'seqnca'],
-#         'problem': ['dungeon'],
-#         # 'map_width': [8, 10, 18, 20],
-#         'map_width': [8, 10, 18],
-#         'arf_size': [3, 5, 8, 16, 31, -1],
-#         'change_pct': [-1.0],
-#         'seed': [3, 4, 5],
-#         # 'seed': [0, 1, 2],
-#         'n_envs': [600],
-#         'max_board_scans': [5],
-#         'total_timesteps': [1_000_000_000],
-#     },
-# ]
+hypers = [
+    {
+        'NAME': 'diff_size_dungeon',
+        # 'model': ['conv2', 'seqnca'],
+        'model': ['conv2'],
+        'problem': ['dungeon'],
+        # 'map_width': [8, 10, 18, 20],
+        'map_width': [24, 28, 32],
+        'obs_size': [31],
+        'change_pct': [-1.0],
+        # 'seed': [3, 4, 5],
+        'seed': [0, 1, 2],
+        'n_envs': [200],
+        'max_board_scans': [5],
+        'total_timesteps': [20_000_000],
+    },
+]
 
 # hypers = [
 #     {

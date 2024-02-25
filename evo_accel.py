@@ -9,7 +9,7 @@ import chex
 import jax
 from jax import numpy as jnp
 import numpy as np
-from config import TrainConfig
+from conf.config import TrainConfig
 from envs.pcgrl_env import PCGRLEnv, QueuedState
 from tensorboardX import SummaryWriter
 

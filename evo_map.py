@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from config import EvoMapConfig
+from conf.config import EvoMapConfig
 from envs.pcgrl_env import PCGRLEnv, PCGRLEnvState
 from envs.probs.problem import ProblemState, get_loss
 from utils import gymnax_pcgrl_make, init_config_evo_map

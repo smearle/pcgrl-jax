@@ -15,7 +15,7 @@ from flax.training import orbax_utils
 import orbax
 from tensorboardX import SummaryWriter
 
-from config import Config, TrainConfig
+from conf.config import Config, TrainConfig
 from envs.pcgrl_env import (gen_dummy_queued_state, gen_dummy_queued_state_old,
                             OldQueuedState)
 from purejaxrl.experimental.s5.wrappers import LogWrapper
@@ -199,8 +199,14 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 )
             )
 
-        def render_frames(frames, i, env_states=None):
-            if config.render_freq <= 0 or i % config.render_freq != 0:
+        def render_frames(frames, i, metric):
+            timesteps = metric["timestep"][metric["returned_episode"]
+                                    ] * config.n_envs
+            if len(timesteps) > 0:
+                t = timesteps[0]
+            else:
+                t = 0
+            if config.render_freq <= 0 or i % config.render_freq != 0 or t == steps_prev_complete:
             # if jnp.all(frames == 0):
                 return
             print(f"Rendering episode gifs at update {i}")
@@ -285,9 +291,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                                                 'save_args': save_args})
                     break
 
-        frames, states = render_episodes(train_state.params)
-        jax.debug.callback(render_frames, frames, runner_state.update_i, states)
-        old_render_results = (frames, states)
+        # frames, states = render_episodes(train_state.params)
+        # jax.debug.callback(render_frames, frames, runner_state.update_i)
+        # old_render_results = (frames, states)
 
         # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
@@ -462,18 +468,25 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                                metric, steps_prev_complete)
 
             # FIXME: shouldn't assume size of render map.
-            frames_shape = (config.n_render_eps * 1 * env.max_steps, 
-                            env.tile_size * (env.map_shape[0] + 2),
-                            env.tile_size * (env.map_shape[1] + 2), 4)
+            # frames_shape = (config.n_render_eps * 1 * env.max_steps, 
+            #                 env.tile_size * (env.map_shape[0] + 2),
+            #                 env.tile_size * (env.map_shape[1] + 2), 4)
 
             # FIXME: Inside vmap, both conditions are likely to get executed. Any way around this?
             # Currently not vmapping the train loop though, so it's ok.
             # start_time = timer()
-            frames, states = jax.lax.cond(
-                runner_state.update_i % config.render_freq == 0,
-                lambda: render_episodes(train_state.params),
-                lambda: old_render_results,)
-            jax.debug.callback(render_frames, frames, runner_state.update_i, states)
+            # should_render = runner_state.update_i % config.render_freq == 0
+            # frames, states = jax.lax.cond(
+            #     should_render,
+            #     lambda: render_episodes(train_state.params),
+            #     lambda: old_render_results,)
+            # jax.lax.cond(
+            #     should_render,
+            #     partial(jax.debug.callback, render_frames),
+            #     lambda _, __, ___: None,
+            #     frames, runner_state.update_i, metric
+            # )
+            # jax.debug.callback(render_frames, frames, runner_state.update_i, metric)
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
             jax.debug.callback(_log_callback, metric)
@@ -606,17 +619,7 @@ def init_checkpointer(config: Config):
     return checkpoint_manager, restored_ckpt
 
     
-@hydra.main(version_base=None, config_path='./', config_name='train_pcgrl')
-def main(config: TrainConfig):
-    config = init_config(config)
-    rng = jax.random.PRNGKey(config.seed)
-
-    exp_dir = config.exp_dir
-
-    # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
-    if config.overwrite and os.path.exists(exp_dir):
-        shutil.rmtree(exp_dir)
-
+def main_chunk(config, rng, exp_dir):
     checkpoint_manager, restored_ckpt = init_checkpointer(config)
 
     # if restored_ckpt is not None:
@@ -633,6 +636,29 @@ def main(config: TrainConfig):
 
     train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
     out = train_jit(rng)
+    return out
+
+    
+@hydra.main(version_base=None, config_path='./', config_name='train_pcgrl')
+def main(config: TrainConfig):
+    config = init_config(config)
+    rng = jax.random.PRNGKey(config.seed)
+
+    exp_dir = config.exp_dir
+
+    # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
+    if config.overwrite and os.path.exists(exp_dir):
+        shutil.rmtree(exp_dir)
+
+    if config.timestep_chunk_size != -1:
+        n_chunks = config.total_timesteps // config.timestep_chunk_size
+        for i in range(n_chunks):
+            config.total_timesteps = config.timestep_chunk_size + (i * config.timestep_chunk_size)
+            print(f"Running chunk {i+1}/{n_chunks}")
+            out = main_chunk(config, rng, exp_dir)
+
+    else:
+        out = main_chunk(config, rng, exp_dir)        
 
 #   ep_returns = out["runner_state"].ep_returns
 

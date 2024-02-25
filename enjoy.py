@@ -6,7 +6,7 @@ import jax
 from jax import numpy as jnp
 import numpy as np
 
-from config import EnjoyConfig
+from conf.config import EnjoyConfig
 from envs.pcgrl_env import PCGRLEnv, render_stats, gen_dummy_queued_state
 from train import init_checkpointer
 from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
@@ -20,9 +20,12 @@ def main_enjoy(config: EnjoyConfig):
     if not config.random_agent:
         print(f'Loading checkpoint from {exp_dir}')
         checkpoint_manager, restored_ckpt = init_checkpointer(config)
-        network_params = restored_ckpt['runner_state'].train_state.params
+        runner_state = restored_ckpt['runner_state']
+        network_params = runner_state.train_state.params
+        steps_prev_complete = restored_ckpt['steps_prev_complete']
     elif not os.path.exists(exp_dir):
         os.makedirs(exp_dir)
+        steps_prev_complete = 0
 
     env: PCGRLEnv
     if config.eval_map_width is not None:
@@ -94,7 +97,8 @@ def main_enjoy(config: EnjoyConfig):
             frame = frames[i, ep_is]
             
             state_i = jax.tree_util.tree_map(lambda x: x[i, ep_is], states)
-            frame = render_stats(env, state_i, frame)
+            if config.render_stats:
+                frame = render_stats(env, state_i, frame)
             new_ep_frames.append(frame)
 
             # Save frame as png
@@ -121,10 +125,14 @@ def main_enjoy(config: EnjoyConfig):
 
         # cum_rewards = jnp.cumsum(jnp.array(
         #   rewards[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps]))
-        gif_name = f"{exp_dir}/anim_ep-{ep_is}" + \
+        gif_name = os.path.join(
+            f"{exp_dir}",
+            f"anim_step-{steps_prev_complete}" + \
+            f"ep-{ep_is}" + \
             f"{('_randAgent' if config.random_agent else '')}" + \
-            f"{('_w-{config.eval_map_width}' if config.eval_map_width is not None else '')}" + \
+            f"{(f'_w-{config.eval_map_width}' if config.eval_map_width is not None else '')}" + \
             ".gif"
+        )
         imageio.v3.imwrite(
             gif_name,
             ep_frames,

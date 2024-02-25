@@ -6,7 +6,7 @@ import jax
 from jax import numpy as jnp
 import numpy as np
 
-from config import TrainConfig
+from conf.config import TrainConfig
 from utils import gymnax_pcgrl_make, init_config
 from envs.pcgrl_env import PCGRLEnvState
 

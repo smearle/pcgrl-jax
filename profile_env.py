@@ -3,7 +3,7 @@ import hydra
 import jax
 from timeit import default_timer as timer
 
-from config import ProfileEnvConfig
+from conf.config import ProfileEnvConfig
 from utils import get_exp_dir, gymnax_pcgrl_make, init_config
 
 

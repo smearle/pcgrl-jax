@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from matplotlib import pyplot as plt
 import numpy as np
 
-from config import EvalCtrlsConfig
+from conf.config import EvalCtrlsConfig
 from envs.pcgrl_env import render_stats
 from train import init_checkpointer
 from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config

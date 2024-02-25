@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from config import EnjoyConfig
+from conf.config import EnjoyConfig
 from envs.pathfinding import get_path_coords_diam, get_max_path_length
 from envs.pcgrl_env import PCGRLEnvState, render_stats
 from envs.probs.maze import MazeTiles

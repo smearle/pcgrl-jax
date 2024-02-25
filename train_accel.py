@@ -17,7 +17,7 @@ from flax.training import orbax_utils
 import orbax
 from tensorboardX import SummaryWriter
 
-from config import Config, TrainConfig
+from conf.config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from evo_accel import EvoState, apply_evo, gen_discount_factors_matrix
 from purejaxrl.experimental.s5.wrappers import LogWrapper

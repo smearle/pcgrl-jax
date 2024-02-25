@@ -6,7 +6,7 @@ import jax
 import numpy as np
 import yaml
 
-from config import Config, EvoMapConfig, SweepConfig, TrainConfig
+from conf.config import Config, EvoMapConfig, SweepConfig, TrainConfig
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams

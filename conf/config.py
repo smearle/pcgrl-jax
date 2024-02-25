@@ -15,6 +15,7 @@ class Config:
     n_envs: int = 4
     num_steps: int = 128
     total_timesteps: int = int(5e7)
+    timestep_chunk_size: int = -1
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4
     GAMMA: float = 0.99
@@ -113,15 +114,16 @@ class TrainAccelConfig(TrainConfig):
 
 
 @dataclass
-class EnjoyConfig(Config):
+class EnjoyConfig(TrainConfig):
     random_agent: bool = False
     # How many episodes to render as gifs
     n_eps: int = 5
-    eval_map_width: int = 16
+    eval_map_width: Optional[int] = None
+    render_stats: bool = True
 
     
 @dataclass
-class EvalConfig(Config):
+class EvalConfig(TrainConfig):
     reevaluate: bool = True
     random_agent: bool = False
     # In how many bins to divide up each metric being evaluated
@@ -136,7 +138,7 @@ class ProfileEnvConfig(Config):
 
 
 @dataclass
-class SweepConfig(TrainConfig, EnjoyConfig, EvalConfig):
+class SweepConfig(EnjoyConfig, EvalConfig):
     name: Optional[str] = None
     mode: str = 'train'
     slurm: bool = True

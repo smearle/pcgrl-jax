@@ -4,7 +4,7 @@ import hydra
 import imageio
 import jax
 
-from config import EnjoyConfig
+from conf.config import EnjoyConfig
 from train import init_checkpointer
 from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 

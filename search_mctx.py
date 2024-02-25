@@ -4,7 +4,7 @@ import functools
 import chex
 import jax
 from jax import numpy as jnp
-from config import TrainConfig
+from conf.config import TrainConfig
 import mctx
 from utils import gymnax_pcgrl_make, init_config
 

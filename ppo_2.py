@@ -11,7 +11,7 @@ from flax.training.train_state import TrainState
 import distrax
 import gymnax
 
-from config import config
+from conf.config import config
 from purejaxrl.experimental.s5.wrappers import LogWrapper, FlattenObservationWrapper
 
 

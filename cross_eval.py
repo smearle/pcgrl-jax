@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import yaml
 
-from config import EvalConfig, SweepConfig, TrainConfig
+from conf.config import EvalConfig, SweepConfig, TrainConfig
 from eval_change_pct import EvalData, get_change_pcts
 from sweep import get_grid_cfgs, hypers
 from utils import init_config, load_sweep_hypers
