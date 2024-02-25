@@ -64,6 +64,12 @@ def gen_ctrl_trgs(metric_bounds, rng):
     rng, _ = jax.random.split(rng)
     return jax.random.randint(rng, (len(metric_bounds),), metric_bounds[:, 0], metric_bounds[:, 1])
 
+    
+@struct.dataclass
+class MapData:
+    env_map: chex.Array
+    actual_map_shape: chex.Array
+
 
 @partial(jax.jit, static_argnames=("tile_enum", "map_shape", "tile_probs", "randomize_map_shape", "empty_start", 
                                    "tile_nums", "pinpoints"))
@@ -88,6 +94,9 @@ def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=Fals
 
         # Replace the rest with tile_enum.BORDER
         init_map = jnp.where(mask, init_map, tile_enum.BORDER)
+    
+    else:
+        actual_map_shape = map_shape
 
     if tile_nums is not None and pinpoints:
 
@@ -112,7 +121,7 @@ def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=Fals
         for tile_idx in tile_idxs:
             (rng, init_map), _ = add_num_tiles((rng, init_map), tile_idx)
 
-    return init_map
+    return MapData(init_map, actual_map_shape)
 
 
 class Problem:
@@ -141,7 +150,7 @@ class Problem:
 
         self.metric_names = [metric.name for metric in self.metrics_enum]
 
-        self.queued_ctrl_trgs = jnp.zeros(len(self.metric_bounds))  # dummy value to placate jax
+        self.queued_ctrl_trgs = jnp.zeros(len(self.metric_names))  # dummy value to placate jax
         self.has_queued_ctrl_trgs = False
 
         # Make sure we don't generate pinpoint tiles if they are being treated as such
@@ -204,20 +213,21 @@ class Problem:
         obs = obs[self.ctrl_metric_obs_idxs]
         return obs
 
-    def gen_rand_ctrl_trgs(self, rng):
+    def gen_rand_ctrl_trgs(self, rng, actual_map_shape):
+        metric_bounds = self.get_metric_bounds(actual_map_shape)
         # Randomly sample some control targets
         ctrl_trgs =  jnp.where(
             self.ctrl_metrics_mask,
-            gen_ctrl_trgs(self.metric_bounds, rng),
+            gen_ctrl_trgs(metric_bounds, rng),
             self.stat_trgs,
         )
         return ctrl_trgs
 
-    def reset(self, env_map: chex.Array, rng, queued_state):
+    def reset(self, env_map: chex.Array, rng, queued_state, actual_map_shape):
         ctrl_trgs = jax.lax.select(
             queued_state.has_queued_ctrl_trgs,
             queued_state.ctrl_trgs,
-            self.gen_rand_ctrl_trgs(rng),
+            self.gen_rand_ctrl_trgs(rng, actual_map_shape),
         )
 
         state = self.get_curr_stats(env_map)

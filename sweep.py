@@ -43,7 +43,8 @@ def get_grid_cfgs(base_config, kwargs):
     if 'obs_size_hid_dims' in kwargs:
         obs_size_hid_dims = kwargs.pop('obs_size_hid_dims')
     items = sorted(list(kwargs.items()))
-    items.append(('obs_size_hid_dims', obs_size_hid_dims))
+    if 'obs_size_hid_dims' in kwargs:
+        items.append(('obs_size_hid_dims', obs_size_hid_dims))
 
     subconfigs = [base_config]
     # Name of hyper, list of values

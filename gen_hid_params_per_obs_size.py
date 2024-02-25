@@ -42,8 +42,11 @@ def main_gen_hid(config: EnjoyConfig):
         while new_n_params <= base_n_params:
             config = copy.deepcopy(new_config)
             n_params = new_n_params
-            if new_config.hidden_dims[0] == new_config.hidden_dims[1]:
-                new_config.hidden_dims[1] += 1
+            if len(new_config.hidden_dims) > 1:
+                if new_config.hidden_dims[0] == new_config.hidden_dims[1]:
+                    new_config.hidden_dims[1] += 1
+                else:
+                    new_config.hidden_dims[0] += 1
             else:
                 new_config.hidden_dims[0] += 1
             new_n_params = compute_n_params(new_config)

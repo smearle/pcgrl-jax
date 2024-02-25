@@ -18,7 +18,7 @@ from envs.probs.dungeon import DungeonProblem
 from envs.probs.dungeon2 import Dungeon2Problem
 from envs.probs.maze import MazeProblem
 from envs.probs.maze_play import MazePlayProblem
-from envs.probs.problem import Problem, ProblemState
+from envs.probs.problem import MapData, Problem, ProblemState
 from envs.reps.narrow import NarrowRepresentation
 from envs.reps.player import PlayerRepresentation
 from envs.reps.turtle import MultiTurtleRepresentation, TurtleRepresentation
@@ -199,8 +199,9 @@ class PCGRLEnv(Environment):
         self.tile_enum = self.prob.tile_enum
         self.tile_probs = self.prob.tile_probs
         rng = jax.random.PRNGKey(0)  # Dummy random key
-        env_map = self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, 
+        map_data = self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, 
                                          empty_start=self.empty_start, pinpoints=self.pinpoints)
+        env_map, actual_map_shape = map_data.env_map, map_data.actual_map_shape
 
         self.rep: Representation
         self.rep = representation
@@ -278,12 +279,14 @@ class PCGRLEnv(Environment):
     @partial(jax.jit, static_argnames=('self',))
     def reset_env(self, rng, env_params: PCGRLEnvParams, queued_state: QueuedState) \
             -> Tuple[chex.Array, PCGRLEnvState]:
-        env_map = jax.lax.select(
+        queued_map_data = MapData(env_map=queued_state.map, actual_map_shape=jnp.array(self.map_shape))
+        map_data = jax.lax.cond(
             queued_state.has_queued_map,
-            queued_state.map,
-            self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, 
+            lambda: queued_map_data,
+            lambda: self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, 
                                    empty_start=self.empty_start, pinpoints=self.pinpoints),
         )
+        env_map, actual_map_shape = map_data.env_map, map_data.actual_map_shape
         # frz_map = jax.lax.cond(
         #     self.static_tile_prob is not None or self.n_freezies > 0,
         #     lambda rng: gen_static_tiles(rng, self.static_tile_prob, self.n_freezies, self.map_shape),
@@ -317,7 +320,8 @@ class PCGRLEnv(Environment):
         rep_state = self.rep.reset(frz_map, rng)
 
         rng, _ = jax.random.split(rng)
-        _, prob_state = self.prob.reset(env_map=env_map, rng=rng, queued_state=queued_state)
+        _, prob_state = self.prob.reset(env_map=env_map, rng=rng, queued_state=queued_state,
+                                        actual_map_shape=actual_map_shape)
 
         obs = self.get_obs(
             env_map=env_map, frz_map=frz_map, rep_state=rep_state, prob_state=prob_state)

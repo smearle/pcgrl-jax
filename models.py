@@ -184,6 +184,7 @@ class SeqNCA(nn.Module):
     act_shape: Tuple[int, int]
     arf_size: int
     vrf_size: int
+    hidden_dims: Tuple[int]
     activation: str = "relu"
 
     @nn.compact
@@ -192,9 +193,10 @@ class SeqNCA(nn.Module):
             activation = nn.relu
         else:
             activation = nn.tanh
+        h1 = self.hidden_dims[0]
 
         hid = nn.Conv(
-            features=64, kernel_size=(3, 3), strides=(1, 1), padding="SAME"
+            features=h1, kernel_size=(3, 3), strides=(1, 1), padding="SAME"
         )(map_x)
         hid = activation(hid)
 
@@ -205,7 +207,7 @@ class SeqNCA(nn.Module):
         act = act.reshape((act.shape[0], -1))
         act = jnp.concatenate((act, flat_x), axis=-1)
         act = nn.Dense(
-            64, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
+            h1, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
         )(act)
         act = nn.Dense(
             flat_action_dim, kernel_init=orthogonal(0.01),
@@ -215,7 +217,7 @@ class SeqNCA(nn.Module):
         critic = critic.reshape((critic.shape[0], -1))
         critic = jnp.concatenate((critic, flat_x), axis=-1)
         critic = nn.Dense(
-            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+            h1, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
         )(critic)
         critic = activation(critic)
         critic = nn.Dense(

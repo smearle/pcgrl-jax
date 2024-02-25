@@ -72,6 +72,9 @@ def get_exp_dir(config: Config):
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
+    if config.model == 'seqnca':
+        config.hidden_dims = config.hidden_dims[:1]
+
     if config.env_name == 'Candy':
         config.exp_dir = get_exp_dir(config)
         return config
@@ -153,6 +156,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
             action_dim, activation=config.activation,
             arf_size=config.arf_size, act_shape=config.act_shape,
             vrf_size=config.vrf_size,
+            hidden_dims=config.hidden_dims,
         )
     elif config.model in {"nca", "autoencoder"}:
         if config.model == "nca":
