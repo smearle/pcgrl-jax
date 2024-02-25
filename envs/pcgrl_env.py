@@ -401,7 +401,7 @@ class PCGRLEnv(Environment):
         return gen_dummy_queued_state(self)
 
     def action_space(self, env_params: PCGRLEnvParams) -> int:
-        return self.rep.action_space()
+        return self.rep.action_space
 
     def observation_space(self, env_params: PCGRLEnvParams) -> int:
         return self.rep.observation_space()
@@ -548,17 +548,18 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
 
         return lvl_img
 
-    lvl_img = jax.lax.cond(
-        # env.static_tile_prob > 0 or env.n_freezies > 0 or env_state.queued_state.has_queued_frz_map,
+    render_frozen_tiles(lvl_img)
+    # lvl_img = jax.lax.cond(
+    #     # env.static_tile_prob > 0 or env.n_freezies > 0 or env_state.queued_state.has_queued_frz_map,
 
-        # The order matters here. If we have concrete_bool, traced_bool, then concrete_bool, there is an issue,
-        # but concrete_bool, concrete_bool, traced_bool is fine. LMAO.
-        env.static_tile_prob > 0 or env.n_freezies > 0 or env.pinpoints or env_state.queued_state.has_queued_frz_map,
+    #     # The order matters here. If we have concrete_bool, traced_bool, then concrete_bool, there is an issue,
+    #     # but concrete_bool, concrete_bool, traced_bool is fine. LMAO.
+    #     env.static_tile_prob > 0 or env.n_freezies > 0 or env.pinpoints or env_state.queued_state.has_queued_frz_map,
 
-        lambda lvl_img: render_frozen_tiles(lvl_img),
-        lambda lvl_img: lvl_img,
-        lvl_img
-    )
+    #     lambda lvl_img: render_frozen_tiles(lvl_img),
+    #     lambda lvl_img: lvl_img,
+    #     lvl_img
+    # )
 
     return lvl_img
 

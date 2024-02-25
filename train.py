@@ -2,7 +2,7 @@ from functools import partial
 import os
 import shutil
 from timeit import default_timer as timer
-from typing import NamedTuple
+from typing import Any, NamedTuple, Tuple
 
 import hydra
 import jax
@@ -520,7 +520,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 #     plt.savefig(os.path.join(get_exp_dir(config), "ep_returns.png"))
 
 
-def init_checkpointer(config: Config):
+def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     # This will not affect training, just for initializing dummy env etc. to load checkpoint.
     rng = jax.random.PRNGKey(30)
     # Set up checkpointing
