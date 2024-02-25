@@ -38,7 +38,7 @@ def get_exp_dir(config: Config):
             f'vrf-{config.vrf_size}_' + \
             (f'cp-{config.change_pct}_' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_' + \
-            (f"hd-{'-'.join((str(hd) for hd in config.hidden_dims))}" if config.hidden_dims != (64, 256) else '') + \
+            (f'hd-{'-'.join((str(hd) for hd in config.hidden_dims))}_' if config.hidden_dims != (64, 256) else '') + \
             f'sp-{config.static_tile_prob}_'
             f'bs-{config.max_board_scans}_' + \
             f'fz-{config.n_freezies}_' + \
@@ -72,8 +72,6 @@ def get_exp_dir(config: Config):
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
-    if config.model == 'seqnca':
-        config.hidden_dims = config.hidden_dims[:1]
 
     if config.env_name == 'Candy':
         config.exp_dir = get_exp_dir(config)
@@ -99,6 +97,10 @@ def init_config(config: Config):
         config.arf_size = config.vrf_size = min([config.arf_size, config.vrf_size])
 
     config.exp_dir = get_exp_dir(config)    
+
+    if config.model == 'seqnca':
+        config.hidden_dims = config.hidden_dims[:1]
+
     return config
 
     

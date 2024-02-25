@@ -13,7 +13,7 @@ __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file
 @hydra.main(config_path="./", config_name="config")
 def main(cfg):
     cfg = init_config(cfg)
-    exp_dir = get_exp_dir(cfg)
+    exp_dir = cfg.exp_dir
     # Open progress.csv and plot
     progress_csv = os.path.join(__location__, exp_dir, "progress.csv")
     with open(progress_csv, "r") as f:
