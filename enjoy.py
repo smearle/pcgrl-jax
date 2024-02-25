@@ -34,7 +34,7 @@ def main_enjoy(config: EnjoyConfig):
     env.prob.init_graphics()
     network = init_network(env, env_params, config)
 
-    rng = jax.random.PRNGKey(42)
+    rng = jax.random.PRNGKey(config.seed)
     rng_reset = jax.random.split(rng, config.n_eps)
 
     # Can manually define frozen tiles here, e.g. to set an OOD task
@@ -131,6 +131,7 @@ def main_enjoy(config: EnjoyConfig):
             f"ep-{ep_is}" + \
             f"{('_randAgent' if config.random_agent else '')}" + \
             f"{(f'_w-{config.eval_map_width}' if config.eval_map_width is not None else '')}" + \
+            f"seed-{config.seed}" + \
             ".gif"
         )
         imageio.v3.imwrite(
