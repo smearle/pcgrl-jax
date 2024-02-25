@@ -9,7 +9,7 @@ import jax.numpy as jnp
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from envs.pathfinding import FloodPath, FloodPathState, FloodRegions, FloodRegionsState, calc_diameter, get_max_n_regions, get_max_path_length, get_path_coords_diam
+from envs.pathfinding import FloodPath, FloodPathState, FloodRegions, FloodRegionsState, calc_diameter, get_max_n_regions, get_max_path_length, get_max_path_length_static, get_path_coords_diam
 from envs.probs.problem import Problem, ProblemState, get_reward
 from envs.utils import Tiles
 
@@ -62,14 +62,14 @@ class BinaryProblem(Problem):
         self.flood_path_net.init_params(map_shape)
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
-        self.max_path_len = get_max_path_length(map_shape)
+        self.max_path_len = get_max_path_length_static(map_shape)
         super().__init__(map_shape=map_shape, ctrl_metrics=ctrl_metrics, pinpoints=pinpoints)
 
     def get_metric_bounds(self, map_shape):
         bounds = [None] * len(BinaryMetrics)
         bounds[BinaryMetrics.DIAMETER] = [0, get_max_path_length(map_shape)]
         bounds[BinaryMetrics.N_REGIONS] = [0, get_max_n_regions(map_shape)]
-        return np.array(bounds)
+        return jnp.array(bounds)
 
     def get_path_coords(self, env_map: chex.Array, prob_state: BinaryState) -> Tuple[chex.Array]:
         return (get_path_coords_diam(flood_count=prob_state.flood_count, max_path_len=self.max_path_len),)

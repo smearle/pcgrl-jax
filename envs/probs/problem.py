@@ -96,7 +96,7 @@ def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=Fals
         init_map = jnp.where(mask, init_map, tile_enum.BORDER)
     
     else:
-        actual_map_shape = map_shape
+        actual_map_shape = jnp.array(map_shape)
 
     if tile_nums is not None and pinpoints:
 

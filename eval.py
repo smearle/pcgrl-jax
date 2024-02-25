@@ -41,6 +41,8 @@ def main_eval(config: EvalConfig):
         os.makedirs(exp_dir)
 
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
+    if config.eval_map_width is not None:
+        config.map_width = config.eval_map_width
     env = LossLogWrapper(env)
     env.prob.init_graphics()
     network = init_network(env, env_params, config)
@@ -85,7 +87,10 @@ def main_eval(config: EvalConfig):
 
         return states, reward, dones
 
-    json_path = os.path.join(exp_dir, 'stats.json')
+    stats_name = \
+        (f"w-{config.eval_map_width}" if config.eval_map_width is not None else "") + \
+        f"stats.json"
+    json_path = os.path.join(exp_dir, stats_name)
 
     # For each bin, evaluate the change pct. at the center of the bin
     
@@ -98,7 +103,7 @@ def main_eval(config: EvalConfig):
         )
 
         with open(json_path, 'w') as f:
-            json_stats = {k: v.tolist() for k, v in stats.__dict__.items()}
+            json_stats = {k: v.tolist() for k, v in stats.__dict__.items() if v is not None}
             json.dump(json_stats, f, indent=4)
     else:
         with open(json_path, 'r') as f:

@@ -25,6 +25,8 @@ def main_enjoy(config: EnjoyConfig):
         os.makedirs(exp_dir)
 
     env: PCGRLEnv
+    if config.eval_map_width is not None:
+        config.map_width = config.eval_map_width
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     env.prob.init_graphics()
     network = init_network(env, env_params, config)
@@ -120,7 +122,9 @@ def main_enjoy(config: EnjoyConfig):
         # cum_rewards = jnp.cumsum(jnp.array(
         #   rewards[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps]))
         gif_name = f"{exp_dir}/anim_ep-{ep_is}" + \
-            f"{('_randAgent' if config.random_agent else '')}.gif"
+            f"{('_randAgent' if config.random_agent else '')}" + \
+            f"{('_w-{config.eval_map_width}' if config.eval_map_width is not None else '')}" + \
+            ".gif"
         imageio.v3.imwrite(
             gif_name,
             ep_frames,

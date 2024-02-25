@@ -56,9 +56,9 @@ def make_evolve(config: EvoMapConfig):
         # on state.
         _, env_state = env.reset(rng, env_params)
 
-        # init_maps = env.prob.gen_init_map(rng)
+        # init_maps, _ = env.prob.gen_init_map(rng)
         init_rng = jax.random.split(rng, config.evo_pop_size)
-        maps = jax.vmap(env.prob.gen_init_map, in_axes=(0,))(init_rng)
+        maps = jax.vmap(env.prob.gen_init_map, in_axes=(0,))(init_rng).env_map
         # Evaluate the maps
         map_stats = jax.vmap(env.prob.get_curr_stats, in_axes=(0,))(maps)
         # Get the loss for each map

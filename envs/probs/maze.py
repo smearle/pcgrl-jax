@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from envs.pathfinding import (FloodPath, FloodRegions, calc_n_regions, 
                               calc_path_length, get_max_n_regions, 
-                              get_max_path_length, get_path_coords)
+                              get_max_path_length, get_max_path_length_static, get_path_coords)
 from envs.probs.problem import Problem, ProblemState
 from envs.utils import Tiles
 
@@ -77,7 +77,7 @@ class MazeProblem(Problem):
         self.flood_path_net.init_params(map_shape)
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
-        self.max_path_len = get_max_path_length(map_shape)
+        self.max_path_len = get_max_path_length_static(map_shape)
         super().__init__(map_shape, ctrl_metrics, pinpoints)
 
     def get_metric_bounds(self, map_shape):
@@ -86,7 +86,7 @@ class MazeProblem(Problem):
         bounds[MazeMetrics.N_REGIONS] = [0, get_max_n_regions(map_shape)]
         bounds[MazeMetrics.N_PLAYERS] = [0, math.prod(map_shape)]
         bounds[MazeMetrics.N_DOORS] = [0, math.prod(map_shape)]
-        return np.array(bounds)
+        return jnp.array(bounds)
 
     def get_path_coords(self, env_map: chex.Array, prob_state: MazeState):
         coord1 = jnp.argwhere(env_map == MazeTiles.DOOR, size=1, fill_value=-1)[0]

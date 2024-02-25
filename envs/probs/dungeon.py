@@ -10,7 +10,7 @@ import jax.numpy as jnp
 from PIL import Image
 import numpy as np
 
-from envs.pathfinding import FloodPath, FloodPathState, FloodRegions, FloodRegionsState, calc_diameter, calc_n_regions, calc_path_length, get_max_n_regions, get_max_path_length, get_path_coords
+from envs.pathfinding import FloodPath, FloodPathState, FloodRegions, FloodRegionsState, calc_diameter, calc_n_regions, calc_path_length, get_max_n_regions, get_max_path_length, get_max_path_length_static, get_path_coords
 from envs.probs.problem import Problem, ProblemState, draw_path, get_max_loss, get_reward
 from envs.utils import idx_dict_to_arr, Tiles
 
@@ -106,7 +106,7 @@ class DungeonProblem(Problem):
         self.flood_path_net.init_params(map_shape)
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
-        self.max_path_len = get_max_path_length(map_shape)
+        self.max_path_len = get_max_path_length_static(map_shape)
         self.n_tiles = math.prod(map_shape)
 
         # Note that we implement target intervals by using target floats
@@ -141,7 +141,7 @@ class DungeonProblem(Problem):
         bounds[DungeonMetrics.N_ENEMIES] = [0, self.n_tiles]
         bounds[DungeonMetrics.N_REGIONS] = [0, self.n_tiles]
         bounds[DungeonMetrics.NEAREST_ENEMY] = [0, self.max_path_len]
-        return np.array(bounds)
+        return jnp.array(bounds)
 
     def get_path_coords(self, env_map: chex.Array, prob_state: ProblemState):
         """Return a list of tile coords, starting somewhere (assumed in the flood) and following the water level upward."""

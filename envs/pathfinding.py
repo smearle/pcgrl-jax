@@ -183,17 +183,27 @@ def get_path_coords_diam(flood_count: chex.Array, max_path_len):
 
 
 def get_max_path_length(map_shape: Tuple[int]):
-    return math.ceil(math.prod(map_shape) / 2) + max(map_shape)
+    map_shape = jnp.array(map_shape)
+    return (jnp.ceil(jnp.prod(map_shape) / 2) + jnp.max(map_shape)).astype(int)
+
+
+def get_max_path_length_static(map_shape: Tuple[int]):
+    return int(math.ceil(math.prod(map_shape) / 2) + max(map_shape))
 
 
 def get_max_n_regions(map_shape: Tuple[int]):
-    return np.ceil(np.prod(map_shape) / 2).astype(int)  # Declaring this as static for jax.
+    map_shape = jnp.array(map_shape)
+    return jnp.ceil(jnp.prod(map_shape) / 2).astype(int)
+
+
+def get_max_n_regions_static(map_shape: Tuple[int]):
+    return int(math.ceil(math.prod(map_shape) / 2))
 
     
 def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passable_tiles: chex.Array):
     """Approximate the diameter of a maze-like tile map."""
-    max_path_length = get_max_path_length(env_map.shape)
-    max_n_regions = get_max_n_regions(env_map.shape)
+    max_path_length = get_max_path_length_static(env_map.shape)
+    max_n_regions = get_max_n_regions_static(env_map.shape)
 
     # Get array of flattened indices of all tiles in env_map
     idxs = jnp.arange(math.prod(env_map.shape), dtype=jnp.float32) + 1
@@ -244,8 +254,8 @@ def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: jnp.n
 def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, env_map: chex.Array, passable_tiles: chex.Array):
     """Approximate the diameter of a maze-like tile map. Simultaneously compute 
     the number of regions (connected traversible components) in the map."""
-    max_path_length = get_max_path_length(env_map.shape)
-    max_n_regions = get_max_n_regions(env_map.shape)
+    max_path_length = get_max_path_length_static(env_map.shape)
+    max_n_regions = get_max_n_regions_static(env_map.shape)
 
     # Get array of flattened indices of all tiles in env_map
     idxs = jnp.arange(math.prod(env_map.shape), dtype=jnp.float32) + 1
