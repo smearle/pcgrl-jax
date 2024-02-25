@@ -75,7 +75,8 @@ class PlayPCGRLEnv(Environment):
         self.tile_enum = self.prob.tile_enum
         self.tile_probs = self.prob.tile_probs
         rng = jax.random.PRNGKey(0)  # Dummy random key
-        env_map = self.prob.gen_init_map(rng)
+        map_data = self.prob.gen_init_map(rng)
+        env_map, actual_map_shape = map_data
 
         self.rep: Representation
         self.rep = PlayerRepresentation(env_map=env_map, rf_shape=rf_shape,
@@ -91,7 +92,8 @@ class PlayPCGRLEnv(Environment):
     @partial(jax.jit, static_argnums=(0, 2))
     def reset_env(self, rng, env_params: PlayPCGRLEnvParams) \
             -> Tuple[chex.Array, PCGRLEnvState]:
-        env_map = self.prob.gen_init_map(rng)
+        map_data = self.prob.gen_init_map(rng)
+        env_map, actual_map_shape = map_data
         frz_map = gen_static_tiles(rng, 0.0, 0, self.map_shape)
 
         rng, _ = jax.random.split(rng)

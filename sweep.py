@@ -12,7 +12,6 @@ from utils import load_sweep_hypers
 from enjoy import main_enjoy
 from eval import main_eval
 from eval_change_pct import main_eval_cp
-from eval_different_size import main_eval_diff_size
 from plot import main as main_plot
 from train import main as main_train
 from gen_hid_params_per_obs_size import get_hiddims_dict_path 
