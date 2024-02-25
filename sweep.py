@@ -39,10 +39,12 @@ def get_grid_cfgs(base_config, kwargs):
     hyperparameter values specified by kwargs."""
 
     # Because this may depend on a bunch of other hyperparameters, so we need to compute hiddims last.
+    has_obs_size_hid_dims = False
     if 'obs_size_hid_dims' in kwargs:
+        has_obs_size_hid_dims = True
         obs_size_hid_dims = kwargs.pop('obs_size_hid_dims')
     items = sorted(list(kwargs.items()))
-    if 'obs_size_hid_dims' in kwargs:
+    if has_obs_size_hid_dims:
         items.append(('obs_size_hid_dims', obs_size_hid_dims))
 
     subconfigs = [base_config]

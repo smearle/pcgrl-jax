@@ -308,6 +308,8 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
 
     row_vals_curves = []
     for sc in sweep_configs:
+        if sc.obs_size == -1:
+            sc.obs_size = eval_config.eval_map_width * 2 - 1
         exp_dir = sc.exp_dir
         train_metrics = pd.read_csv(f'{exp_dir}/progress.csv')
         train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
@@ -325,7 +327,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
 
     # Create a line plot of the metric curves w.r.t. timesteps. Each row in the
     # column corresponds to a different line
-    fig, ax = plt.subplots(figsize=(10, 12))
+    fig, ax = plt.subplots(figsize=(10, 20))
     for i, row in metric_curves_df.iterrows():
         ax.plot(row, label=str(i))
     ax.set_xlabel('Timesteps')
