@@ -35,7 +35,7 @@ def main_enjoy(config: EnjoyConfig):
     network = init_network(env, env_params, config)
 
     rng = jax.random.PRNGKey(config.seed)
-    rng_reset = jax.random.split(rng, config.n_eps)
+    rng_reset = jax.random.split(rng, config.n_enjoy_envs)
 
     # Can manually define frozen tiles here, e.g. to set an OOD task
     # frz_map = jnp.zeros(env.map_shape, dtype=bool)
@@ -57,7 +57,7 @@ def main_enjoy(config: EnjoyConfig):
             # obs = jax.tree_map(lambda x: x[None, ...], obs)
             action = network.apply(network_params, obs)[
                 0].sample(seed=rng_act)
-        rng_step = jax.random.split(rng, config.n_eps)
+        rng_step = jax.random.split(rng, config.n_enjoy_envs)
         # obs, env_state, reward, done, info = env.step(
         #     rng_step, env_state, action[..., 0], env_params
         # )
@@ -77,70 +77,73 @@ def main_enjoy(config: EnjoyConfig):
     print('Scanning episode steps:')
     _, (states, rewards, dones, infos, frames) = jax.lax.scan(
         step_env, (rng, obs, env_state), None,
-        length=1*env.max_steps)
+        length=config.n_eps*env.max_steps)  # *at least* this many eps (maybe more if change percentage or whatnot)
 
     # frames = frames.reshape((config.n_eps*env.max_steps, *frames.shape[2:]))
 
     # assert len(frames) == config.n_eps * env.max_steps, \
     #     "Not enough frames collected"
-    assert frames.shape[1] == config.n_eps and frames.shape[0] == env.max_steps, \
+    assert frames.shape[1] == config.n_enjoy_envs and frames.shape[0] == config.n_eps * env.max_steps, \
         "`frames` has wrong shape"
-
 
     # Save gifs.
     print('Adding stats to frames:')
-    for ep_is in range(config.n_eps):
+    for env_idx in range(config.n_enjoy_envs):
         # ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
 
-        new_ep_frames = []
-        for i in range(env.max_steps):
-            frame = frames[i, ep_is]
-            
-            state_i = jax.tree_util.tree_map(lambda x: x[i, ep_is], states)
-            if config.render_stats:
-                frame = render_stats(env, state_i, frame)
-            new_ep_frames.append(frame)
+        for ep_idx in range(config.n_eps):
 
-            # Save frame as png
-            png_name = f"{exp_dir}/frame_ep-{ep_is}_step-{i}" + \
-                f"{('_randAgent' if config.random_agent else '')}.png"
-            # imageio.v3.imwrite(png_name, frame)
-            # imageio.imwrite(png_name, frame)
-            new_ep_frames.append(frame)
+            net_ep_idx = env_idx * config.n_eps + ep_idx
 
-        ep_frames = new_ep_frames
+            new_ep_frames = []
+            for i in range(ep_idx * env.max_steps, (ep_idx + 1) * env.max_steps):
+                frame = frames[i, env_idx]
+                
+                state_i = jax.tree_util.tree_map(lambda x: x[i, env_idx], states)
+                if config.render_stats:
+                    frame = render_stats(env, state_i, frame)
+                new_ep_frames.append(frame)
 
-        frame_shapes = [frame.shape for frame in ep_frames]
-        max_frame_w, max_frame_h = max(frame_shapes, key=lambda x: x[0])[0], \
-            max(frame_shapes, key=lambda x: x[1])[1]
-        # Pad frames to be same size
-        new_ep_frames = []
-        for frame in ep_frames:
-            frame = np.pad(frame, ((0, max_frame_w - frame.shape[0]),
-                                      (0, max_frame_h - frame.shape[1]),
-                                      (0, 0)), constant_values=0)
-            frame[:, :, 3] = 255
-            new_ep_frames.append(frame)
-        ep_frames = new_ep_frames
+                # Save frame as png
+                # png_name = f"{exp_dir}/frame_ep-{net_ep_idx}_step-{i}" + \
+                #     f"{('_randAgent' if config.random_agent else '')}.png"
+                # imageio.v3.imwrite(png_name, frame)
+                # imageio.imwrite(png_name, frame)
+                new_ep_frames.append(frame)
 
-        # cum_rewards = jnp.cumsum(jnp.array(
-        #   rewards[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps]))
-        gif_name = os.path.join(
-            f"{exp_dir}",
-            f"anim_step-{steps_prev_complete}" + \
-            f"ep-{ep_is}" + \
-            f"{('_randAgent' if config.random_agent else '')}" + \
-            f"{(f'_w-{config.eval_map_width}' if config.eval_map_width is not None else '')}" + \
-            f"seed-{config.seed}" + \
-            ".gif"
-        )
-        imageio.v3.imwrite(
-            gif_name,
-            ep_frames,
-            # Not sure why but the frames are too slow otherwise (compared to 
-            # when captured in `train.py`). Are we saving extra frames?
-            duration=config.gif_frame_duration / 2
-        )
+            ep_frames = new_ep_frames
+
+            frame_shapes = [frame.shape for frame in ep_frames]
+            max_frame_w, max_frame_h = max(frame_shapes, key=lambda x: x[0])[0], \
+                max(frame_shapes, key=lambda x: x[1])[1]
+            # Pad frames to be same size
+            new_ep_frames = []
+            for frame in ep_frames:
+                frame = np.pad(frame, ((0, max_frame_w - frame.shape[0]),
+                                        (0, max_frame_h - frame.shape[1]),
+                                        (0, 0)), constant_values=0)
+                frame[:, :, 3] = 255
+                new_ep_frames.append(frame)
+            ep_frames = new_ep_frames
+
+            # cum_rewards = jnp.cumsum(jnp.array(
+            #   rewards[ep_is*env.rep.max_steps:(ep_is+1)*env.rep.max_steps]))
+            gif_name = os.path.join(
+                f"{exp_dir}",
+                f"anim_step-{steps_prev_complete}" + \
+                f"_ep-{net_ep_idx}" + \
+                f"{('_randAgent' if config.random_agent else '')}" + \
+                f"{(f'_w-{config.eval_map_width}' if config.eval_map_width is not None else '')}" + \
+                f"_seed-{config.seed}" + \
+                ".gif"
+            )
+            imageio.v3.imwrite(
+                gif_name,
+                ep_frames,
+                # Not sure why but the frames are too slow otherwise (compared to 
+                # when captured in `train.py`). Are we saving extra frames?
+                duration=config.gif_frame_duration / 2
+            )
 
 
 if __name__ == '__main__':

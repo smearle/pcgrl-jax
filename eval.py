@@ -33,8 +33,9 @@ class EvalData:
 def main_eval(config: EvalConfig):
     config = init_config(config)
 
-    exp_dir = get_exp_dir(config)
+    exp_dir = config.exp_dir
     if not config.random_agent:
+        print(f'Attempting to load checkpoint from {exp_dir}')
         checkpoint_manager, restored_ckpt = init_checkpointer(config)
         network_params = restored_ckpt['runner_state'].train_state.params
     elif not os.path.exists(exp_dir):
@@ -43,10 +44,12 @@ def main_eval(config: EvalConfig):
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     if config.eval_map_width is not None:
         config.map_width = config.eval_map_width
+    if config.eval_max_board_scans is not None:
+        config.max_board_scans = config.eval_max_board_scans
     env = LossLogWrapper(env)
     env.prob.init_graphics()
     network = init_network(env, env_params, config)
-    rng = jax.random.PRNGKey(42)
+    rng = jax.random.PRNGKey(config.seed)
 
     init_x = env.gen_dummy_obs(env_params)
     # init_x = env.observation_space(env_params).sample(_rng)[None]
@@ -89,6 +92,7 @@ def main_eval(config: EvalConfig):
 
     stats_name = \
         (f"w-{config.eval_map_width}" if config.eval_map_width is not None else "") + \
+        (f"bs-{config.eval_max_board_scans}" if config.eval_max_board_scans is not None else "") + \
         f"stats.json"
     json_path = os.path.join(exp_dir, stats_name)
 

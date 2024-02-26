@@ -44,7 +44,7 @@ def cross_eval_main(cfg: SweepConfig):
 
 def sweep_grid(cfg, grid_hypers):
     default_cfg = TrainConfig()
-    sweep_configs = get_grid_cfgs(default_cfg, grid_hypers)
+    sweep_configs = get_grid_cfgs(default_cfg, grid_hypers, mode='eval')
     sweep_configs = [init_config(sc) for sc in sweep_configs]
 
     # FIXME: This part is messy, we have to assume we ran the eval with the 
@@ -75,13 +75,18 @@ def format_num(s):
     # Return if not a number
     if not np.issubdtype(s.dtype, np.number):
         return s
-    s_max = s.max()
+    # Check if the header of the row 
+    if 'loss' in s.name:
+        s_best = s.min()
+
+    else:
+        s_best = s.max()
 
     col = []
 
     for v in s:
         v_frmt = f'{v:.2f}'
-        if v == s_max:
+        if v == s_best:
             v_frmt = f'\\textbf{{{v_frmt}}}'
         col.append(v_frmt)
     

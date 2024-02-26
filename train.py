@@ -566,12 +566,9 @@ def init_checkpointer(config: Config):
     checkpoint_manager = orbax.checkpoint.CheckpointManager(
         ckpt_dir, orbax.checkpoint.PyTreeCheckpointer(), options)
 
-    if checkpoint_manager.latest_step() is None:
-        restored_ckpt = None
-    else:
-        print(f"Restoring checkpoint from {ckpt_dir}")
-        steps_prev_complete = checkpoint_manager.latest_step()
+    def try_load_ckpt(steps_prev_complete, target):
 
+        runner_state = target['runner_state']
         try:
             restored_ckpt = checkpoint_manager.restore(
                 steps_prev_complete, items=target)
@@ -615,6 +612,27 @@ def init_checkpointer(config: Config):
 
         # progress_df = progress_df[progress_df["timestep"] <= steps_prev_complete]
         # progress_df.to_csv(progress_csv_path, header=False, index=False)
+
+        return restored_ckpt
+
+    if checkpoint_manager.latest_step() is None:
+        restored_ckpt = None
+    else:
+        # print(f"Restoring checkpoint from {ckpt_dir}")
+        # steps_prev_complete = checkpoint_manager.latest_step()
+
+        ckpt_subdirs = os.listdir(ckpt_dir)
+        ckpt_steps = [int(cs) for cs in ckpt_subdirs if cs.isdigit()]
+
+        # Sort in decreasing order
+        ckpt_steps.sort(reverse=True)
+        for steps_prev_complete in ckpt_steps:
+            try:
+                restored_ckpt = try_load_ckpt(steps_prev_complete, target)
+                break
+            except TypeError as e:
+                print(f"Failed to load checkpoint at step {steps_prev_complete}. Error: {e}")
+                continue 
 
     return checkpoint_manager, restored_ckpt
 

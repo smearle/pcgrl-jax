@@ -226,7 +226,7 @@ class Dungeon2Problem(Problem):
         )
 
         is_playable: bool = ((n_players == 1) & (n_doors == 1) & (n_keys == 1) & (5 >= n_enemies) & (n_enemies >= 2) &
-                             (n_regions <= 2) & (n_treasures == 1))
+                             (n_regions <= 2) & (n_treasures == 1) & door_is_on_threshold & treasure_in_room)
 
         # Get path from player to key and from key to door
         pk_path_length, pk_flood_count, k_xy = jax.lax.cond(

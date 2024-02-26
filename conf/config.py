@@ -72,6 +72,9 @@ class Config:
 
     hidden_dims: Tuple[int] = (64, 256)
 
+    # TODO: Implement this. Just a placeholder for now.
+    reward_every: int = 1
+
 
 @dataclass
 class EvoMapConfig(Config):
@@ -114,15 +117,6 @@ class TrainAccelConfig(TrainConfig):
 
 
 @dataclass
-class EnjoyConfig(TrainConfig):
-    random_agent: bool = False
-    # How many episodes to render as gifs
-    n_eps: int = 5
-    eval_map_width: Optional[int] = None
-    render_stats: bool = True
-
-    
-@dataclass
 class EvalConfig(TrainConfig):
     reevaluate: bool = True
     random_agent: bool = False
@@ -130,7 +124,20 @@ class EvalConfig(TrainConfig):
     n_bins: int = 10
     n_eval_envs: int = 10
     n_eps: int = 5
-    eval_map_width: int = 16
+    eval_map_width: Optional[int] = None
+    eval_max_board_scans: Optional[int] = None
+
+
+@dataclass
+class EnjoyConfig(TrainConfig):
+    random_agent: bool = False
+    # How many episodes to render as gifs
+    n_eps: int = 5
+    eval_map_width: Optional[int] = None
+    render_stats: bool = True
+    n_enjoy_envs: int = 1
+
+    
 
 @dataclass
 class ProfileEnvConfig(Config):

@@ -1,0 +1,18 @@
+NAME: bs_binary
+change_pct:
+- -1.0
+max_board_scans:
+- 1
+- 5
+- 10
+n_envs:
+- 600
+seed:
+- 0
+- 1
+- 2
+- 3
+- 4
+- 5
+total_timesteps:
+- 1000000000

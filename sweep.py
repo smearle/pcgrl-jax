@@ -17,11 +17,11 @@ from train import main as main_train
 from gen_hid_params_per_obs_size import get_hiddims_dict_path 
 
 
-def get_sweep_cfgs(default_config, hypers):
+def get_sweep_cfgs(default_config, hypers, mode):
     # sweep_configs = get_sweep_cfgs(default_config, **hypers)
     sweep_configs = []
     for h in hypers:
-        sweep_configs += get_grid_cfgs(default_config, h)
+        sweep_configs += get_grid_cfgs(default_config, h, mode)
     return sweep_configs
 
     
@@ -34,16 +34,20 @@ def get_hiddims_dict(hiddims_dict_path):
     return hid_dims_dict
 
 
-def get_grid_cfgs(base_config, kwargs):
+def get_grid_cfgs(base_config, hypers, mode):
     """Return set of experiment configs corresponding to the grid of 
     hyperparameter values specified by kwargs."""
 
+    # If models were trained with different max_board_scans, evaluate them on the highest such value, for fairness.
+    if 'max_board_scans' in hypers.keys() and 'eval' in mode or 'enjoy' in mode:
+        base_config.eval_max_board_scans = max(hypers['max_board_scans'])
+
     # Because this may depend on a bunch of other hyperparameters, so we need to compute hiddims last.
     has_obs_size_hid_dims = False
-    if 'obs_size_hid_dims' in kwargs:
+    if 'obs_size_hid_dims' in hypers:
         has_obs_size_hid_dims = True
-        obs_size_hid_dims = kwargs.pop('obs_size_hid_dims')
-    items = sorted(list(kwargs.items()))
+        obs_size_hid_dims = hypers.pop('obs_size_hid_dims')
+    items = sorted(list(hypers.items()))
     if has_obs_size_hid_dims:
         items.append(('obs_size_hid_dims', obs_size_hid_dims))
 
@@ -175,7 +179,7 @@ def sweep_main(cfg: SweepConfig):
     for k, v in dict(cfg).items():
         setattr(default_config, k, v)
 
-    sweep_configs = get_sweep_cfgs(default_config, _hypers)
+    sweep_configs = get_sweep_cfgs(default_config, _hypers, mode=cfg.mode)
 
     # sweep_configs = [(sc,) for sc in sweep_configs]
 
