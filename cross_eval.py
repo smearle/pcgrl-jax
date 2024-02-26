@@ -1,4 +1,6 @@
 
+import copy
+from itertools import product
 import json
 import os
 from typing import Iterable
@@ -12,12 +14,21 @@ import yaml
 from conf.config import EvalConfig, SweepConfig, TrainConfig
 from eval import get_eval_name, init_config_for_eval
 from eval_change_pct import EvalData, get_change_pcts
-from sweep import get_grid_cfgs, hypers
+from sweep import get_grid_cfgs, hypers, eval_hypers
 from utils import init_config, load_sweep_hypers
 
 
 CROSS_EVAL_DIR = 'cross_eval'
 
+# The index of the metric in the column MultiIndex. When 0, the metric will go on top. (This is good when we are 
+# are sweeping over eval metrics and want to show only one metric to save space.) Otherwise, should be -1.
+METRIC_COL_TPL_IDX = 0
+
+table_name_remaps = {
+    'min_min_ep_loss': 'min. loss',
+    'mean_min_ep_loss': 'mean loss',
+    'max_board_scans': 'max. board scans',
+}
 
 @hydra.main(version_base=None, config_path='./', config_name='batch_pcgrl')
 def cross_eval_main(cfg: SweepConfig):
@@ -76,8 +87,10 @@ def format_num(s):
     # Return if not a number
     if not np.issubdtype(s.dtype, np.number):
         return s
+    is_pct = False
     # Check if the header of the row 
-    if 'loss' in s.name:
+    if isinstance(s.name, str) and 'loss' in s.name or isinstance(s.name, tuple) and 'loss' in s.name[METRIC_COL_TPL_IDX]:
+        is_pct = True
         s_best = s.min()
 
     else:
@@ -86,35 +99,94 @@ def format_num(s):
     col = []
 
     for v in s:
-        v_frmt = f'{v:.2f}'
+        if is_pct:
+            v_frmt = f'{v:.2%}'
+            v_frmt = v_frmt.replace('%', '\\%')
+        else:
+            v_frmt = f'{v:.2f}'
         if v == s_best:
             v_frmt = f'\\textbf{{{v_frmt}}}'
         col.append(v_frmt)
     
     return col
 
-# Function to replace underscores with spaces in a string
+
 def replace_underscores(s):
     return s.replace('_', ' ')
+
+
+def process_col_str(s):
+    if isinstance(s, str):
+        if s in table_name_remaps:
+            s = table_name_remaps[s]
+        else:
+            s = replace_underscores(s)
+    return s
+
+
+# Function to replace underscores with spaces in a string
+def process_col_tpls(t):
+    if isinstance(t, str):
+        return process_col_str(t)
+    new_s = []
+    for s in t:
+        s = process_col_str(s)
+        new_s.append(s)
+    return tuple(new_s)
+
 
 def clean_df_strings(df):
 
     # Replace underscores in index names
     if df.index.names:
-        df.index.names = [replace_underscores(name) if name is not None else None for name in df.index.names]
+        # df.index.names = [replace_underscores(name) if name is not None else None for name in df.index.names]
+        new_names = []
+        for name in df.index.names:
+            if name is None:
+                continue
+            if name in table_name_remaps:
+                new_names.append(table_name_remaps[name])
+            else:
+                new_names.append(replace_underscores(name))
+        df.index.names = new_names
+
+    if df.columns.names:
+        # df.columns.names = [replace_underscores(name) if name is not None else None for name in df.columns.names]
+        new_names = []
+        for name in df.columns.names:
+            if name is None:
+                new_names.append(name)
+            elif name in table_name_remaps:
+                new_names.append(table_name_remaps[name])
+            else:
+                new_names.append(replace_underscores(name))
+        df.columns.names = new_names
 
     # Replace underscores in index labels for each level of the MultiIndex
     # for level in range(df.index.nlevels):
     #     df.index = df.index.set_levels([df.index.levels[level].map(replace_underscores)], level=level)
 
     # Replace underscores in column names
-    df.columns = df.columns.map(replace_underscores)
+    df.columns = df.columns.map(process_col_tpls)
 
     return df
 
 
 def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
                     eval_config: EvalConfig, hypers):
+    eval_hyper_ks = [k for k in eval_hypers]
+    eval_hyper_combos = list(product(*[eval_hypers[k] for k in eval_hypers]))
+
+    eval_sweep_name = ('eval_' + '_'.join(k.strip('eval_') + '_' for k, v in eval_hypers.items() if len(v) > 1) if 
+                        len(eval_hypers) > 0 else '')
+
+    metrics_to_keep = None
+    if 'eval_map_width' in eval_hyper_ks:
+        metrics_to_keep = ['min_min_ep_loss']
+
+    col_headers = [k for k in eval_hyper_ks]
+    col_headers.insert(METRIC_COL_TPL_IDX, '')
+    col_indices = set({})
 
     row_headers = [tuple(v) if isinstance(v, list) else v for v in list(hypers.keys())]
     row_indices = []
@@ -125,23 +197,45 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     # for exp_dir, stats in basic_stats.items():
     for sc in sweep_configs:
 
-        # Do this so that we can get the correct stats file depending on eval parameters
-        # TODO: To sweep over eval configs, we'd nest a for loop here or something like that
-        sc = init_config_for_eval(sc)
+        sweep_eval_configs = [copy.deepcopy(sc)]
 
-        sc_stats = json.load(open(
-            os.path.join(f'{sc.exp_dir}', 
-                         'stats' + get_eval_name(sc) + '.json')))
+        # Do this so that we can get the correct stats file depending on eval parameters
+        # sc = init_config_for_eval(sc)
+
+        # For each train config, also sweep over eval params to get all the relevant stats
+        for eval_hyper_combo in eval_hyper_combos:
+            new_sweep_eval_configs = copy.deepcopy(sweep_eval_configs)
+            for sec in sweep_eval_configs:
+                new_sec = copy.deepcopy(sec)
+                for k, v in zip(eval_hyper_ks, eval_hyper_combo):
+                    setattr(new_sec, k, v)
+                new_sweep_eval_configs.append(new_sec)
+            sweep_eval_configs = new_sweep_eval_configs
+        
         row_tpl = tuple(getattr(sc, k) for k in row_headers)
         row_tpl = tuple(tuple(v) if isinstance(v, list) else v for v in row_tpl)
         row_indices.append(row_tpl)
+        
         vals = {}
-        for k, v in sc_stats.items():
-            vals[k] = v
+        for sec in sweep_eval_configs:
+            sec_col_tpl = [getattr(sec, k) for k in eval_hyper_ks]
+            sc_stats = json.load(open(
+                os.path.join(f'{sc.exp_dir}', 
+                            'stats' + get_eval_name(sec) + '.json')))
+            for k, v in sc_stats.items():
+                col_tpl = copy.deepcopy(sec_col_tpl)
+                col_tpl.insert(METRIC_COL_TPL_IDX, k)
+                col_tpl = tuple(col_tpl)
+                col_indices.add(col_tpl)
+                vals[col_tpl] = v
         row_vals.append(vals)
-    
+
+    col_index = pd.MultiIndex.from_tuples(col_indices, names=col_headers)
     row_index = pd.MultiIndex.from_tuples(row_indices, names=row_headers)
-    basic_stats_df = pd.DataFrame(row_vals, index=row_index)
+    basic_stats_df = pd.DataFrame(row_vals, index=row_index, columns=col_index)
+
+    # Sort columns
+    basic_stats_df = basic_stats_df.sort_index(axis=1)
     
     # Save the dataframe to a csv
     # os.makedirs(CROSS_EVAL_DIR, exist_ok=True)
@@ -165,7 +259,7 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     #                                     "basic_stats_mean.csv"))
     
     # Save to markdown
-    with open(os.path.join(CROSS_EVAL_DIR, name, "basic_stats_mean.md"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, f"{eval_sweep_name}basic_stats_mean.md"), 'w') as f:
         f.write(basic_stats_mean_df.to_markdown())
     
     # Save the dataframe as a latex table
@@ -173,32 +267,47 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     #     f.write(basic_stats_mean_df.to_latex())
 
     # Now, remove all row indices that have the same value across all rows
-    levels_to_drop = \
+    row_levels_to_drop = \
         [level for level in basic_stats_mean_df.index.names if 
          basic_stats_mean_df.index.get_level_values(level).nunique() == 1]
-    
-    # Drop these rows
-    basic_stats_concise_df = basic_stats_mean_df.droplevel(levels_to_drop)
 
-    # Drop the column names `n_parameters`
-    if 'n_parameters' in basic_stats_concise_df.columns:
-        basic_stats_concise_df = basic_stats_concise_df.drop(columns='n_parameters')
+    # Drop these rows
+    basic_stats_concise_df = basic_stats_mean_df.droplevel(row_levels_to_drop)
+
+    # Similarly, remove all column indices that have the same value across all columns
+    col_levels_to_drop = \
+        [level for level in basic_stats_mean_df.columns.names if
+            basic_stats_mean_df.columns.get_level_values(level).nunique() == 1]
+    
+    # Drop these columns
+    basic_stats_concise_df = basic_stats_concise_df.droplevel(col_levels_to_drop, axis=1)
+
+    # Drop the `n_parameters` `n_eval_eps` metrics, and others if `metrics_to_keep` is specified
+    for col_tpl in basic_stats_concise_df.columns:
+        if isinstance(col_tpl, str):
+            metric_str = col_tpl
+        else:
+            metric_str = col_tpl[METRIC_COL_TPL_IDX]
+        if metric_str == 'n_parameters' or metric_str == 'n_eval_eps':
+            basic_stats_concise_df = basic_stats_concise_df.drop(columns=col_tpl)
+        elif metrics_to_keep is not None and metric_str not in metrics_to_keep:
+            basic_stats_concise_df = basic_stats_concise_df.drop(columns=col_tpl)
 
     # Save the dataframe to a csv
     # basic_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
     #                                     name, "basic_stats_concise.csv"))
 
     # Save to markdown
-    with open(os.path.join(CROSS_EVAL_DIR, name, "basic_stats_concise.md"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, f"{eval_sweep_name}basic_stats_concise.md"), 'w') as f:
         f.write(basic_stats_concise_df.to_markdown())
-
-    basic_stats_concise_df = clean_df_strings(basic_stats_concise_df)
 
     # Bold the maximum value in each column
     styled_basic_stats_concise_df = basic_stats_concise_df.apply(format_num)
 
+    styled_basic_stats_concise_df = clean_df_strings(styled_basic_stats_concise_df)
+
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, name, f"{name}_basic_stats_concise.tex"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, f"{name}_{eval_sweep_name}basic_stats_concise.tex"), 'w') as f:
         f.write(styled_basic_stats_concise_df.to_latex())
 
 
@@ -323,7 +432,12 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     for sc in sweep_configs:
         if hasattr(sc, "obs_size"):
             if sc.obs_size == -1:
-                sc.obs_size = eval_config.eval_map_width * 2 - 1
+                if eval_config.eval_map_width is not None:
+                    mw = eval_config.eval_map_width
+                else:
+                    mw = eval_config.map_width
+                # Why exactly is this necessary? And should we really be inhering from *eval* map width?
+                sc.obs_size = mw * 2 - 1
         exp_dir = sc.exp_dir
         train_metrics = pd.read_csv(f'{exp_dir}/progress.csv')
         train_metrics = train_metrics.sort_values(by='timestep', ascending=True)

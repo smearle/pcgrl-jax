@@ -5,9 +5,10 @@ import pprint
 
 import hydra
 import submitit
+from tqdm import tqdm
 
 from conf.config import EnjoyConfig, EvalConfig, SweepConfig, TrainConfig
-from conf.config_sweeps import hypers
+from conf.config_sweeps import hypers, eval_hypers
 from utils import load_sweep_hypers
 from enjoy import main_enjoy
 from eval import main_eval
@@ -15,6 +16,10 @@ from eval_change_pct import main_eval_cp
 from plot import main as main_plot
 from train import main as main_train
 from gen_hid_params_per_obs_size import get_hiddims_dict_path 
+
+
+def am_on_hpc():
+    return 'CLUSTER' in os.environ
 
 
 def get_sweep_cfgs(default_config, hypers, mode):
@@ -39,8 +44,12 @@ def get_grid_cfgs(base_config, hypers, mode):
     hyperparameter values specified by kwargs."""
 
     # If models were trained with different max_board_scans, evaluate them on the highest such value, for fairness.
-    if 'max_board_scans' in hypers.keys() and 'eval' in mode or 'enjoy' in mode:
-        base_config.eval_max_board_scans = max(hypers['max_board_scans'])
+    if 'eval' in mode or 'enjoy' in mode:
+        if 'max_board_scans' in hypers.keys() and 'max_board_scans' not in eval_hypers:
+            base_config.eval_max_board_scans = max(hypers['max_board_scans'])
+
+        # Add eval hypers
+        hypers = {**hypers, **eval_hypers}
 
     # Because this may depend on a bunch of other hyperparameters, so we need to compute hiddims last.
     has_obs_size_hid_dims = False
@@ -138,12 +147,17 @@ def get_grid_cfgs(base_config, hypers, mode):
 
 def seq_main(main_fn, sweep_configs):
     """Convenience function for executing a sweep of jobs sequentially"""
-    return [main_fn(sc) for sc in sweep_configs]
+    # return [main_fn(sc) for sc in sweep_configs]
+    results = []
+    for sc in tqdm(sweep_configs):
+        results.append(main_fn(sc))
+    return results
 
 
 @hydra.main(version_base=None, config_path='./', config_name='batch_pcgrl')
 def sweep_main(cfg: SweepConfig):
-    cfg.slurm = False if cfg.mode == 'plot' else cfg.slurm
+    if cfg.mode == 'plot' or not am_on_hpc():
+        cfg.slurm = False
 
     if cfg.name is not None:
         _hypers = [load_sweep_hypers(cfg)]
