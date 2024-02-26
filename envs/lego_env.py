@@ -76,10 +76,9 @@ class LegoEnvState:
 
 @struct.dataclass
 class LegoEnvParams:
-    rf_shape: Tuple[int, int, int]
     problem: int = ProbEnum.LEGO
     representation: int = RepEnum.LEGO_REARRANGE
-    map_shape: Tuple[int, int, int] = (6, 6*3-2, 6)
+    map_shape: Tuple[int, int, int] = (6, 6, 6)
     act_shape: Tuple[int] = (1,1)
     max_steps_multiple: int = 25
     #static_tile_prob: Optional[float] = 0.0
@@ -88,6 +87,7 @@ class LegoEnvParams:
     n_blocks: int = 20
     #max_board_scans: float = 3.0
     ctrl_metrics: Tuple = (1,1)
+  
     #change_pct: float = -1.0
 
 """
@@ -172,7 +172,7 @@ class LegoEnv(Environment):
     
 
         prob_cls = PROB_CLASSES[problem]
-        self.prob = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics)
+        self.prob = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics, n_blocks = n_blocks)
         
 
         rng = jax.random.PRNGKey(0)  # Dummy random key
@@ -260,49 +260,49 @@ class LegoEnv(Environment):
             step_idx = env_state.step_idx,
             rng = subkey
         )
+
+        obs = self.get_obs(env_state.rep_state, env_state.prob_state)
+
         #env_map = jnp.where(env_state.static_map == 1,
         #                    env_state.env_map, env_map,
         #) 
         
         #env_state = jax.lax.cond(env_state.prob_state == None, env_state.prob_state = LegoProblemState(reward = 0), env_state)
         reward, prob_state = self.prob.step(env_map, state=env_state.prob_state, blocks=rep_state.blocks)
-        
-        
-        obs = self.get_obs(env_state.rep_state, env_state.prob_state)
-            #env_map=env_map, static_map=env_state.static_map,
-            #rep_state=rep_state, prob_state=prob_state)
-         
-        done = self.is_terminal(env_state, env_params)
-        step_idx = env_state.step_idx + 1
+
         env_state = LegoEnvState(
             env_map=env_map, static_map=env_state.static_map,
-            rep_state=rep_state, done=done, reward=reward + rep_state.punish_term,
-            prob_state=prob_state, step_idx=step_idx, queued_state = env_state.queued_state)
+            rep_state=rep_state, done=False, reward=reward,
+            prob_state=prob_state, step_idx=env_state.step_idx + 1, queued_state = env_state.queued_state)
+         
+        done = self.is_terminal(env_state, env_params)
+        
+        env_state = env_state.replace(done=done)
+
         
         self.render(env_state)
 
         return (
             jax.lax.stop_gradient(obs),
             jax.lax.stop_gradient(env_state),
-            reward+rep_state.punish_term,
+            reward,
             done,
             {"discount": self.discount(env_state, env_params), 
              "footprint": prob_state.stats[LegoMetrics.FOOTPRINT], 
              "avg_height": prob_state.stats[LegoMetrics.AVG_HEIGHT], 
+             "ctr_dist": prob_state.stats[LegoMetrics.DIST_TO_CENTER],
              "last_action": action[0][0][0],
              "stats": prob_state.stats,
              "rotation": rep_state.rotation
              }
         )
     
-    def is_terminal(self, state: LegoEnvState, params: LegoEnvParams) \
+    def is_terminal(self, env_state: LegoEnvState, env_params) \
             -> bool:
         """Check whether state is terminal."""
-        done = state.step_idx >= (self.rep.max_steps - 1)
-        #done = jnp.logical_or(done, jnp.logical_and(
-        #    params.change_pct > 0, state.pct_changed >= params.change_pct))
-        return done
-
+        max_reps_hit = env_state.step_idx >= (self.rep.max_steps - 1) 
+        #done = jnp.logical_or(max_reps_hit, env_state.prob_state.done)
+        return max_reps_hit
     """
     def render(self, env_state: LegoEnvState):
         # TODO: Refactor this into problem

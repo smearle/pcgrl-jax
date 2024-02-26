@@ -94,8 +94,8 @@ class LegoConfig(Config):
     num_envs: int = 4
     #num_steps: int = 
     max_steps_multiple:int = 15
-    n_blocks:int = 26
-    total_timesteps: int = int(5e7)
+    n_blocks:int = 7
+    total_timesteps: int = int(3e7)
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4
     GAMMA: float = 0.99
@@ -111,11 +111,12 @@ class LegoConfig(Config):
     exp_name: str = "0"
     seed: int = 0
 
+    reward: str = "center"
     problem: str = "lego"
     representation: str = "lego_rearrange"
     model: str = "conv"
 
-    map_width: int = 6#12
+    map_width: int = 7#12
     is_3d: bool = True
     n_render_eps: int = 3
 
@@ -124,10 +125,7 @@ class LegoConfig(Config):
 
  
     ctrl_metrics: Tuple[str] = ()
-    # Size of the receptive field to be fed to the action subnetwork.
-    vrf_size: Optional[int] = 11
-    # Size of the receptive field to be fed to the value subnetwork.
-    arf_size: Optional[int] = 11
+
     # TODO: actually take arf and vrf into account in models, where possible
 
     #change_pct: float = -1.0

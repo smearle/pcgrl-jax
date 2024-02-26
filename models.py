@@ -22,19 +22,6 @@ def crop_rf(x, rf_size):
 
 def crop_arf_vrf(x, arf_size, vrf_size):
     return crop_rf(x, arf_size), crop_rf(x, vrf_size)
-
-
-def crop_rf_3d(x, rf_size):
-    mid_x = x.shape[1] // 2
-    mid_y = x.shape[2] // 2
-    mid_z = x.shape[3] // 2
-    return x[:, mid_x-math.floor(rf_size/2):mid_x+math.ceil(rf_size/2),
-             mid_y-math.floor(rf_size/2):mid_y+math.ceil(rf_size/2),
-             mid_z-math.floor(rf_size/2):mid_z+math.ceil(rf_size/2)
-             ]
-
-def crop_arf_vrf_3d(x, arf_size, vrf_size):
-    return crop_rf_3d(x, arf_size), crop_rf_3d(x, vrf_size)
     
 
 class Dense(nn.Module):
@@ -157,11 +144,15 @@ class ConvForward3d(nn.Module):
         
 
         map_x = nn.Conv(
-            features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(3, 3,3)
+            features=32, kernel_size=(5,5,5), strides=(2, 2, 2), padding=(3, 3,3)
         )(map_x)
         map_x = activation(map_x)
+        #map_x = nn.Conv(
+        #    features=64, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(3, 3,3)
+        #)(map_x)
+        #map_x = activation(map_x)
         map_x = nn.Conv(
-            features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(3, 3,3)
+            features=64, kernel_size=(2,2,2), strides=(1, 1, 1), padding=(3, 3,3)
         )(map_x)
         map_x = activation(map_x)
 

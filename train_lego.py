@@ -65,6 +65,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         return config["LR"] * frac
 
     def train(rng, config: TrainConfig):
+
+        train_start_time = timer()
         # INIT NETWORK
         network = get_network(env, env_params, config)
 
@@ -192,17 +194,15 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             for ep_is in range(config.n_render_eps):
                 ep_blocks = blocks[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
-                ep_avg_height = states.prob_state.stats[-1, ep_is, 0]
-                ep_footprint = states.prob_state.stats[-1, ep_is, 1]
-                ep_rotation_0 = states.rep_state.rotation[0, ep_is]
-                ep_rotation_1 = states.rep_state.rotation[1, ep_is]
-                ep_rotation_end = states.rep_state.rotation[-2, ep_is]
+                ep_avg_height = states.prob_state.stats[-2, ep_is, 0]
+                ep_footprint = states.prob_state.stats[-2, ep_is, 1]
+                ep_cntr_dist = states.prob_state.stats[-2, ep_is, 3]
                 ep_rotations = states.rep_state.rotation[:,ep_is]
                 ep_curr_blocks = states.rep_state.curr_block[:,ep_is]
                 actions = states.rep_state.last_action[:,ep_is]
 
 
-                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_avg_height:.2f}_fp{ep_footprint:.2f}_ro{ep_rotation_0}{ep_rotation_1}{ep_rotation_end}/"
+                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_avg_height:.2f}_fp{ep_footprint:.2f}_ctrdist{ep_cntr_dist:.2f}/"
                 if not os.path.exists(savedir):
                     os.makedirs(savedir)
                 
@@ -403,7 +403,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     traj_batch, advantages, targets = batch_info
 
                     def _loss_fn(params, traj_batch, gae, targets):
-                        # RERUN NETWORK
+                        # RERUN  
                         # obs = traj_batch.obs[None]
                         pi, value = network.apply(params, traj_batch.obs)
                         # action = traj_batch.action.reshape(pi.logits.shape[:-1])
@@ -507,24 +507,22 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # Create a tensorboard writer
             writer = SummaryWriter(get_exp_dir(config))
 
-            def log_callback(metric, steps_prev_complete):
+            def log_callback(metric, steps_prev_complete, train_start_time):
                 timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
+
                 if len(timesteps) > 0:
                     t = timesteps[0]
                     ep_return = (metric["returned_episode_returns"]
-                                 [metric["returned_episode"]].mean(
-                    ))
-                    #ep_length = (metric["returned_episode_lengths"]
-                    #              [metric["returned_episode"]].mean())
-                    #ep_footprint = (metric["footprint"][metric["returned_episode"]].mean())
-                    #ep_avg_height = (metric["avg_height"][metric["returned_episode"]].mean())
+                                 [metric["returned_episode"]].mean()
+                                 )
+                    ep_length = (metric["returned_episode_lengths"]
+                                  [metric["returned_episode"]].mean())
                     
-                    #test = (metric["avg_height"][metric["returned_episode"]])
-                    #second_test = (metric["avg_height"][-2])
-                    #test1 = jnp.argmax(metric["avg_height"],0)
-                    #test2 = metric["avg_height"][test1]
+
                     ep_footprint = metric["stats"][metric["returned_episode"]][:,1].mean()
                     ep_avg_height = metric["stats"][metric["returned_episode"]][:,0].mean()
+                    #ep_ctr_dist = metric["stats"][metric["returned_episode"]][:,3].mean()
+                    ep_ctr_dist = metric["ctr_dist"][metric["returned_episode"]].mean()
 
                     n_envs = metric["last_action"].shape[1]
                     mean_num_actions = sum([len(set(metric["last_action"][:,i])) for i in range(n_envs)])/n_envs
@@ -538,11 +536,14 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
                     writer.add_scalar("ep_return", ep_return, t)
                     #writer.add_scalar("ep_length", ep_length, t)
-                    writer.add_scalar("ep_end_footprint", ep_footprint,t)
-                    writer.add_scalar("ep_end_avg_height", ep_avg_height, t)
-                    writer.add_scalar("num_actions", mean_num_actions, t)
+                    writer.add_scalar("ep_stats/ep_end_footprint", ep_footprint,t)
+                    writer.add_scalar("ep_stats/ep_end_avg_height", ep_avg_height, t)
+                    writer.add_scalar("ep_stats/num_actions", mean_num_actions, t)
+                    writer.add_scalar("ep_stats/ep_end_dist_ctr", ep_ctr_dist,t)
                     # for k, v in zip(env.prob.metric_names, env.prob.stats):
                     #     writer.add_scalar(k, v, t)
+                    fps = (t - steps_prev_complete) / (timer() - train_start_time)
+                    writer.add_scalar("fps", fps, t)
 
             # FIXME: shouldn't assume size of render map.
             frames_shape = (config.n_render_eps * 1 * env.max_steps, 
@@ -561,7 +562,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
             jax.debug.callback(log_callback, metric,
-                               steps_prev_complete)
+                               steps_prev_complete, train_start_time)
 
             runner_state = RunnerState(
                 train_state, env_state, last_obs, rng,

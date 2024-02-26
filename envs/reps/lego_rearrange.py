@@ -2,6 +2,7 @@ from abc import ABC
 import math
 from typing import Tuple
 import copy
+import os
 
 import chex
 from flax import struct
@@ -12,7 +13,61 @@ import jax.numpy as jnp
 from envs.utils import Tiles
 from .representation import Representation, RepresentationState
 
+def render_mpds(blocks, i, savedir, config):
 
+                if not os.path.exists(savedir):
+                    os.makedirs(savedir)
+                
+                for num in range(blocks.shape[0]):
+                    curr_blocks = blocks[num,:,:]
+                    rotation = blocks[num]
+                    curr_block = blocks[num]
+
+                    savename = os.path.join(savedir, f"{num}.mpd")
+                    
+                    f = open(savename, "a")
+                    f.write("0/n")
+                    f.write("0 Name: New Model.ldr\n")
+                    f.write("0 Author:\n")
+                    f.write("\n")
+
+                    for x in range(config.map_width):
+                        for z in range(config.map_width):
+                            lego_block_name = "3005"
+                            block_color = "2 "
+                            if curr_block == num:
+                                block_color = "7 "
+                            
+                            y_offset = -3#-24
+
+                            x_lego = x * 20  + config.map_width - 1
+                            y_lego =  0#(1)*(LegoDimsDict[lego_block_name][1])
+                            z_lego = z * 20 + config.map_width - 1
+
+                            #print(block.x, block.y, block.z)
+                            
+                            f.write("1 ")
+                            f.write(block_color)
+                            f.write(str(x_lego) + ' ' + str(y_lego) + ' ' + str(z_lego) + ' ')
+                            f.write("1 0 0 0 1 0 0 0 1 ")
+                            f.write(lego_block_name + ".dat")
+                            f.write("\n")
+                    
+                    y_offset = -24
+                    for b in range(curr_blocks.shape[0]):
+                        lego_block_name = "3005"
+                        block_color = "7 "
+                        x_lego = curr_blocks[b, 0] * 20  + config.map_width - 1
+                        y_lego = curr_blocks[b, 1] * (-24) + y_offset
+                        z_lego = curr_blocks[b, 2] * 20 + config.map_width - 1
+
+                        f.write("1 ")
+                        f.write(block_color)
+                        f.write(str(x_lego) + ' ' + str(y_lego) + ' ' + str(z_lego) + ' ')
+                        f.write("1 0 0 0 1 0 0 0 1 ")
+                        f.write(lego_block_name + ".dat")
+                        f.write("\n")
+                    f.close()
 
 
 @struct.dataclass
@@ -21,7 +76,6 @@ class LegoRearrangeRepresentationState(RepresentationState):
     blocks: chex.Array
     rotation: int=0
     last_action: int=0
-    punish_term: int = 0
 
 class LegoRearrangeRepresentation(Representation):
     #pre_tile_action_dim: int
@@ -45,7 +99,7 @@ class LegoRearrangeRepresentation(Representation):
         self.max_steps = max_steps_multiple*self.num_blocks
 
         self.moves = jnp.array([
-            #(0,0),
+            (0,0),
             (0,1),
             (0,-1),
             (1,0),
@@ -61,7 +115,7 @@ class LegoRearrangeRepresentation(Representation):
     def observation_shape(self):
         # Always observe static tile channel
         obs_shape = (2*(self.env_shape[0])+1, 2*(self.env_shape[1])+1, 2*(self.env_shape[2])+1)
-        return (*obs_shape, len(self.tile_enum)+1)
+        return (*obs_shape, len(self.tile_enum)+2)
 
 
 
@@ -149,7 +203,9 @@ class LegoRearrangeRepresentation(Representation):
         #     block_x, block_y, block_z = block
         #     obs = obs.at[block_x + x_offset, block_y + y_offset, block_z + z_offset].set(2)
         # obs = self.perturb_obs(rotation, obs)
-        obs = jax.nn.one_hot(obs, num_classes=len(self.tile_enum)+1, axis=-1)
+
+        obs = obs.at[blocks[curr_block,0]+x_offset, blocks[curr_block,1]+y_offset,blocks[curr_block,2]+z_offset].set(3)
+        obs = jax.nn.one_hot(obs, num_classes=len(self.tile_enum)+2, axis=-1)
         return obs
 
     #@property
@@ -175,7 +231,7 @@ class LegoRearrangeRepresentation(Representation):
         
         rotation = 0#jax.random.randint(subkey,shape=(1,), minval =0, maxval=3, dtype=int)[0]
 
-        return LegoRearrangeRepresentationState(curr_block = 0, blocks = blocks, rotation=rotation, last_action = 0, punish_term = 0)
+        return LegoRearrangeRepresentationState(curr_block = 0, blocks = blocks, rotation=rotation, last_action = 0)
 
     def step(self, env_map: chex.Array, action: chex.Array, rep_state: LegoRearrangeRepresentationState, step_idx: int, rng):
         
@@ -211,19 +267,13 @@ class LegoRearrangeRepresentation(Representation):
 
         new_blocks = new_blocks.at[rep_state.curr_block, 0].add(x_step)
         new_blocks = new_blocks.at[rep_state.curr_block, 2].add(z_step)
-        
 
 
-        def ret0():
-            return 0.0
-        def ret1():
-            return 0.0#0-.1
-        
-        punish = jax.lax.cond( new_blocks[rep_state.curr_block, 0] > self.env_shape[0]-1, ret1, ret0)
-        punish = jax.lax.cond( new_blocks[rep_state.curr_block, 2] > self.env_shape[2]-1, ret1, ret0)
-
-
-        new_blocks = jnp.clip(new_blocks, a_min = 0, a_max = self.env_shape[0]-1)
+        new_blocks_x = jnp.clip(new_blocks[:,0], a_min = 0, a_max = self.env_shape[0]-1)
+        new_blocks_z = jnp.clip(new_blocks[:,2], a_min = 0, a_max = self.env_shape[2]-1)
+        new_blocks = new_blocks.at[:,0].set(new_blocks_x)
+        new_blocks = new_blocks.at[:,2].set(new_blocks_z)
+       
         x = new_blocks[rep_state.curr_block, 0]
         z = new_blocks[rep_state.curr_block, 2]
      
@@ -247,8 +297,7 @@ class LegoRearrangeRepresentation(Representation):
             curr_block = (rep_state.curr_block + 1)%self.num_blocks, 
             blocks = return_blocks,
             rotation = rotation,
-            last_action=action[0][0][0],
-            punish_term = punish
+            last_action=action[0][0][0]
             )
 
         return return_map, rng, return_state

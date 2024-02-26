@@ -19,6 +19,7 @@ class LegoTiles(IntEnum):
 class LegoProblemState:
     stats: Optional[chex.Array] = None
     ctrl_trgs: Optional[chex.Array] = None
+    done: Optional[bool] = False
     
 
 class LegoMetrics(IntEnum):
@@ -36,15 +37,16 @@ class LegoProblem(Problem):
     #stat_weights = stat_weights.at[LegoMetrics.DIST_TO_CENTER].set(0)
     metrics_enum = LegoMetrics
 
-    def __init__(self, map_shape, ctrl_metrics):
+    def __init__(self, map_shape, ctrl_metrics, n_blocks):
         self.tile_enum = LegoTiles
         # self.map_shape = map_shape
         self.metrics_enum = LegoMetrics
-        
+        self.n_blocks = n_blocks
+
         stat_trgs = np.zeros(len(LegoMetrics))
-        stat_trgs[LegoMetrics.AVG_HEIGHT] = np.inf
+        stat_trgs[LegoMetrics.AVG_HEIGHT] = sum([i for i in range(self.n_blocks)])/self.n_blocks
         stat_trgs[LegoMetrics.FOOTPRINT] = 1
-        stat_trgs[LegoMetrics.AVG_EUCLIDEAN] = 1
+        stat_trgs[LegoMetrics.AVG_EUCLIDEAN] = 0
         stat_trgs[LegoMetrics.DIST_TO_CENTER] = 0
         self.stat_trgs = jnp.array(stat_trgs)
         
@@ -97,9 +99,12 @@ class LegoProblem(Problem):
         stats = stats.at[LegoMetrics.AVG_EUCLIDEAN].set(avg_euclidean)
         stats = stats.at[LegoMetrics.DIST_TO_CENTER].set(avg_cntr_dist)
 
+        done = jnp.sum(jnp.where(stats == self.stat_trgs, 0, 1) * self.stat_weights) == 0
 
         state = LegoProblemState(
-            stats=stats, ctrl_trgs=self.get_stat_trgs)
+            stats=stats, 
+            ctrl_trgs=self.get_stat_trgs,
+            done = done)
         
         
         return state
@@ -122,7 +127,7 @@ class LegoProblem(Problem):
     def reset(self, blocks: chex.Array, env_map: chex.Array):
         old_stats = self.get_curr_stats(blocks, env_map).stats
         
-        state = LegoProblemState(ctrl_trgs = self.get_stat_trgs, stats = old_stats)
+        state = LegoProblemState(ctrl_trgs = self.get_stat_trgs, stats = old_stats, done = False)
         reward = self.get_reward(state.stats, old_stats, self.stat_weights, self.stat_trgs, self.ctrl_threshes)
         return reward, state
 
