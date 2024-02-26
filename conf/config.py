@@ -126,10 +126,11 @@ class EvalConfig(TrainConfig):
     n_eps: int = 5
     eval_map_width: Optional[int] = None
     eval_max_board_scans: Optional[int] = None
+    eval_seed: int = 0
 
 
 @dataclass
-class EnjoyConfig(TrainConfig):
+class EnjoyConfig(EvalConfig):
     random_agent: bool = False
     # How many episodes to render as gifs
     n_eps: int = 5

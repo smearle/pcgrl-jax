@@ -8,11 +8,12 @@ import numpy as np
 
 from conf.config import EnjoyConfig
 from envs.pcgrl_env import PCGRLEnv, render_stats, gen_dummy_queued_state
+from eval import get_eval_name, init_config_for_eval
 from train import init_checkpointer
 from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 
 
-@hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
+@hydra.main(version_base=None, config_path='./conf', config_name='enjoy_pcgrl')
 def main_enjoy(config: EnjoyConfig):
     config = init_config(config)
 
@@ -28,13 +29,12 @@ def main_enjoy(config: EnjoyConfig):
         steps_prev_complete = 0
 
     env: PCGRLEnv
-    if config.eval_map_width is not None:
-        config.map_width = config.eval_map_width
+    config = init_config_for_eval(config)
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     env.prob.init_graphics()
     network = init_network(env, env_params, config)
 
-    rng = jax.random.PRNGKey(config.seed)
+    rng = jax.random.PRNGKey(config.eval_seed)
     rng_reset = jax.random.split(rng, config.n_enjoy_envs)
 
     # Can manually define frozen tiles here, e.g. to set an OOD task
@@ -133,8 +133,7 @@ def main_enjoy(config: EnjoyConfig):
                 f"anim_step-{steps_prev_complete}" + \
                 f"_ep-{net_ep_idx}" + \
                 f"{('_randAgent' if config.random_agent else '')}" + \
-                f"{(f'_w-{config.eval_map_width}' if config.eval_map_width is not None else '')}" + \
-                f"_seed-{config.seed}" + \
+                get_eval_name(config) + \
                 ".gif"
             )
             imageio.v3.imwrite(

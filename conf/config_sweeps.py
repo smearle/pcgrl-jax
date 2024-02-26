@@ -112,7 +112,7 @@
 # hypers = [
 #     {
 #         'NAME': 'bs_binary',
-#         'max_board_scans': [1, 5, 10],
+        # 'max_board_scans': [1, 5, 10],
 #         'change_pct': [-1.0],
 #         'seed': list(range(6)),
 #         'n_envs': [600],
@@ -332,23 +332,23 @@
 
 
 ###### add some experiment to train on smaller/bigger map size for comparison #######
-hypers = [
-    {
-        'NAME': 'diff_size_dungeon',
-        # 'model': ['conv2', 'seqnca'],
-        'model': ['conv2'],
-        'problem': ['dungeon'],
-        # 'map_width': [8, 10, 18, 20],
-        'map_width': [24, 28, 32],
-        'obs_size': [31],
-        'change_pct': [-1.0],
-        # 'seed': [3, 4, 5],
-        'seed': [0, 1, 2],
-        'n_envs': [200],
-        'max_board_scans': [5],
-        'total_timesteps': [20_000_000],
-    },
-]
+# hypers = [
+#     {
+#         'NAME': 'diff_size_dungeon',
+#         # 'model': ['conv2', 'seqnca'],
+#         'model': ['conv2'],
+#         'problem': ['dungeon'],
+#         # 'map_width': [8, 10, 18, 20],
+#         'map_width': [24, 28, 32],
+#         'obs_size': [31],
+#         'change_pct': [-1.0],
+#         # 'seed': [3, 4, 5],
+#         'seed': [0, 1, 2],
+#         'n_envs': [200],
+#         'max_board_scans': [5],
+#         'total_timesteps': [20_000_000],
+#     },
+# ]
 
 # hypers = [
 #     {
@@ -375,11 +375,72 @@ hypers = [
 #         'change_pct': [-1.0],
 #         'seed': [0, 1, 2],
 #         'n_envs': [600],
-#         'randomize_map_shape': [True, False],
+#         # 'randomize_map_shape': [True, False],
+#         'randomize_map_shape': [True],
 #         'empty_start': [True],
-#         'pinpoints': [True, False],
+#         # 'pinpoints': [True, False],
+#         'pinpoints': [True],
 #         'max_board_scans': [5],
 #         'total_timesteps': [1_000_000_000],
+#     },
+# ]
+
+# hypers = [
+#     {
+#         'NAME': 'diffshape_pinpoint_ctrl_dungeon',
+#         'model': ['conv2'],
+#         'problem': ['dungeon'],
+#         'map_width': [16],
+#         'ctrl_metrics': [['path_length', 'nearest_enemy']],
+#         'obs_size': [8, 16, 24, -1],
+#         'change_pct': [-1.0],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'randomize_map_shape': [True],
+#         'empty_start': [False],
+#         'pinpoints': [True],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
+
+# hypers = [
+#     {
+#         'NAME': 'bigdungeon',
+#         'model': ['conv2'],
+#         'problem': ['dungeon'],
+#         'map_width': [32],
+#         'change_pct': [0.8, -1.0],
+#         'seed': [0, 1, 2],
+#         'n_envs': [200],
+#         'randomize_map_shape': [True],
+#         'ctrl_metrics': [['path_length', 'nearest_enemy']],
+#         'empty_start': [False],
+#         'pinpoints': [True],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#         'timestep_chunk_size': [10_000_000],
+#         # 'obs_size_hid_dims': [8, 16, 24, 31],
+#     },
+# ]
+
+# hypers = [
+#     {
+#         'NAME': 'bigdungeon2',
+#         'model': ['conv2'],
+#         'problem': ['dungeon2'],
+#         'map_width': [32],
+#         'change_pct': [0.8, -1.0],
+#         'seed': [0, 1, 2],
+#         'n_envs': [200],
+#         'randomize_map_shape': [True],
+#         'ctrl_metrics': [['path_length', 'nearest_enemy']],
+#         'empty_start': [False],
+#         'pinpoints': [True],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#         'timestep_chunk_size': [10_000_000],
+#         # 'obs_size_hid_dims': [8, 16, 24, 31],
 #     },
 # ]
 

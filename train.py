@@ -585,7 +585,10 @@ def init_checkpointer(config: Config):
             restored_ckpt = checkpoint_manager.restore(
                 steps_prev_complete, items=target)
             
+            
         restored_ckpt['steps_prev_complete'] = steps_prev_complete
+        if restored_ckpt is None:
+            raise TypeError("Restored checkpoint is None")
 
         # HACK
         if isinstance(runner_state.env_state.env_state.queued_state, OldQueuedState):
@@ -657,7 +660,7 @@ def main_chunk(config, rng, exp_dir):
     return out
 
     
-@hydra.main(version_base=None, config_path='./', config_name='train_pcgrl')
+@hydra.main(version_base=None, config_path='./conf', config_name='train_pcgrl')
 def main(config: TrainConfig):
     config = init_config(config)
     rng = jax.random.PRNGKey(config.seed)

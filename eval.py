@@ -27,9 +27,10 @@ class EvalData:
     mean_ep_reward: chex.Array
     mean_min_ep_loss: chex.Array
     min_min_ep_loss: chex.Array
+    n_eval_eps: int
     n_parameters: Optional[int] = None
 
-@hydra.main(version_base=None, config_path='./', config_name='eval_pcgrl')
+@hydra.main(version_base=None, config_path='./conf', config_name='eval_pcgrl')
 def main_eval(config: EvalConfig):
     config = init_config(config)
 
@@ -39,21 +40,18 @@ def main_eval(config: EvalConfig):
         checkpoint_manager, restored_ckpt = init_checkpointer(config)
         network_params = restored_ckpt['runner_state'].train_state.params
     elif not os.path.exists(exp_dir):
+        network_params = network.init(rng, init_x)
         os.makedirs(exp_dir)
 
+    config = init_config_for_eval(config)
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
-    if config.eval_map_width is not None:
-        config.map_width = config.eval_map_width
-    if config.eval_max_board_scans is not None:
-        config.max_board_scans = config.eval_max_board_scans
     env = LossLogWrapper(env)
     env.prob.init_graphics()
     network = init_network(env, env_params, config)
-    rng = jax.random.PRNGKey(config.seed)
+    rng = jax.random.PRNGKey(config.eval_seed)
 
     init_x = env.gen_dummy_obs(env_params)
     # init_x = env.observation_space(env_params).sample(_rng)[None]
-    network_params = network.init(rng, init_x)
     # model_summary = network.subnet.tabulate(rng, init_x.map_obs, init_x.flat_obs)
     n_parameters = sum(np.prod(p.shape) for p in jax.tree_leaves(network_params) if isinstance(p, jnp.ndarray))
 
@@ -91,14 +89,14 @@ def main_eval(config: EvalConfig):
         return states, reward, dones
 
     stats_name = \
-        (f"w-{config.eval_map_width}" if config.eval_map_width is not None else "") + \
-        (f"bs-{config.eval_max_board_scans}" if config.eval_max_board_scans is not None else "") + \
-        f"stats.json"
+        "stats" + \
+        get_eval_name(config) + \
+        f".json"
     json_path = os.path.join(exp_dir, stats_name)
 
     # For each bin, evaluate the change pct. at the center of the bin
     
-    if config.reevaluate:
+    if config.reevaluate or not os.path.exists(json_path):
         states, rewards, dones = _eval(env_params)
 
         stats = get_eval_stats(states, dones)
@@ -107,7 +105,7 @@ def main_eval(config: EvalConfig):
         )
 
         with open(json_path, 'w') as f:
-            json_stats = {k: v.tolist() for k, v in stats.__dict__.items() if v is not None}
+            json_stats = {k: v.tolist() for k, v in stats.__dict__.items() if isinstance(v, jnp.ndarray)}
             json.dump(json_stats, f, indent=4)
     else:
         with open(json_path, 'r') as f:
@@ -120,7 +118,8 @@ def get_eval_stats(states, dones):
     ep_rews = states.log_env_state.returned_episode_returns * dones
     # Get mean episode reward
     ep_rews = jnp.sum(ep_rews)
-    mean_ep_rew = ep_rews / jnp.sum(dones)
+    n_eval_eps = jnp.sum(dones)
+    mean_ep_rew = ep_rews / n_eval_eps
 
     # Get the average min. episode loss
     min_ep_losses = states.min_episode_losses
@@ -128,15 +127,33 @@ def get_eval_stats(states, dones):
     min_ep_losses = jnp.where(dones, min_ep_losses, jnp.nan)
     # Get mean episode loss
     sum_min_ep_losses = jnp.nansum(min_ep_losses)
-    mean_min_ep_loss = sum_min_ep_losses / jnp.nansum(dones)
+    mean_min_ep_loss = sum_min_ep_losses / n_eval_eps
     min_min_ep_loss = jnp.nanmin(min_ep_losses)
 
     stats = EvalData(
         mean_ep_reward=mean_ep_rew,
         mean_min_ep_loss=mean_min_ep_loss,
         min_min_ep_loss=min_min_ep_loss,
+        n_eval_eps=n_eval_eps,
     )
     return stats
+
+            
+def init_config_for_eval(config):
+    if config.eval_map_width is not None:
+        config.map_width = config.eval_map_width
+    if config.eval_max_board_scans is not None:
+        config.max_board_scans = config.eval_max_board_scans
+    return config
+
+
+def get_eval_name(config):
+    eval_name = \
+        (f"_w-{config.eval_map_width}" if config.eval_map_width is not None else "") + \
+        (f"_bs-{config.eval_max_board_scans}" if config.eval_max_board_scans is not None else "") + \
+        (f"_seed-{config.eval_seed}" if config.eval_seed is not None else "")
+    return eval_name
+
     
 if __name__ == '__main__':
     main_eval()
