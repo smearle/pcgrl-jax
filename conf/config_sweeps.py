@@ -125,11 +125,12 @@
 #         'NAME': 'arf_conv_binary',
 #         'arf_size': [3, 5, 8, 16, -1],
 #         'change_pct': [-1.0],
-#         'seed': list(range(6)),
+#         'seed': [3, 4, 5],
+#         # 'seed': list(range(6)),
 #         'n_envs': [600],
 #         'max_board_scans': [4],
 #         'total_timesteps': [200_000_000],
-#      #  'eval_map_width': [16, 18, 20],
+#       'eval_map_width': [16, 18, 20],
 #     },
 # ]
 
@@ -213,10 +214,10 @@
 #         'obs_size_hid_dims': [3, 5, 8, 16],
 #         'model': ['conv2'],
 #         'change_pct': [-1.0],
-#         'seed': list(range(3)),
+#         'seed': list(range(3,6)),
 #         'n_envs': [100],
 #         'max_board_scans': [5],
-#         'total_timesteps': [100_000_000],
+#         'total_timesteps': [1_000_000_000],
 #     },
 # ]
 
@@ -355,7 +356,8 @@
 #         'NAME': 'diff_size_binary',
 #         'model': ['conv2', 'seqnca'],
 #         'map_width': [8, 10, 18, 20],
-#         'arf_size': [3, 5, 8, 16, 31, -1],
+#         'arf_size': [-1],
+#         # 'arf_size': [3, 5, 8, 16, 31, -1],
 #         'change_pct': [-1.0],
 #         'seed': [3, 4, 5],
 #         # 'seed': [0, 1, 2],
@@ -373,7 +375,8 @@
 #         'map_width': [16],
 #         'obs_size': [8, 16, 24, -1],
 #         'change_pct': [-1.0],
-#         'seed': [0, 1, 2],
+#         'seed': [3, 4, 5],
+#         # 'seed': [0, 1, 2],
 #         'n_envs': [600],
 #         # 'randomize_map_shape': [True, False],
 #         'randomize_map_shape': [True],
@@ -443,5 +446,23 @@
 #         # 'obs_size_hid_dims': [8, 16, 24, 31],
 #     },
 # ]
-
+ 
+# hypers = [
+#     {
+#         'NAME': 'everything_dungeon',
+#         'model': ['conv2'],
+#         'problem': ['dungeon'],
+# #         'seed': [3, 4, 5],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'randomize_map_shape': [True, False],
+#         'ctrl_metrics': [['path_length', 'nearest_enemy']],
+#         'empty_start': [True],
+#         'pinpoints': [True, False],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#         'timestep_chunk_size': [10_000_000],
+#         'obs_size_hid_dims': [8, 16, 24, 31],
+#     },
+# ]
 ########################

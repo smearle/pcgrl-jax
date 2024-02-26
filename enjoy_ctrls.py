@@ -17,7 +17,7 @@ from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 def main_enjoy_ctrls(config: EvalCtrlsConfig):
     config = init_config(config)
 
-    exp_dir = get_exp_dir(config)
+    exp_dir = config.exp_dir
     if not config.random_agent:
         checkpoint_manager, restored_ckpt = init_checkpointer(config)
         network_params = restored_ckpt['runner_state'].train_state.params

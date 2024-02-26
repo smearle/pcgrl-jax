@@ -10,7 +10,7 @@ from utils import get_exp_dir, gymnax_pcgrl_make, init_config
 @hydra.main(version_base=None, config_path='./', config_name='profile_pcgrl')
 def enjoy(config: ProfileEnvConfig):
     config = init_config(config)
-    exp_dir = get_exp_dir(config)
+    exp_dir = config.exp_dir
 
     env, env_params = gymnax_pcgrl_make(config.env_name, config)
     # network = Dense(

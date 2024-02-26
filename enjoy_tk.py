@@ -29,7 +29,7 @@ def set_ctrl_trgs(env, trgs, env_state: PCGRLEnvState):
 def main_enjoy_tk(config: EnjoyConfig):
     config = init_config(config)
 
-    exp_dir = get_exp_dir(config)
+    exp_dir = config.exp_dir
     if not config.random_agent:
         checkpoint_manager, restored_ckpt = init_checkpointer(config)
         network_params = restored_ckpt['runner_state'].train_state.params

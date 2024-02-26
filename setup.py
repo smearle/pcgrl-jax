@@ -10,7 +10,7 @@ setup(name='purejaxrl',
       description="A package for controllable \"Procedural Content Generation via Reinforcement Learning\" OpenAI Gym interface.",
       long_description=long_description,
       long_description_content_type="text/markdown",
-      url="https://github.com/smearle/gym-pcgrl",
+      url="https://github.com/smearle/pcgrl-jax.git",
       classifiers=[
           "Programming Language :: Python :: 3",
           "License :: OSI Approved :: MIT License",

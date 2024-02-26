@@ -655,7 +655,7 @@ def main(config: TrainConfig):
     config = init_config(config)
     rng = jax.random.PRNGKey(config.seed)
 
-    exp_dir = get_exp_dir(config)
+    exp_dir = config.exp_dir
 
     # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
     if config.overwrite and os.path.exists(exp_dir):
