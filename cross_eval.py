@@ -10,6 +10,7 @@ import pandas as pd
 import yaml
 
 from conf.config import EvalConfig, SweepConfig, TrainConfig
+from eval import get_eval_name, init_config_for_eval
 from eval_change_pct import EvalData, get_change_pcts
 from sweep import get_grid_cfgs, hypers
 from utils import init_config, load_sweep_hypers
@@ -43,7 +44,7 @@ def cross_eval_main(cfg: SweepConfig):
 
 
 def sweep_grid(cfg, grid_hypers):
-    default_cfg = TrainConfig()
+    default_cfg = EvalConfig()
     sweep_configs = get_grid_cfgs(default_cfg, grid_hypers, mode='eval')
     sweep_configs = [init_config(sc) for sc in sweep_configs]
 
@@ -123,7 +124,14 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     basic_stats_df = {}
     # for exp_dir, stats in basic_stats.items():
     for sc in sweep_configs:
-        sc_stats = json.load(open(f'{sc.exp_dir}/stats.json'))
+
+        # Do this so that we can get the correct stats file depending on eval parameters
+        # TODO: To sweep over eval configs, we'd nest a for loop here or something like that
+        sc = init_config_for_eval(sc)
+
+        sc_stats = json.load(open(
+            os.path.join(f'{sc.exp_dir}', 
+                         'stats' + get_eval_name(sc) + '.json')))
         row_tpl = tuple(getattr(sc, k) for k in row_headers)
         row_tpl = tuple(tuple(v) if isinstance(v, list) else v for v in row_tpl)
         row_indices.append(row_tpl)
