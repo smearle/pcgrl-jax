@@ -1,6 +1,12 @@
 NAME: bs_binary
 change_pct:
 - -1.0
+eval_hypers:
+  eval_map_width:
+  - 8
+  - 16
+  - 24
+  - 32
 max_board_scans:
 - 1
 - 5
@@ -11,8 +17,5 @@ seed:
 - 0
 - 1
 - 2
-- 3
-- 4
-- 5
 total_timesteps:
 - 1000000000

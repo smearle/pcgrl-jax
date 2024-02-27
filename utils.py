@@ -26,6 +26,12 @@ def get_exp_dir_evo_map(config: EvoMapConfig):
     )
     return exp_dir
 
+    
+def is_default_hiddims(config: Config):
+    # Hack, because we're not consistent about when we truncate the hidden dims argument relative to getting the exp_dir
+    # path.
+    return tuple(config.hidden_dims) == (64, 256)[:len(config.hidden_dims)]
+
 
 def get_exp_dir(config: Config):
     if config.env_name == 'PCGRL':
@@ -38,7 +44,7 @@ def get_exp_dir(config: Config):
             f'vrf-{config.vrf_size}_' + \
             (f'cp-{config.change_pct}_' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_' + \
-            (f"hd-{'-'.join((str(hd) for hd in config.hidden_dims))}_" if config.hidden_dims != (64, 256) else '') + \
+            (f"hd-{'-'.join((str(hd) for hd in config.hidden_dims))}_" if not is_default_hiddims(config) else '') + \
             f'sp-{config.static_tile_prob}_'
             f'bs-{config.max_board_scans}_' + \
             f'fz-{config.n_freezies}_' + \
@@ -256,13 +262,15 @@ def get_sweep_conf_path(cfg: SweepConfig):
     return sweep_conf_path_yaml
 
 
-def write_sweep_confs(_hypers: dict):
+def write_sweep_confs(_hypers: dict, eval_hypers: dict):
+    conf_sweeps_dir = os.path.join('conf', 'sweeps')
+    os.makedirs(conf_sweeps_dir, exist_ok=True)
     for grid_hypers in _hypers:
-        conf_sweeps_dir = os.path.join('conf', 'sweeps')
         name = grid_hypers['NAME']
-        os.makedirs(conf_sweeps_dir, exist_ok=True)
+        save_grid_hypers = grid_hypers.copy()
+        save_grid_hypers['eval_hypers'] = eval_hypers
         with open(os.path.join(conf_sweeps_dir, f'{name}.yaml'), 'w') as f:
-            f.write(yaml.dump(grid_hypers))
+            f.write(yaml.dump(save_grid_hypers))
         # with open(os.path.join(conf_sweeps_dir, f'{name}.json'), 'w') as f:
         #     f.write(json.dumps(grid_hypers, indent=4))
 
@@ -270,8 +278,9 @@ def write_sweep_confs(_hypers: dict):
 def load_sweep_hypers(cfg: SweepConfig):
     sweep_conf_path = get_sweep_conf_path(cfg)
     if os.path.exists(sweep_conf_path):
-        grid_hypers = yaml.load(open(sweep_conf_path), Loader=yaml.FullLoader)
+        hypers = yaml.load(open(sweep_conf_path), Loader=yaml.FullLoader)
+        eval_hypers = hypers.pop('eval_hypers')
     else:
         raise FileNotFoundError(f"Could not find sweep config file {sweep_conf_path}")
-    return grid_hypers
+    return hypers, eval_hypers
 

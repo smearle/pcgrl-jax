@@ -632,11 +632,13 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
         for steps_prev_complete in ckpt_steps:
             try:
                 restored_ckpt = try_load_ckpt(steps_prev_complete, target)
+                if restored_ckpt is None:
+                    raise TypeError("Restored checkpoint is None")
                 break
             except TypeError as e:
                 print(f"Failed to load checkpoint at step {steps_prev_complete}. Error: {e}")
                 continue 
-
+    
     return checkpoint_manager, restored_ckpt
 
     

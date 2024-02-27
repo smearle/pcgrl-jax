@@ -1,4 +1,4 @@
-NAME: arf_seqnca_dungeon
+NAME: arf_conv_binary
 arf_size:
 - 3
 - 5
@@ -9,22 +9,19 @@ change_pct:
 - -1.0
 eval_hypers:
   eval_map_width:
+  - 8
   - 16
   - 24
   - 32
   eval_randomize_map_shape:
   - true
 max_board_scans:
-- 5
-model:
-- seqnca
+- 4
 n_envs:
-- 200
-problem:
-- dungeon
+- 600
 seed:
-- 0
-- 1
-- 2
+- 3
+- 4
+- 5
 total_timesteps:
-- 1000000000
+- 200000000

@@ -3,6 +3,14 @@ change_pct:
 - -1.0
 empty_start:
 - true
+eval_hypers:
+  eval_map_width:
+  - 8
+  - 16
+  - 24
+  - 32
+  eval_randomize_map_shape:
+  - true
 map_width:
 - 16
 max_board_scans:

@@ -129,6 +129,14 @@ class EvalConfig(TrainConfig):
     eval_randomize_map_shape: Optional[bool] = None
     eval_seed: int = 0
 
+    # Which eval metric to keep in our generated table if sweeping over eval hyperparams (in which case we want to 
+    # save space). Only applied when runnins `cross_eval.py`
+    # metrics_to_keep = [
+    #     # 'min_min_loss',
+    #     'mean_ep_reward',
+    # ]
+    metrics_to_keep: Tuple[str] = ('mean_ep_reward',)
+
 
 @dataclass
 class EnjoyConfig(EvalConfig):

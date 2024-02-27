@@ -8,7 +8,7 @@ import submitit
 from tqdm import tqdm
 
 from conf.config import EnjoyConfig, EvalConfig, SweepConfig, TrainConfig
-from conf.config_sweeps import hypers, eval_hypers
+from conf.config_sweeps import eval_hypers
 from utils import get_sweep_conf_path, load_sweep_hypers, write_sweep_confs
 from enjoy import main_enjoy
 from eval import main_eval
@@ -22,11 +22,11 @@ def am_on_hpc():
     return 'CLUSTER' in os.environ
 
 
-def get_sweep_cfgs(default_config, hypers, mode):
+def get_sweep_cfgs(default_config, hypers, mode, eval_hypers={}):
     # sweep_configs = get_sweep_cfgs(default_config, **hypers)
     sweep_configs = []
     for h in hypers:
-        sweep_configs += get_grid_cfgs(default_config, h, mode)
+        sweep_configs += get_grid_cfgs(default_config, h, mode, eval_hypers)
     return sweep_configs
 
     
@@ -39,7 +39,7 @@ def get_hiddims_dict(hiddims_dict_path):
     return hid_dims_dict
 
 
-def get_grid_cfgs(base_config, hypers, mode):
+def get_grid_cfgs(base_config, hypers, mode, eval_hypers={}):
     """Return set of experiment configs corresponding to the grid of 
     hyperparameter values specified by kwargs."""
 
@@ -160,11 +160,14 @@ def sweep_main(cfg: SweepConfig):
         cfg.slurm = False
 
     if cfg.name is not None:
-        _hypers = [load_sweep_hypers(cfg)]
+        _hypers, _eval_hypers = load_sweep_hypers(cfg)
+        _hypers = [_hypers]
         sweep_name = cfg.name
     else:
+        from conf.config_sweeps import hypers
         _hypers = hypers
-        write_sweep_confs(_hypers)
+        _eval_hypers = eval_hypers
+        write_sweep_confs(_hypers, _eval_hypers)
 
         sweep_name = _hypers[0]['NAME']
 
@@ -196,7 +199,7 @@ def sweep_main(cfg: SweepConfig):
     for k, v in dict(cfg).items():
         setattr(default_config, k, v)
 
-    sweep_configs = get_sweep_cfgs(default_config, _hypers, mode=cfg.mode)
+    sweep_configs = get_sweep_cfgs(default_config, _hypers, mode=cfg.mode, eval_hypers=_eval_hypers)
 
     # sweep_configs = [(sc,) for sc in sweep_configs]
 

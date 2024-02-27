@@ -14,7 +14,7 @@ import yaml
 from conf.config import EvalConfig, SweepConfig, TrainConfig
 from eval import get_eval_name
 from eval_change_pct import EvalData, get_change_pcts
-from sweep import get_grid_cfgs, hypers, eval_hypers
+from sweep import get_grid_cfgs, eval_hypers
 from utils import get_sweep_conf_path, init_config, load_sweep_hypers, write_sweep_confs
 
 
@@ -36,18 +36,21 @@ def cross_eval_main(cfg: SweepConfig):
     sweep_conf_exists = os.path.exists(sweep_conf_path)
 
     if cfg.name is not None:
-        _hypers = [load_sweep_hypers(cfg)]
+        _hypers, _eval_hypers = load_sweep_hypers(cfg)
+        _hypers = [_hypers]
     else:
+        from conf.config_sweeps import hypers
         _hypers = hypers
-        write_sweep_confs(cfg, _hypers, sweep_conf_exists)
+        _eval_hypers = eval_hypers
+        write_sweep_confs(_hypers, _eval_hypers)
 
     for grid_hypers in _hypers:
-        sweep_grid(cfg, grid_hypers)
+        sweep_grid(cfg, grid_hypers, _eval_hypers)
 
 
-def sweep_grid(cfg, grid_hypers):
+def sweep_grid(cfg, grid_hypers, _eval_hypers):
     default_cfg = EvalConfig()
-    sweep_configs = get_grid_cfgs(default_cfg, grid_hypers, mode='eval')
+    sweep_configs = get_grid_cfgs(default_cfg, grid_hypers, mode='eval', eval_hypers=_eval_hypers)
     sweep_configs = [init_config(sc) for sc in sweep_configs]
 
     # FIXME: This part is messy, we have to assume we ran the eval with the 
@@ -66,7 +69,7 @@ def sweep_grid(cfg, grid_hypers):
         cross_eval_misc(name=name, sweep_configs=sweep_configs,
                         eval_config=eval_config, hypers=grid_hypers)
         cross_eval_basic(name=name, sweep_configs=sweep_configs,
-                        eval_config=eval_config, hypers=grid_hypers)
+                        eval_config=eval_config, hypers=grid_hypers, eval_hypers=_eval_hypers)
         
         if name.startswith('cp_'):
             cross_eval_cp(sweep_name=name, sweep_configs=sweep_configs,
@@ -108,25 +111,6 @@ def is_loss_column(col):
     elif isinstance(col, tuple) and 'loss' in col[METRIC_COL_TPL_IDX]:
         return True
     return False
-
-
-# Function to bold the maximum value in a column for LaTeX
-def format_meanstd(col, idx, mean, std):
-    # Return if not a number
-    if not np.issubdtype(mean.dtype, np.number):
-        return mean
-    is_pct = False
-    # Check if the header of the row 
-    if is_loss_column(col):
-        is_pct = True
-        mean_frmt = f'{mean:.2%}'
-        mean_frmt = mean_frmt.replace('%', '\\%')
-        std_frmt = f'{std:.2%}'
-        std_frmt = std_frmt.replace('%', '\\%')
-    else:
-        mean_frmt = f'{mean:.2f}'
-        std_frmt = f'{std:.2f}'
-    return f'{mean_frmt} +/- {std_frmt}'
 
 
 def replace_underscores(s):
@@ -191,16 +175,22 @@ def clean_df_strings(df):
 
 
 def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
-                    eval_config: EvalConfig, hypers):
+                    eval_config: EvalConfig, hypers, eval_hypers):
+
+    # Save the eval hypers to the cross_eval directory, so that we know of any special eval hyperparameters that were
+    # applied during eval.
+    # with open(os.path.join(CROSS_EVAL_DIR, name, "eval_hypers.yaml"), 'w') as f:
+    #     yaml.dump(eval_hypers, f)
+
     eval_hyper_ks = [k for k in eval_hypers]
     eval_hyper_combos = list(product(*[eval_hypers[k] for k in eval_hypers]))
 
-    eval_sweep_name = ('eval_' + '_'.join(k.strip('eval_') + '_' for k, v in eval_hypers.items() if len(v) > 1) if 
+    eval_sweep_name = ('eval_' + '_'.join(k.strip('eval_') for k, v in eval_hypers.items() if len(v) > 1 and k != 'metrics_to_keep') if 
                         len(eval_hypers) > 0 else '')
 
-    metrics_to_keep = None
+    _metrics_to_keep = None
     if 'eval_map_width' in eval_hyper_ks:
-        metrics_to_keep = ['min_min_ep_loss']
+        _metrics_to_keep = eval_config.metrics_to_keep
 
     col_headers = [k for k in eval_hyper_ks]
     col_headers.insert(METRIC_COL_TPL_IDX, '')
@@ -279,13 +269,29 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
 
     # Iterate over each cell to format
     for col in basic_stats_mean_df.columns:
+        if is_loss_column(col):
+            is_pct = True
+            m_best = basic_stats_mean_df[col].min()
+        else:
+            is_pct = False
+            m_best = basic_stats_mean_df[col].max()
+
         for idx in basic_stats_mean_df.index:
-            mean = basic_stats_mean_df.loc[idx, col]
-            std = basic_stats_std_df.loc[idx, col]
-            # Format string as "mean +/- std%"
-            # formatted_df.loc[idx, col] = f"{mean:.2f} +/- {std:.2f}%"
-            meanstd_df.loc[idx, col] = format_meanstd(col, idx, mean, std)
-            # format_meanstd(col, idx, mean, std)
+            mean = basic_stats_mean_df.at[idx, col]
+            std = basic_stats_std_df.at[idx, col]
+
+            if is_pct:
+                mean_frmt = f'{mean:.2%}'
+                mean_frmt = mean_frmt.replace('%', '\\%')
+                std_frmt = f'{std:.2%}'
+                std_frmt = std_frmt.replace('%', '\\%')
+            else:
+                mean_frmt = f'{mean:.2f}'
+                std_frmt = f'{std:.2f}'
+            if mean == m_best:
+                mean_frmt = f'\\textbf{{{mean_frmt}}}'
+                std_frmt = f'\\textbf{{{std_frmt}}}'
+            meanstd_df.at[idx, col] = f'{mean_frmt} ± {std_frmt}'
 
     # Note: If you want the std as a percentage of the mean, replace the formatting line with:
     # formatted_df.loc[idx, col] = f"{mean:.2f} +/- {std/mean*100:.2f}%
@@ -296,7 +302,7 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     #                                     "basic_stats_mean.csv"))
     
     # Save to markdown
-    with open(os.path.join(CROSS_EVAL_DIR, name, f"{eval_sweep_name}basic_stats_mean.md"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, f"{eval_sweep_name}_basic_stats_mean.md"), 'w') as f:
         f.write(basic_stats_mean_df.to_markdown())
     
     # Save the dataframe as a latex table
@@ -327,7 +333,7 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
             metric_str = col_tpl[METRIC_COL_TPL_IDX]
         if metric_str == 'n_parameters' or metric_str == 'n_eval_eps':
             basic_stats_concise_df = basic_stats_concise_df.drop(columns=col_tpl)
-        elif metrics_to_keep is not None and metric_str not in metrics_to_keep:
+        elif _metrics_to_keep is not None and metric_str not in _metrics_to_keep:
             basic_stats_concise_df = basic_stats_concise_df.drop(columns=col_tpl)
 
     # Save the dataframe to a csv
@@ -335,17 +341,30 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     #                                     name, "basic_stats_concise.csv"))
 
     # Save to markdown
-    with open(os.path.join(CROSS_EVAL_DIR, name, f"{eval_sweep_name}basic_stats_concise.md"), 'w') as f:
+    with open(os.path.join(CROSS_EVAL_DIR, name, f"{eval_sweep_name}_basic_stats_concise.md"), 'w') as f:
         f.write(basic_stats_concise_df.to_markdown())
 
     # Bold the maximum value in each column
-    styled_basic_stats_concise_df = basic_stats_concise_df.apply(format_num)
+    # styled_basic_stats_concise_df = basic_stats_concise_df.apply(format_num)
 
-    styled_basic_stats_concise_df = clean_df_strings(styled_basic_stats_concise_df)
+    styled_basic_stats_concise_df = clean_df_strings(basic_stats_concise_df)
+
+    latex_str = styled_basic_stats_concise_df.to_latex(
+        multicolumn_format='c',
+    )
+    latex_str_lines = latex_str.split('\n')
+    # Add `\centering` to the beginning of the table
+    latex_str_lines.insert(0, '\\centering')
+    n_col_header_rows = len(styled_basic_stats_concise_df.columns.names)
+    i = 3 + n_col_header_rows
+    latex_str_lines.insert(i, '\\toprule')
+    # Add `\label` to the end of the table
+    latex_str_lines.append(f'\\label{{tab:{name}_{eval_sweep_name}}}')
+    latex_str = '\n'.join(latex_str_lines)
 
     # Save the dataframe as a latex table
-    with open(os.path.join(CROSS_EVAL_DIR, name, f"{name}_{eval_sweep_name}basic_stats_concise.tex"), 'w') as f:
-        f.write(styled_basic_stats_concise_df.to_latex())
+    with open(os.path.join(CROSS_EVAL_DIR, name, f"{name}_{eval_sweep_name}.tex"), 'w') as f:
+        f.write(latex_str)
 
 
 
