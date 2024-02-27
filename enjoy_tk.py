@@ -105,7 +105,7 @@ def main_enjoy_tk(config: EnjoyConfig):
         obs, env_state, reward, done, info = env.step(
             rng_step, env_state, action[..., 0], env_params
         )
-        meric_vals = env_state.prob_state.stats
+        metric_vals = env_state.prob_state.stats
         frame = env.render(env_state)
 
         # Tkinter UI updates

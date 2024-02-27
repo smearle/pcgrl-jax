@@ -1,0 +1,25 @@
+NAME: fixed_arf_dungeon
+arf_size:
+- 8
+change_pct:
+- -1.0
+max_board_scans:
+- 5
+model:
+- seqnca
+n_envs:
+- 600
+problem:
+- dungeon
+seed:
+- 3
+- 4
+- 5
+total_timesteps:
+- 1000000000
+vrf_size:
+- 8
+- 12
+- 16
+- 23
+- -1

@@ -249,16 +249,28 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
     return env, env_params
 
 
-def load_sweep_hypers(cfg: SweepConfig):
+def get_sweep_conf_path(cfg: SweepConfig):
     conf_sweeps_dir = os.path.join('conf', 'sweeps')
-    sweep_conf_path_yaml = os.path.join(conf_sweeps_dir, f'{cfg.name}.yaml')
-    sweep_conf_path = sweep_conf_path_yaml
     # sweep_conf_path_json = os.path.join(conf_sweeps_dir, f'{cfg.name}.json')
-    if os.path.exists(sweep_conf_path_yaml):
+    sweep_conf_path_yaml = os.path.join(conf_sweeps_dir, f'{cfg.name}.yaml')
+    return sweep_conf_path_yaml
+
+
+def write_sweep_confs(_hypers: dict):
+    for grid_hypers in _hypers:
+        conf_sweeps_dir = os.path.join('conf', 'sweeps')
+        name = grid_hypers['NAME']
+        os.makedirs(conf_sweeps_dir, exist_ok=True)
+        with open(os.path.join(conf_sweeps_dir, f'{name}.yaml'), 'w') as f:
+            f.write(yaml.dump(grid_hypers))
+        # with open(os.path.join(conf_sweeps_dir, f'{name}.json'), 'w') as f:
+        #     f.write(json.dumps(grid_hypers, indent=4))
+
+
+def load_sweep_hypers(cfg: SweepConfig):
+    sweep_conf_path = get_sweep_conf_path(cfg)
+    if os.path.exists(sweep_conf_path):
         grid_hypers = yaml.load(open(sweep_conf_path), Loader=yaml.FullLoader)
-    # if os.path.exists(sweep_conf_path_json):
-    #     sweep_conf_path = sweep_conf_path_json
-    #     grid_hypers = json.load(open(sweep_conf_path))
     else:
         raise FileNotFoundError(f"Could not find sweep config file {sweep_conf_path}")
     return grid_hypers

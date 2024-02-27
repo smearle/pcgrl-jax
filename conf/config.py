@@ -126,6 +126,7 @@ class EvalConfig(TrainConfig):
     n_eps: int = 5
     eval_map_width: Optional[int] = None
     eval_max_board_scans: Optional[int] = None
+    eval_randomize_map_shape: Optional[bool] = None
     eval_seed: int = 0
 
 

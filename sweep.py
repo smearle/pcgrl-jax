@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from conf.config import EnjoyConfig, EvalConfig, SweepConfig, TrainConfig
 from conf.config_sweeps import hypers, eval_hypers
-from utils import load_sweep_hypers
+from utils import get_sweep_conf_path, load_sweep_hypers, write_sweep_confs
 from enjoy import main_enjoy
 from eval import main_eval
 from eval_change_pct import main_eval_cp
@@ -164,7 +164,10 @@ def sweep_main(cfg: SweepConfig):
         sweep_name = cfg.name
     else:
         _hypers = hypers
+        write_sweep_confs(_hypers)
+
         sweep_name = _hypers[0]['NAME']
+
 
     # This is a hack. Would mean that we can't overwrite trial-specific settings
     # via hydra yamls or command line arguments...

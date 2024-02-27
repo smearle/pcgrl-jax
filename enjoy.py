@@ -1,3 +1,4 @@
+import copy
 import os
 
 import hydra
@@ -14,13 +15,13 @@ from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 
 
 @hydra.main(version_base=None, config_path='./conf', config_name='enjoy_pcgrl')
-def main_enjoy(config: EnjoyConfig):
-    config = init_config(config)
+def main_enjoy(enjoy_config: EnjoyConfig):
+    enjoy_config = init_config(enjoy_config)
 
-    exp_dir = config.exp_dir
-    if not config.random_agent:
+    exp_dir = enjoy_config.exp_dir
+    if not enjoy_config.random_agent:
         print(f'Loading checkpoint from {exp_dir}')
-        checkpoint_manager, restored_ckpt = init_checkpointer(config)
+        checkpoint_manager, restored_ckpt = init_checkpointer(enjoy_config)
         runner_state = restored_ckpt['runner_state']
         network_params = runner_state.train_state.params
         steps_prev_complete = restored_ckpt['steps_prev_complete']
@@ -29,13 +30,17 @@ def main_enjoy(config: EnjoyConfig):
         steps_prev_complete = 0
 
     env: PCGRLEnv
-    config = init_config_for_eval(config)
-    env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
-    env.prob.init_graphics()
-    network = init_network(env, env_params, config)
 
-    rng = jax.random.PRNGKey(config.eval_seed)
-    rng_reset = jax.random.split(rng, config.n_enjoy_envs)
+    # Preserve config as it was during training, for future reference (i.e. naming output of enjoy/eval)
+    train_config = copy.deepcopy(enjoy_config)
+
+    enjoy_config = init_config_for_eval(enjoy_config)
+    env, env_params = gymnax_pcgrl_make(enjoy_config.env_name, config=enjoy_config)
+    env.prob.init_graphics()
+    network = init_network(env, env_params, enjoy_config)
+
+    rng = jax.random.PRNGKey(enjoy_config.eval_seed)
+    rng_reset = jax.random.split(rng, enjoy_config.n_enjoy_envs)
 
     # Can manually define frozen tiles here, e.g. to set an OOD task
     # frz_map = jnp.zeros(env.map_shape, dtype=bool)
@@ -51,13 +56,13 @@ def main_enjoy(config: EnjoyConfig):
     def step_env(carry, _):
         rng, obs, env_state = carry
         rng, rng_act = jax.random.split(rng)
-        if config.random_agent:
+        if enjoy_config.random_agent:
             action = env.action_space(env_params).sample(rng_act)
         else:
             # obs = jax.tree_map(lambda x: x[None, ...], obs)
             action = network.apply(network_params, obs)[
                 0].sample(seed=rng_act)
-        rng_step = jax.random.split(rng, config.n_enjoy_envs)
+        rng_step = jax.random.split(rng, enjoy_config.n_enjoy_envs)
         # obs, env_state, reward, done, info = env.step(
         #     rng_step, env_state, action[..., 0], env_params
         # )
@@ -77,30 +82,30 @@ def main_enjoy(config: EnjoyConfig):
     print('Scanning episode steps:')
     _, (states, rewards, dones, infos, frames) = jax.lax.scan(
         step_env, (rng, obs, env_state), None,
-        length=config.n_eps*env.max_steps)  # *at least* this many eps (maybe more if change percentage or whatnot)
+        length=enjoy_config.n_eps*env.max_steps)  # *at least* this many eps (maybe more if change percentage or whatnot)
 
     # frames = frames.reshape((config.n_eps*env.max_steps, *frames.shape[2:]))
 
     # assert len(frames) == config.n_eps * env.max_steps, \
     #     "Not enough frames collected"
-    assert frames.shape[1] == config.n_enjoy_envs and frames.shape[0] == config.n_eps * env.max_steps, \
+    assert frames.shape[1] == enjoy_config.n_enjoy_envs and frames.shape[0] == enjoy_config.n_eps * env.max_steps, \
         "`frames` has wrong shape"
 
     # Save gifs.
     print('Adding stats to frames:')
-    for env_idx in range(config.n_enjoy_envs):
+    for env_idx in range(enjoy_config.n_enjoy_envs):
         # ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
 
-        for ep_idx in range(config.n_eps):
+        for ep_idx in range(enjoy_config.n_eps):
 
-            net_ep_idx = env_idx * config.n_eps + ep_idx
+            net_ep_idx = env_idx * enjoy_config.n_eps + ep_idx
 
             new_ep_frames = []
             for i in range(ep_idx * env.max_steps, (ep_idx + 1) * env.max_steps):
                 frame = frames[i, env_idx]
                 
                 state_i = jax.tree_util.tree_map(lambda x: x[i, env_idx], states)
-                if config.render_stats:
+                if enjoy_config.render_stats:
                     frame = render_stats(env, state_i, frame)
                 new_ep_frames.append(frame)
 
@@ -132,8 +137,8 @@ def main_enjoy(config: EnjoyConfig):
                 f"{exp_dir}",
                 f"anim_step-{steps_prev_complete}" + \
                 f"_ep-{net_ep_idx}" + \
-                f"{('_randAgent' if config.random_agent else '')}" + \
-                get_eval_name(config) + \
+                f"{('_randAgent' if enjoy_config.random_agent else '')}" + \
+                get_eval_name(eval_config=enjoy_config, train_config=train_config) + \
                 ".gif"
             )
             imageio.v3.imwrite(
@@ -141,7 +146,7 @@ def main_enjoy(config: EnjoyConfig):
                 ep_frames,
                 # Not sure why but the frames are too slow otherwise (compared to 
                 # when captured in `train.py`). Are we saving extra frames?
-                duration=config.gif_frame_duration / 2
+                duration=enjoy_config.gif_frame_duration / 2
             )
 
 

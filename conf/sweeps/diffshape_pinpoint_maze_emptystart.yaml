@@ -22,6 +22,7 @@ problem:
 - maze
 randomize_map_shape:
 - true
+- false
 seed:
 - 0
 - 1

@@ -112,7 +112,7 @@
 # hypers = [
 #     {
 #         'NAME': 'bs_binary',
-        # 'max_board_scans': [1, 5, 10],
+#         'max_board_scans': [1, 5, 10],
 #         'change_pct': [-1.0],
 #         'seed': list(range(6)),
 #         'n_envs': [600],
@@ -140,7 +140,7 @@
 #         'problem': ['dungeon'],
 #         'model': ['seqnca'],
 #         'arf_size': [8],
-#         'vrf_size': [8, 12, 16, 23, 31],
+#         'vrf_size': [8, 12, 16, 23, -1],
 #         'change_pct': [-1.0],
 #         'seed': list(range(3, 6)),
 #         'n_envs': [600],
@@ -378,8 +378,8 @@
 #         'seed': [3, 4, 5],
 #         # 'seed': [0, 1, 2],
 #         'n_envs': [600],
-#         # 'randomize_map_shape': [True, False],
-#         'randomize_map_shape': [True],
+#         'randomize_map_shape': [True, False],
+#         # 'randomize_map_shape': [True],
 #         'empty_start': [True],
 #         # 'pinpoints': [True, False],
 #         'pinpoints': [True],
@@ -465,4 +465,11 @@
 #         'obs_size_hid_dims': [8, 16, 24, 31],
 #     },
 # ]
+
+eval_hypers = {
+    'eval_map_width': [8, 16, 24, 32],
+    # 'eval_max_board_scans': [10],
+    'eval_randomize_map_shape': [True],
+}
+
 ########################

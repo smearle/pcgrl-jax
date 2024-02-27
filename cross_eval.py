@@ -12,10 +12,10 @@ import pandas as pd
 import yaml
 
 from conf.config import EvalConfig, SweepConfig, TrainConfig
-from eval import get_eval_name, init_config_for_eval
+from eval import get_eval_name
 from eval_change_pct import EvalData, get_change_pcts
 from sweep import get_grid_cfgs, hypers, eval_hypers
-from utils import init_config, load_sweep_hypers
+from utils import get_sweep_conf_path, init_config, load_sweep_hypers, write_sweep_confs
 
 
 CROSS_EVAL_DIR = 'cross_eval'
@@ -32,25 +32,16 @@ table_name_remaps = {
 
 @hydra.main(version_base=None, config_path='./', config_name='batch_pcgrl')
 def cross_eval_main(cfg: SweepConfig):
-    conf_sweeps_dir = os.path.join('conf', 'sweeps')
-    sweep_conf_path_json = os.path.join(conf_sweeps_dir, f'{cfg.name}.json')
-    sweep_conf_path_yaml = os.path.join(conf_sweeps_dir, f'{cfg.name}.yaml')
-    sweep_conf_exists = os.path.exists(sweep_conf_path_yaml)
+    sweep_conf_path = get_sweep_conf_path(cfg)
+    sweep_conf_exists = os.path.exists(sweep_conf_path)
 
-    if cfg.name is not None and sweep_conf_exists:
+    if cfg.name is not None:
         _hypers = [load_sweep_hypers(cfg)]
     else:
         _hypers = hypers
+        write_sweep_confs(cfg, _hypers, sweep_conf_exists)
 
     for grid_hypers in _hypers:
-        if not sweep_conf_exists:
-            conf_sweeps_dir = os.path.join('conf', 'sweeps')
-            name = grid_hypers['NAME']
-            os.makedirs(conf_sweeps_dir, exist_ok=True)
-            with open(os.path.join(conf_sweeps_dir, f'{name}.yaml'), 'w') as f:
-                f.write(yaml.dump(grid_hypers))
-            # with open(os.path.join(conf_sweeps_dir, f'{name}.json'), 'w') as f:
-            #     f.write(json.dumps(grid_hypers, indent=4))
         sweep_grid(cfg, grid_hypers)
 
 
@@ -88,8 +79,8 @@ def format_num(s):
     if not np.issubdtype(s.dtype, np.number):
         return s
     is_pct = False
-    # Check if the header of the row 
-    if isinstance(s.name, str) and 'loss' in s.name or isinstance(s.name, tuple) and 'loss' in s.name[METRIC_COL_TPL_IDX]:
+    # Check if the header of the row
+    if is_loss_column(s.name):
         is_pct = True
         s_best = s.min()
 
@@ -109,6 +100,33 @@ def format_num(s):
         col.append(v_frmt)
     
     return col
+
+
+def is_loss_column(col):
+    if isinstance(col, str) and 'loss' in col:
+        return True
+    elif isinstance(col, tuple) and 'loss' in col[METRIC_COL_TPL_IDX]:
+        return True
+    return False
+
+
+# Function to bold the maximum value in a column for LaTeX
+def format_meanstd(col, idx, mean, std):
+    # Return if not a number
+    if not np.issubdtype(mean.dtype, np.number):
+        return mean
+    is_pct = False
+    # Check if the header of the row 
+    if is_loss_column(col):
+        is_pct = True
+        mean_frmt = f'{mean:.2%}'
+        mean_frmt = mean_frmt.replace('%', '\\%')
+        std_frmt = f'{std:.2%}'
+        std_frmt = std_frmt.replace('%', '\\%')
+    else:
+        mean_frmt = f'{mean:.2f}'
+        std_frmt = f'{std:.2f}'
+    return f'{mean_frmt} +/- {std_frmt}'
 
 
 def replace_underscores(s):
@@ -221,7 +239,7 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
             sec_col_tpl = [getattr(sec, k) for k in eval_hyper_ks]
             sc_stats = json.load(open(
                 os.path.join(f'{sc.exp_dir}', 
-                            'stats' + get_eval_name(sec) + '.json')))
+                            'stats' + get_eval_name(sec, sec) + '.json')))
             for k, v in sc_stats.items():
                 col_tpl = copy.deepcopy(sec_col_tpl)
                 col_tpl.insert(METRIC_COL_TPL_IDX, k)
@@ -250,9 +268,28 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     # with open(os.path.join(CROSS_EVAL_DIR, name, "basic_stats.tex"), 'w') as f:
     #     f.write(basic_stats_df.to_latex())
 
-    # Take averages of stats across seeds, keeping the original row indices
+    # Step 1: Calculate mean and standard deviation
     group_row_indices = [col for col in basic_stats_df.index.names if col != 'seed']
     basic_stats_mean_df = basic_stats_df.groupby(group_row_indices).mean()
+    basic_stats_std_df = basic_stats_df.groupby(group_row_indices).std()
+
+    # Step 2: Create a new DataFrame with the formatted "mean +/- std%" strings
+    # Initialize an empty DataFrame with the same index and columns
+    meanstd_df = pd.DataFrame(index=basic_stats_mean_df.index, columns=basic_stats_mean_df.columns)
+
+    # Iterate over each cell to format
+    for col in basic_stats_mean_df.columns:
+        for idx in basic_stats_mean_df.index:
+            mean = basic_stats_mean_df.loc[idx, col]
+            std = basic_stats_std_df.loc[idx, col]
+            # Format string as "mean +/- std%"
+            # formatted_df.loc[idx, col] = f"{mean:.2f} +/- {std:.2f}%"
+            meanstd_df.loc[idx, col] = format_meanstd(col, idx, mean, std)
+            # format_meanstd(col, idx, mean, std)
+
+    # Note: If you want the std as a percentage of the mean, replace the formatting line with:
+    # formatted_df.loc[idx, col] = f"{mean:.2f} +/- {std/mean*100:.2f}%
+    basic_stats_mean_df = meanstd_df
 
     # Save the dataframe to a csv
     # basic_stats_mean_df.to_csv(os.path.join(CROSS_EVAL_DIR, name,
