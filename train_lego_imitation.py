@@ -131,22 +131,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
          # INIT ENV FOR TRAIN
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config.n_envs)
-        # obsv, env_state = jax.vmap(
-        #     env.reset, in_axes=(0, None))(reset_rng, env_params)
-
-        # Reshape reset_rng and other per-environment states to (n_devices, -1, ...)
-        # reset_rng = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
-
+ 
         dummy_queued_state = gen_dummy_queued_state(config, env, reset_rng)
 
-        # Apply pmap
         vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, None))
-        # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
         obsv, env_state = vmap_reset_fn(reset_rng, env_params, dummy_queued_state)
         
-    
-        #env_state = env_state.env_state.replace(prob_state = LegoProblemState(reward = 0.0))
-        # INIT ENV FOR RENDER
         rng_r, _rng_r = jax.random.split(rng)
         reset_rng_r = jax.random.split(_rng_r, config.n_render_eps)
 
@@ -359,8 +349,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         
         actions, observations, rewards = get_data()
-        returns = compute_returns(rewards, 0.99)
-
+        #returns = compute_returns(rewards, 0.99)
+        returns = rewards
         
         def _update_step(runner_state, batch, rng):
             train_state = runner_state.train_state
@@ -368,7 +358,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 actions, obs, returns = batch
                 pcgrl_obs = PCGRLObs(
                     map_obs = obs,
-                    flat_obs = init_x.flat_obs
+                    flat_obs = jnp.tile(init_x.flat_obs, reps = (obs.shape[0], 1))
                 )
                 logits, values = train_state.apply_fn(params, pcgrl_obs)
                 loss = compute_loss(logits, actions, values.squeeze(), returns)
@@ -394,7 +384,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             rng, _rng = jax.random.split(_rng)
             batch = (actions[i*batch_size:(i+1)*batch_size], observations[i*batch_size:(i+1)*batch_size], returns[i*batch_size:(i+1)*batch_size])
             runner_state, metrics = _update_step(runner_state, batch, _rng)
-            #if i == n_epochs-1:
             losses.append(metrics['loss'])
             jax.debug.print("Batch {b}/{batches}, Loss: {loss}", loss = metrics['loss'], b = i+1, batches = n_epochs)
         
