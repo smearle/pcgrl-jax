@@ -43,8 +43,13 @@ def cross_eval_main(cfg: SweepConfig):
         _hypers = hypers
         _eval_hypers = eval_hypers
         write_sweep_confs(_hypers, _eval_hypers)
-
+    
     for grid_hypers in _hypers:
+        for k, v in grid_hypers.items():
+            if k.startswith('obs_size'):
+                if -1 in v:
+                    v.remove(-1)
+                    v.append(31)
         sweep_grid(cfg, grid_hypers, _eval_hypers)
 
 
@@ -516,7 +521,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
         ax.plot(row, label=str(i))
     ax.set_xlabel('Timesteps')
     ax.set_ylabel('Return')
-    ax.legend()
+    # ax.legend()
     plt.savefig(os.path.join(CROSS_EVAL_DIR, name, f"metric_curves.png"))
 
     fig, ax = plt.subplots()
