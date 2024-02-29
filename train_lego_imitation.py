@@ -179,27 +179,23 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             plt.title("Loss")
             plt.savefig(filename)
 
+        
         def render_frames(frames, i, env_states=None):
-
+            if i % config.render_freq != 0:
+            # if jnp.all(frames == 0):
+                return
+            
+            is_finished = env_states.done
            
-            assert len(frames) == config.n_render_eps * 1 * env.max_steps,\
-                "Not enough frames collected"
-
-            if config.env_name == 'Candy':
-                # Render intermediary frames.
-                pass
-
+        
             # Save gifs.
             for ep_is in range(config.n_render_eps):
                 gif_name = f"{config.exp_dir}/update-{i}_ep-{ep_is}.gif"
-                ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
+                dones = is_finished[:,ep_is]
+                done_ind = jnp.argmax(dones)
 
-                # new_frames = []
-                # for i, frame in enumerate(frames):
-                #     state_i = jax.tree_util.tree_map(lambda x: x[i], env_states)
-                #     frame = render_stats(env_r, state_i, frame)
-                #     new_frames.append(frame)
-                # frames = new_frames
+                ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
+                ep_frames = ep_frames[:done_ind+1]
 
                 try:
                     imageio.v3.imwrite(
@@ -212,34 +208,37 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     return
             print(f"Done rendering episode gifs at update {i}")
 
-        def render_mpds(blocks, i, states=None):
-            
-            assert len(blocks) == config.n_render_eps * 1 * env.max_steps,\
-                "Not enough frames collected"
-            if config.env_name != 'Lego':
+        def render_mpds(blocks, i, states):
+
+            if i % config.render_freq != 0:
                 return
+            
+            is_finished = states.done
 
             for ep_is in range(config.n_render_eps):
-                ep_blocks = blocks[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
-                ep_avg_height = states.prob_state.stats[-2, ep_is, 0]
-                ep_footprint = states.prob_state.stats[-2, ep_is, 1]
-                ep_cntr_dist = states.prob_state.stats[-2, ep_is, 3]
-                ep_rotations = states.rep_state.rotation[:,ep_is]
-                ep_curr_blocks = states.rep_state.curr_block[:,ep_is]
-                actions = states.rep_state.last_action[:,ep_is]
+                dones = is_finished[:,ep_is]
+                done_ind = jnp.argmax(dones)
 
+                ep_blocks = blocks[ep_is*env.max_steps:ep_is*env.max_steps+done_ind+1]
 
-                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_avg_height:.2f}_fp{ep_footprint:.2f}_ctrdist{ep_cntr_dist:.2f}/"
+                ep_end_avg_height = states.prob_state.stats[done_ind, ep_is, 0]
+                ep_footprint = states.prob_state.stats[done_ind, ep_is, 1]
+                ep_cntr_dist = states.prob_state.stats[done_ind, ep_is, 3]
+                #ep_rotations = states.rep_state.rotation[:done_ind+1,ep_is]
+                ep_curr_blocks = states.rep_state.curr_block[:done_ind+1,ep_is]
+                actions = states.rep_state.last_action[:done_ind+1,ep_is]
+
+                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_fp{ep_footprint:.2f}_ctrdist{ep_cntr_dist:.2f}/"
                 if not os.path.exists(savedir):
                     os.makedirs(savedir)
                 
                 for num in range(ep_blocks.shape[0]):
                     curr_blocks = ep_blocks[num,:,:]
-                    rotation = ep_rotations[num]
+                    #rotation = ep_rotations[num]
                     curr_block = ep_curr_blocks[num]
                     action = actions[num]
 
-                    savename = os.path.join(savedir, f"{num}_r{rotation}_a{action}.mpd")
+                    savename = os.path.join(savedir, f"{num}_a{action}.mpd")
                     
                     f = open(savename, "a")
                     f.write("0/n")
@@ -284,7 +283,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         f.write(lego_block_name + ".dat")
                         f.write("\n")
                     f.close()
-
 
         def render_episodes(network_params):
             _, (states, rewards, dones, infos, frames, blocks) = jax.lax.scan(
@@ -369,13 +367,13 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             new_state = train_state.apply_gradients(grads=grad)
 
             new_runner_state = RunnerState(
-                new_state, env_state, batch[1], rng, update_i = runner_state.update_i+1
+                new_state, env_state, batch[1], rng, update_i = runner_state.update_i+1 
             )
 
             metrics = {'loss': loss}
             return new_runner_state, metrics
             
-        batch_size = 3
+        batch_size = 20 
 
         n_epochs =len(observations)//batch_size
 
@@ -393,8 +391,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         frames, states, blocks = render_episodes(train_state.params)
         jax.debug.callback(render_frames, frames, runner_state.update_i, states)
         jax.debug.callback(render_mpds, blocks, runner_state.update_i, states)
-        jax.debug.callback(loss_log, losses, batch_size)
-        
+        jax.debug.callback(loss_log, losses, batch_size)  
         
         return runner_state
     

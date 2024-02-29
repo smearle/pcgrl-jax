@@ -43,7 +43,7 @@ def get_action(env_state):
 @hydra.main(version_base=None, config_path='./', config_name='lego_pcgrl')
 def main(config: TrainConfig):
         
-    dataset_size = 100
+    dataset_size = 10000
 
     rng = jax.random.PRNGKey(42)
     rng, subkey = jax.random.split(rng)
@@ -53,10 +53,8 @@ def main(config: TrainConfig):
         os.makedirs(savedir)
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     
-    
     obs, env_state = env.reset(subkey)
     done = False
-
 
     observations_arr = np.empty((dataset_size,) + obs.map_obs.shape)
     actions_arr = np.empty((dataset_size,))
@@ -69,12 +67,8 @@ def main(config: TrainConfig):
             obs, env_state = env.reset_env(subkey, env_params, None)
             rng, subkey = jax.random.split(rng)
             
-            
-        
         action = get_action(env_state)
         
-
-
         observations_arr[i] = obs.map_obs
         actions_arr[i] = action[0][0]
         rewards_arr[i] = env_state.reward

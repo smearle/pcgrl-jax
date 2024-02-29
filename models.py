@@ -143,14 +143,14 @@ class ConvForward3d(nn.Module):
 
         
 
-        map_x = nn.Conv(
-            features=32, kernel_size=(5,5,5), strides=(2, 2, 2), padding=(3, 3,3)
-        )(map_x)
-        map_x = activation(map_x)
         #map_x = nn.Conv(
-        #    features=64, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(3, 3,3)
+        #    features=32, kernel_size=(5,5,5), strides=(2, 2, 2), padding=(3, 3,3)
         #)(map_x)
         #map_x = activation(map_x)
+        map_x = nn.Conv(
+            features=64, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(3, 3,3)
+        )(map_x)
+        map_x = activation(map_x)
         map_x = nn.Conv(
             features=64, kernel_size=(2,2,2), strides=(1, 1, 1), padding=(3, 3,3)
         )(map_x)

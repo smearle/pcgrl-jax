@@ -301,8 +301,8 @@ class LegoEnv(Environment):
             -> bool:
         """Check whether state is terminal."""
         max_reps_hit = env_state.step_idx >= (self.rep.max_steps - 1) 
-        #done = jnp.logical_or(max_reps_hit, env_state.prob_state.done)
-        return max_reps_hit
+        done = jnp.logical_or(max_reps_hit, env_state.prob_state.done)
+        return done
     """
     def render(self, env_state: LegoEnvState):
         # TODO: Refactor this into problem

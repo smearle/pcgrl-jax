@@ -194,17 +194,14 @@ class LegoRearrangeRepresentation(Representation):
             jnp.ones(self.env_shape),
             (x_offset, y_offset, z_offset),
         )
-        # for x in range(self.env_shape[0]):
-        #     for y in range(self.env_shape[1]):
-        #         for z in range(self.env_shape[2]):
-        #             obs = obs.at[x+x_offset, y+y_offset, z+z_offset].set(1)
+        
         obs = obs.at[blocks[:, 0]+x_offset, blocks[:, 1]+y_offset, blocks[:, 2]+z_offset].set(2)
-        # for block in blocks:
-        #     block_x, block_y, block_z = block
-        #     obs = obs.at[block_x + x_offset, block_y + y_offset, block_z + z_offset].set(2)
-        # obs = self.perturb_obs(rotation, obs)
 
+        #mark current block
         obs = obs.at[blocks[curr_block,0]+x_offset, blocks[curr_block,1]+y_offset,blocks[curr_block,2]+z_offset].set(3)
+        #mark center block
+        #obs = obs.at[(self.env_shape[0]-1)//2+x_offset, (self.env_shape[1]-1)//2+y_offset, (self.env_shape[2]-1)//2+z_offset].set(4)
+        
         obs = jax.nn.one_hot(obs, num_classes=len(self.tile_enum)+2, axis=-1)
         return obs
 
