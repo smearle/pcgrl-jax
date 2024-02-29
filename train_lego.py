@@ -507,8 +507,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     ep_return = (metric["returned_episode_returns"]
                                  [metric["returned_episode"]].mean()
                                  )
-                    ep_length = (metric["returned_episode_lengths"]
-                                  [metric["returned_episode"]].mean())
+                    ep_length = (jnp.argmax(metric["returned_episode"], axis=0)).mean()
                     
 
                     ep_footprint = metric["stats"][metric["returned_episode"]][:,1].mean()
