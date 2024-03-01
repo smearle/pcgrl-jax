@@ -29,7 +29,7 @@ def compute_n_params(config):
     # print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
 
     
-    n_parameters = sum(np.prod(p.shape) for p in jax.tree_leaves(network_params) if isinstance(p, jnp.ndarray))
+    n_parameters = sum(np.prod(p.shape) for p in jax.tree_util.tree_leaves(network_params) if isinstance(p, jnp.ndarray))
     return n_parameters
 
 
