@@ -4,14 +4,22 @@ arf_size:
 - 5
 - 8
 - 16
-- 31
 - -1
+eval_hypers:
+  eval_map_width:
+  - 8
+  - 16
+  - 24
+  - 31
+  eval_randomize_map_shape:
+  - true
+  # - false
 change_pct:
 - -1.0
 map_width:
-- 8
-- 10
-- 18
+# - 8
+# - 10
+# - 18
 - 20
 max_board_scans:
 - 5

@@ -28,6 +28,9 @@ table_name_remaps = {
     'min_min_ep_loss': 'min. loss',
     'mean_min_ep_loss': 'mean loss',
     'max_board_scans': 'max. board scans',
+    'eval_randomize_map_shape': 'rand. map shape',
+    'randomize_map_shape': 'rand. map shape',
+    'eval map width': 'map width',
 }
 
 @hydra.main(version_base=None, config_path='./', config_name='batch_pcgrl')
@@ -45,11 +48,6 @@ def cross_eval_main(cfg: SweepConfig):
         write_sweep_confs(_hypers, _eval_hypers)
     
     for grid_hypers in _hypers:
-        for k, v in grid_hypers.items():
-            if k.startswith('obs_size'):
-                if -1 in v:
-                    v.remove(-1)
-                    v.append(31)
         sweep_grid(cfg, grid_hypers, _eval_hypers)
 
 
@@ -57,6 +55,12 @@ def sweep_grid(cfg, grid_hypers, _eval_hypers):
     default_cfg = EvalConfig()
     sweep_configs = get_grid_cfgs(default_cfg, grid_hypers, mode='eval', eval_hypers=_eval_hypers)
     sweep_configs = [init_config(sc) for sc in sweep_configs]
+
+    for sc in sweep_configs:
+        for k, v in sc.__dict__.items():
+            if k.startswith('obs_size'):
+                if v == -1:
+                    setattr(sc, k, sc.map_width * 2 - 1)
 
     # FIXME: This part is messy, we have to assume we ran the eval with the 
     #  default params as defined in the class below. We should probably save
@@ -359,22 +363,26 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     )
     latex_str_lines = latex_str.split('\n')
     # Add `\centering` to the beginning of the table
+    latex_str_lines.insert(0, '\\adjustbox{max width=\\textwidth}{%')
     latex_str_lines.insert(0, '\\centering')
     n_col_header_rows = len(styled_basic_stats_concise_df.columns.names)
-    i = 3 + n_col_header_rows
+    i = 4 + n_col_header_rows
     latex_str_lines.insert(i, '\\toprule')
     # Add `\label` to the end of the table
     latex_str_lines.append(f'\\label{{tab:{name}_{eval_sweep_name}}}')
+    latex_str_lines.append('}')
     latex_str = '\n'.join(latex_str_lines)
 
     # Save the dataframe as a latex table
     with open(os.path.join(CROSS_EVAL_DIR, name, f"{name}_{eval_sweep_name}.tex"), 'w') as f:
         f.write(latex_str)
 
+    print(f"Basic stats for {name} saved to {CROSS_EVAL_DIR}/{name}.")
 
 
         
 def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
+
                     eval_config: EvalConfig, hypers):
 
     # Create a dataframe with miscellaneous stats for each experiment
@@ -525,8 +533,28 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     plt.savefig(os.path.join(CROSS_EVAL_DIR, name, f"metric_curves.png"))
 
     fig, ax = plt.subplots()
+    # cut off the first and last 100 timesteps to remove outliers
+    metric_curves_mean = metric_curves_mean.drop(columns=metric_curves_mean.columns[:25])
+    metric_curves_mean = metric_curves_mean.drop(columns=metric_curves_mean.columns[-25:])
+    columns = copy.deepcopy(metric_curves_mean.columns)
+    # columns = columns[100:-100]
     for i, row in metric_curves_mean.iterrows():
+
+        # Apply a convolution to smooth the curve
+        row = np.convolve(row, np.ones(10), 'same') / 10
+        # row = row[100:-100]
+        # row = np.convolve(row, np.ones(10), 'valid') / 10
+        # turn it back into a pandas series
+        row = pd.Series(row, index=columns)
+        
+        # drop the first 100 timesteps to remove outliers caused by conv
+        row = row.drop(row.index[:25])
+        row = row.drop(row.index[-25:])
+
+        
+
         ax.plot(row, label=str(i))
+    metric_curves_mean.columns = columns
     ax.set_xlabel('Timesteps')
     ax.set_ylabel('Return')
 
@@ -539,6 +567,8 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     legend_title = ', '.join(levels_to_keep).replace('_', ' ')
     ax.legend(title=legend_title)
     plt.savefig(os.path.join(CROSS_EVAL_DIR, name, f"{name}_metric_curves_mean.png"))
+
+    print(f"Misc stats for {name} saved to {CROSS_EVAL_DIR}/{name}.")
 
 
 def cross_eval_cp(sweep_name: str, sweep_configs: Iterable[SweepConfig],

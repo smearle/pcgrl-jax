@@ -1,8 +1,10 @@
-NAME: fixed_arf_dungeon
-arf_size:
-- 8
+NAME: cp_binary_conv2
 change_pct:
-- -1.0
+- 0.2
+- 0.4
+- 0.6
+- 0.8
+- 1.0
 eval_hypers:
   eval_map_width:
   - 8
@@ -10,25 +12,19 @@ eval_hypers:
   - 24
   - 32
   eval_randomize_map_shape:
-  - true
   - false
 max_board_scans:
-- 5
+- 3.0
 model:
-- seqnca
+- conv2
 n_envs:
 - 600
-problem:
-- dungeon
 seed:
 - 0
 - 1
 - 2
+- 3
+- 4
+- 5
 total_timesteps:
 - 1000000000
-vrf_size:
-- 8
-- 12
-- 16
-- 23
-- -1
