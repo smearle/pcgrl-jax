@@ -152,6 +152,7 @@ class EnjoyConfig(EvalConfig):
 @dataclass
 class ProfileEnvConfig(Config):
     N_PROFILE_STEPS: int = 5000
+    reevaluate: bool = False
 
 
 @dataclass
