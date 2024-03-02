@@ -100,7 +100,7 @@ class LegoProblem(Problem):
         stats = stats.at[LegoMetrics.DIST_TO_CENTER].set(avg_cntr_dist)
 
         done = jnp.sum(jnp.where(stats == self.stat_trgs, 0, 1) * self.stat_weights) == 0
-
+        
         state = LegoProblemState(
             stats=stats, 
             ctrl_trgs=self.get_stat_trgs,

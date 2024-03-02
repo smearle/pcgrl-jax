@@ -248,7 +248,7 @@ class LegoEnv(Environment):
         return queued_state
 
     @partial(jax.jit, static_argnums=(0, 4))
-    def step(self, rng, env_state: LegoEnvState, action, env_params):
+    def step_env(self, rng, env_state: LegoEnvState, action, env_params):
         action = action[..., None]
         
         rng, subkey = jax.random.split(rng)
@@ -263,11 +263,6 @@ class LegoEnv(Environment):
 
         obs = self.get_obs(env_state.rep_state, env_state.prob_state)
 
-        #env_map = jnp.where(env_state.static_map == 1,
-        #                    env_state.env_map, env_map,
-        #) 
-        
-        #env_state = jax.lax.cond(env_state.prob_state == None, env_state.prob_state = LegoProblemState(reward = 0), env_state)
         reward, prob_state = self.prob.step(env_map, state=env_state.prob_state, blocks=rep_state.blocks)
 
         env_state = LegoEnvState(
@@ -276,7 +271,7 @@ class LegoEnv(Environment):
             prob_state=prob_state, step_idx=env_state.step_idx + 1, queued_state = env_state.queued_state)
          
         done = self.is_terminal(env_state, env_params)
-        
+ 
         env_state = env_state.replace(done=done)
 
         
@@ -293,7 +288,10 @@ class LegoEnv(Environment):
              "ctr_dist": prob_state.stats[LegoMetrics.DIST_TO_CENTER],
              "last_action": action[0][0][0],
              "stats": prob_state.stats,
-             "rotation": rep_state.rotation
+             "rotation": rep_state.rotation,
+             "done": done,
+             "step": env_state.step_idx
+             
              }
         )
     

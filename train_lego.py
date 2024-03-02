@@ -22,7 +22,6 @@ from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
 from envs.probs.lego import LegoProblemState
 from envs.lego_env import LegoEnvState
 
-
 class RunnerState(struct.PyTreeNode):
     train_state: TrainState
     env_state: jnp.ndarray
@@ -98,40 +97,21 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # INIT ENV FOR TRAIN
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config.n_envs)
-        # obsv, env_state = jax.vmap(
-        #     env.reset, in_axes=(0, None))(reset_rng, env_params)
-
-        # Reshape reset_rng and other per-environment states to (n_devices, -1, ...)
-        # reset_rng = reset_rng.reshape((config.n_gpus, -1) + reset_rng.shape[1:])
 
         dummy_queued_state = gen_dummy_queued_state(config, env, reset_rng)
 
-        # Apply pmap
         vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, None))
-        # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
         obsv, env_state = vmap_reset_fn(reset_rng, env_params, dummy_queued_state)
         
-    
-        #env_state = env_state.env_state.replace(prob_state = LegoProblemState(reward = 0.0))
         # INIT ENV FOR RENDER
         rng_r, _rng_r = jax.random.split(rng)
         reset_rng_r = jax.random.split(_rng_r, config.n_render_eps)
-
-        # Apply pmap
         
-        # reset_rng_r = reset_rng_r.reshape((config.n_gpus, -1) + reset_rng_r.shape[1:])
         vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None, None))
-        # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
-        obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params, dummy_queued_state)  # Replace None with your env_params if any
-        #env_state_r = env_state_r.replace(prob_state = LegoProblemState(reward = 0.0))
-
-        # obsv_r, env_state_r = jax.vmap(
-        #     env_r.reset, in_axes=(0, None))(reset_rng_r, env_params)
+        obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params, dummy_queued_state) 
 
         rng, _rng = jax.random.split(rng)
-#       ep_returns = jnp.full(shape=config.NUM_UPDATES,
-#       ep_returns = jnp.full(shape=1,
-#                             fill_value=jnp.nan, dtype=jnp.float32)
+
         steps_prev_complete = 0
         runner_state = RunnerState(
             train_state, env_state, obsv, rng,
@@ -502,17 +482,24 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             def log_callback(metric, steps_prev_complete, train_start_time):
                 timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
 
+                
+                
                 if len(timesteps) > 0:
                     t = timesteps[0]
                     ep_return = (metric["returned_episode_returns"]
                                  [metric["returned_episode"]].mean()
                                  )
-                    ep_length = (jnp.argmax(metric["returned_episode"], axis=0)).mean()
-                    
+                
+                    stats=metric["stats"]
 
-                    ep_footprint = metric["stats"][metric["returned_episode"]][:,1].mean()
-                    ep_avg_height = metric["stats"][metric["returned_episode"]][:,0].mean()
-                    ep_ctr_dist = metric["ctr_dist"][metric["returned_episode"]].mean()
+                    dones = (jnp.argmax(metric["done"], axis=0))
+                    first_finished_episode = jnp.arange(metric["done"].shape[0])[:,None]==dones
+                    test = stats[first_finished_episode]
+
+                    ep_footprint = metric["stats"][first_finished_episode][:,1].mean()
+                    ep_avg_height = metric["stats"][first_finished_episode][:,0].mean()
+                    ep_ctr_dist = metric["ctr_dist"][first_finished_episode].mean()
+                    ep_length = metric["step"][first_finished_episode].mean()+1
 
                     n_envs = metric["last_action"].shape[1]
                     mean_num_actions = sum([len(set(metric["last_action"][:,i])) for i in range(n_envs)])/n_envs
