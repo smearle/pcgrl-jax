@@ -15,8 +15,7 @@ problems = [
     'dungeon',
 ]
 
-# n_envss= [1, 10, 50, 100, 200, 400]
-n_envss= [1,2]
+n_envss= [1, 10, 50, 100, 200, 400, 600]
 
 
 @hydra.main(version_base=None, config_path='./', config_name='profile_pcgrl')
@@ -88,11 +87,17 @@ def profile(config: ProfileEnvConfig):
 
     # Turn into a dataframe, where rows are problems and columns are different n_envs
     fps_df = pd.DataFrame(problem_n_envs_to_fps)
+    # Swap rows and columns
+    fps_df = fps_df.T
+    # Round to 2 decimal places
+    fps_df = fps_df.round(2)
     print(fps_df)
     # Save as markdown
     fps_df.to_markdown(f'n_envs_to_fps.md')
-    # latex
-    fps_df.to_latex(f'n_envs_to_fps.tex')
+    # latex format 2 decimal places
+    styled_fps_df = fps_df.style.format("{:.2f}")
+    with open(f'n_envs_to_fps.tex', 'w') as f:
+        f.write(styled_fps_df.to_latex())
 
 if __name__ == '__main__':
     profile() 

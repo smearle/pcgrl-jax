@@ -9,7 +9,9 @@ import numpy as np
 
 from conf.config import EnjoyConfig
 from envs.pcgrl_env import PCGRLEnv, render_stats, gen_dummy_queued_state
+from envs.probs.problem import get_loss
 from eval import get_eval_name, init_config_for_eval
+from purejaxrl.experimental.s5.wrappers import LossLogWrapper
 from train import init_checkpointer
 from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 
@@ -29,6 +31,14 @@ def main_enjoy(enjoy_config: EnjoyConfig):
         os.makedirs(exp_dir)
         steps_prev_complete = 0
 
+
+    if enjoy_config.render_ims:
+        frames_dir = os.path.join(exp_dir, 'frames')
+        os.makedirs(frames_dir, exist_ok=True)
+
+    best_frames_dir = os.path.join(exp_dir, 'best_frames')
+    os.makedirs(best_frames_dir, exist_ok=True)
+
     env: PCGRLEnv
 
     # Preserve config as it was during training, for future reference (i.e. naming output of enjoy/eval)
@@ -36,6 +46,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
 
     enjoy_config = init_config_for_eval(enjoy_config)
     env, env_params = gymnax_pcgrl_make(enjoy_config.env_name, config=enjoy_config)
+    env = LossLogWrapper(env)
     env.prob.init_graphics()
     network = init_network(env, env_params, enjoy_config)
 
@@ -70,7 +81,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
             rng_step, env_state, action, env_params
 
         )
-        frames = jax.vmap(env.render, in_axes=(0))(env_state)
+        frames = jax.vmap(env.render, in_axes=(0))(env_state.log_env_state.env_state)
         # frame = env.render(env_state)
         rng = jax.random.split(rng)[0]
         # Can't concretize these values inside jitted function (?)
@@ -83,6 +94,13 @@ def main_enjoy(enjoy_config: EnjoyConfig):
     _, (states, rewards, dones, infos, frames) = jax.lax.scan(
         step_env, (rng, obs, env_state), None,
         length=enjoy_config.n_eps*env.max_steps)  # *at least* this many eps (maybe more if change percentage or whatnot)
+    
+    min_ep_losses = states.min_episode_losses
+    # Mask out so we only have the final step of each episode
+    min_ep_losses = jnp.where(dones, min_ep_losses, jnp.nan)
+
+    # FIXME: get best frame index for *each* episode
+    min_ep_loss_frame_idx = jnp.nanargmin(min_ep_losses, axis=0)
 
     # frames = frames.reshape((config.n_eps*env.max_steps, *frames.shape[2:]))
 
@@ -101,20 +119,40 @@ def main_enjoy(enjoy_config: EnjoyConfig):
             net_ep_idx = env_idx * enjoy_config.n_eps + ep_idx
 
             new_ep_frames = []
+
+            min_loss, best_frame = np.inf, None
+
             for i in range(ep_idx * env.max_steps, (ep_idx + 1) * env.max_steps):
                 frame = frames[i, env_idx]
                 
                 state_i = jax.tree_util.tree_map(lambda x: x[i, env_idx], states)
                 if enjoy_config.render_stats:
-                    frame = render_stats(env, state_i, frame)
+                    frame = render_stats(env, state_i.log_env_state.env_state, frame)
                 new_ep_frames.append(frame)
 
-                # Save frame as png
-                # png_name = f"{exp_dir}/frame_ep-{net_ep_idx}_step-{i}" + \
-                #     f"{('_randAgent' if config.random_agent else '')}.png"
-                # imageio.v3.imwrite(png_name, frame)
-                # imageio.imwrite(png_name, frame)
+                loss = get_loss(state_i.log_env_state.env_state.prob_state.stats, 
+                    env._env.prob.stat_weights, 
+                    env._env.prob.stat_trgs,
+                    env._env.prob.ctrl_threshes, 
+                    env._env.prob.metric_bounds)
+
+                if loss < min_loss:
+                    min_loss, best_frame = loss, frame
+
+
+                if enjoy_config.render_ims:
+                    # Save frame as png
+                    png_name = os.path.join(frames_dir, f"{enjoy_config.exp_dir.strip('saves/')}_" +\
+                        f"{get_eval_name(eval_config=enjoy_config, train_config=train_config)}_frame_ep-{net_ep_idx}_step-{i}" + \
+                        f"{('_randAgent' if enjoy_config.random_agent else '')}.png")
+                    imageio.v3.imwrite(png_name, frame)
+                    # imageio.imwrite(png_name, frame)
                 new_ep_frames.append(frame)
+
+            best_png_name = os.path.join(best_frames_dir, f"{enjoy_config.exp_dir.strip('saves/')}_" +\
+                f"{get_eval_name(eval_config=enjoy_config, train_config=train_config)}_frame_ep-{net_ep_idx}_step-{i}" + \
+                f"{('_randAgent' if enjoy_config.random_agent else '')}.png")
+            imageio.v3.imwrite(best_png_name, best_frame)
 
             ep_frames = new_ep_frames
 

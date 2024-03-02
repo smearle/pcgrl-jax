@@ -146,6 +146,7 @@ class EnjoyConfig(EvalConfig):
     eval_map_width: Optional[int] = None
     render_stats: bool = True
     n_enjoy_envs: int = 1
+    render_ims: bool = False
 
     
 

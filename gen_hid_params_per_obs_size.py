@@ -61,7 +61,7 @@ def main_gen_hid(config: EnjoyConfig):
 
 def get_hiddims_dict_path(config):
         hid_params_path = os.path.join('conf',
-            f"{config.problem}_{config.representation}_{config.model}_w-{config.map_width}_hid_params.json")
+            f"{config.problem}_{config.representation}_{config.model}_w-{16}_hid_params.json")
         return hid_params_path
 
 

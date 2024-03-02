@@ -505,7 +505,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
                     mw = eval_config.eval_map_width
                 else:
                     mw = eval_config.map_width
-                # Why exactly is this necessary? And should we really be inhering from *eval* map width?
+                # Why exactly is this necessary? And should we really be inheriting from *eval* map width?
                 sc.obs_size = mw * 2 - 1
         exp_dir = sc.exp_dir
         train_metrics = pd.read_csv(f'{exp_dir}/progress.csv')
