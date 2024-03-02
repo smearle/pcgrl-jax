@@ -52,6 +52,7 @@ def get_exp_dir(config: Config):
             f'nag-{config.n_agents}_' + \
             ('empty-start_' if config.empty_start else '') + \
             ('pinpoints_' if config.pinpoints else '') + \
+            (f'{config.n_envs}-envs_' if config.profile_fps else '') + \
             f'{config.seed}_{config.exp_name}')
     elif config.env_name == 'PlayPCGRL':
         exp_dir = os.path.join(

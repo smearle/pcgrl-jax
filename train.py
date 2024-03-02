@@ -668,6 +668,7 @@ def main(config: TrainConfig):
     rng = jax.random.PRNGKey(config.seed)
 
     exp_dir = config.exp_dir
+    print(f'running experiment at {exp_dir}\n')
 
     # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
     if config.overwrite and os.path.exists(exp_dir):
