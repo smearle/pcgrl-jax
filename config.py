@@ -95,7 +95,7 @@ class LegoConfig(Config):
     #num_steps: int = 
     max_steps_multiple:int = 15
     n_blocks:int = 7
-    total_timesteps: int = int(3e7)
+    total_timesteps: int = int(5e7)
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4
     GAMMA: float = 0.99

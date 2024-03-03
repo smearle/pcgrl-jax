@@ -140,9 +140,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 gif_name = f"{config.exp_dir}/update-{i}_ep-{ep_is}.gif"
                 dones = is_finished[:,ep_is]
                 done_ind = jnp.argmax(dones)
+                done_ind = jax.lax.cond(done_ind == 0, lambda: env.max_steps-1, lambda: done_ind)
 
                 ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
-                ep_frames = ep_frames[:done_ind+1]
+                ep_frames = ep_frames[:done_ind]
 
                 try:
                     imageio.v3.imwrite(
@@ -165,15 +166,16 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             for ep_is in range(config.n_render_eps):
                 dones = is_finished[:,ep_is]
                 done_ind = jnp.argmax(dones)
+                done_ind = jax.lax.cond(done_ind == 0, lambda: env.max_steps-1, lambda: done_ind)
 
-                ep_blocks = blocks[ep_is*env.max_steps:ep_is*env.max_steps+done_ind+1]
+                ep_blocks = blocks[ep_is*env.max_steps:ep_is*env.max_steps+done_ind-1]
 
                 ep_end_avg_height = states.prob_state.stats[done_ind, ep_is, 0]
                 ep_footprint = states.prob_state.stats[done_ind, ep_is, 1]
                 ep_cntr_dist = states.prob_state.stats[done_ind, ep_is, 3]
                 #ep_rotations = states.rep_state.rotation[:done_ind+1,ep_is]
-                ep_curr_blocks = states.rep_state.curr_block[:done_ind+1,ep_is]
-                actions = states.rep_state.last_action[:done_ind+1,ep_is]
+                ep_curr_blocks = states.rep_state.curr_block[:done_ind,ep_is]
+                actions = states.rep_state.last_action[:done_ind,ep_is]
 
                 savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_fp{ep_footprint:.2f}_ctrdist{ep_cntr_dist:.2f}/"
                 if not os.path.exists(savedir):
@@ -483,23 +485,16 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
 
                 
-                
                 if len(timesteps) > 0:
                     t = timesteps[0]
                     ep_return = (metric["returned_episode_returns"]
                                  [metric["returned_episode"]].mean()
                                  )
-                
-                    stats=metric["stats"]
 
-                    dones = (jnp.argmax(metric["done"], axis=0))
-                    first_finished_episode = jnp.arange(metric["done"].shape[0])[:,None]==dones
-                    test = stats[first_finished_episode]
-
-                    ep_footprint = metric["stats"][first_finished_episode][:,1].mean()
-                    ep_avg_height = metric["stats"][first_finished_episode][:,0].mean()
-                    ep_ctr_dist = metric["ctr_dist"][first_finished_episode].mean()
-                    ep_length = metric["step"][first_finished_episode].mean()+1
+                    ep_footprint = metric["stats"][metric["returned_episode"]][:,1].mean()
+                    ep_avg_height = metric["stats"][metric["returned_episode"]][:,0].mean()
+                    ep_ctr_dist = metric["stats"][metric["returned_episode"]][:,3].mean()
+                    ep_length = metric["step"][metric["returned_episode"]].mean()+1
 
                     n_envs = metric["last_action"].shape[1]
                     mean_num_actions = sum([len(set(metric["last_action"][:,i])) for i in range(n_envs)])/n_envs
