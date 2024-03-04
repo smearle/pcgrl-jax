@@ -2,7 +2,7 @@ import os
 import shutil
 from timeit import default_timer as timer
 from typing import NamedTuple
-
+from matplotlib import pyplot as plt
 import hydra
 import jax
 import jax.numpy as jnp
@@ -11,14 +11,14 @@ import imageio
 import optax
 from flax.training.train_state import TrainState
 from flax.training import orbax_utils
+from flax.training.common_utils import onehot
 import orbax 
 from tensorboardX import SummaryWriter
 
 from config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from purejaxrl.experimental.s5.wrappers import LogWrapper
-from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
-                   init_config)
+from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make, init_config)
 from envs.probs.lego import LegoProblemState
 from envs.lego_env import LegoEnvState
 
@@ -35,12 +35,60 @@ class RunnerState(struct.PyTreeNode):
 class Transition(NamedTuple):
     done: jnp.ndarray
     action: jnp.ndarray
-    value: jnp.ndarray
+    expert_action: jnp.ndarray
     reward: jnp.ndarray
     log_prob: jnp.ndarray
     obs: jnp.ndarray
     info: jnp.ndarray
     # rng_act: jnp.ndarray
+
+def get_expert_action(log_env_state):
+    env_state = log_env_state.env_state
+    moves = jnp.array([
+            (0,0),
+            (0,1),
+            (0,-1),
+            (1,0),
+            (-1,0),
+        ])
+    
+    blocks = env_state.rep_state.blocks
+    curr_block_inds = env_state.rep_state.curr_block
+    map_shape = env_state.env_map[0].shape
+
+    n_envs = blocks.shape[0]
+
+    center_x = map_shape[0]-1//2
+    center_z = map_shape[2]-1//2
+
+    curr_blocks = jnp.array([blocks[i, curr_block_inds[i], :] for i in range(blocks.shape[0])])
+    curr_x = curr_blocks[:,0]
+    curr_z = curr_blocks[:,2]
+    
+    x_dir = center_x - curr_x
+    z_dir = center_z - curr_z
+
+    x_moves = jnp.clip(x_dir, a_min = -1, a_max = 1).reshape(x_dir.shape[0], 1)
+    z_moves = jnp.clip(z_dir, a_min = -1, a_max = 1).reshape(x_dir.shape[0], 1)
+    z_moves = jnp.where(x_moves==0, z_moves, 0)
+    
+    combined_actions = jnp.concatenate((x_moves, z_moves), axis=1)
+
+    def find_indices(array1, array2):
+        # Step 1: Compare each row of array1 with each row of array2
+        comparison = array1[:, None, :] == array2[None, :, :]  # Shape becomes (4, 5, 2)
+
+        # Step 2: Check where all elements along the last axis match
+        matches = jnp.all(comparison, axis=2)  # Shape becomes (4, 5)
+
+        # Step 3: Find the index in the second array for each row of the first array
+        indices = jnp.argmax(matches, axis=1)  # Shape becomes (4,)
+
+        return indices
+
+    actions = find_indices(combined_actions, moves)
+    
+    return actions.reshape(actions.shape[0], 1, 1, 1)
 
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
@@ -60,16 +108,16 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             / config.NUM_UPDATES
         )
         return config["LR"] * frac
+        
 
     def train(rng, config: TrainConfig):
 
         train_start_time = timer()
+
         # INIT NETWORK
         network = get_network(env, env_params, config)
-
         rng, _rng = jax.random.split(rng)
         init_x = env.gen_dummy_obs(env_params)
-        # init_x = env.observation_space(env_params).sample(_rng)[None]
      
         network_params = network.init(_rng, init_x)
         print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
@@ -85,6 +133,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 optax.clip_by_global_norm(config.MAX_GRAD_NORM),
                 optax.adam(config.lr, eps=1e-5),
             )
+       
         train_state = TrainState.create(
             apply_fn=network.apply,
             params=network_params,
@@ -94,7 +143,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # INIT ENV FOR TRAIN
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config.n_envs)
-
+ 
         dummy_queued_state = gen_dummy_queued_state(config, env, reset_rng)
 
         vmap_reset_fn = jax.vmap(env.reset, in_axes=(0, None, None))
@@ -103,9 +152,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         # INIT ENV FOR RENDER
         rng_r, _rng_r = jax.random.split(rng)
         reset_rng_r = jax.random.split(_rng_r, config.n_render_eps)
-        
+
         vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None, None))
-        obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params, dummy_queued_state) 
+        obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params, dummy_queued_state)  # Replace None with your env_params if any
 
         rng, _rng = jax.random.split(rng)
 
@@ -114,7 +163,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             train_state, env_state, obsv, rng,
             update_i=0)
 
-        # exp_dir = get_exp_dir(config)
+        
         if restored_ckpt is not None:
             steps_prev_complete = restored_ckpt['steps_prev_complete']
             runner_state = restored_ckpt['runner_state']
@@ -124,6 +173,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             # TODO: Overwrite certain config values
 
+        
         def render_frames(frames, i, env_states=None):
             if i % config.render_freq != 0:
             # if jnp.all(frames == 0):
@@ -231,6 +281,80 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     f.close()
 
 
+            if i % config.render_freq != 0:
+                return
+            
+            is_finished = states.done
+
+            for ep_is in range(config.n_render_eps):
+                dones = is_finished[:,ep_is]
+                done_ind = jnp.argmax(dones)
+
+                ep_blocks = blocks[ep_is*env.max_steps:ep_is*env.max_steps+done_ind+1]
+
+                ep_end_avg_height = states.prob_state.stats[done_ind, ep_is, 0]
+                ep_footprint = states.prob_state.stats[done_ind, ep_is, 1]
+                ep_cntr_dist = states.prob_state.stats[done_ind, ep_is, 3]
+                #ep_rotations = states.rep_state.rotation[:done_ind+1,ep_is]
+                ep_curr_blocks = states.rep_state.curr_block[:done_ind+1,ep_is]
+                actions = states.rep_state.last_action[:done_ind+1,ep_is]
+
+                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_fp{ep_footprint:.2f}_ctrdist{ep_cntr_dist:.2f}/"
+                if not os.path.exists(savedir):
+                    os.makedirs(savedir)
+                
+                for num in range(ep_blocks.shape[0]):
+                    curr_blocks = ep_blocks[num,:,:]
+                    #rotation = ep_rotations[num]
+                    curr_block = ep_curr_blocks[num]
+                    action = actions[num]
+
+                    savename = os.path.join(savedir, f"{num}_a{action}.mpd")
+                    
+                    f = open(savename, "a")
+                    f.write("0/n")
+                    f.write("0 Name: New Model.ldr\n")
+                    f.write("0 Author:\n")
+                    f.write("\n")
+
+                    for x in range(config.map_width):
+                        for z in range(config.map_width):
+                            lego_block_name = "3005"
+                            block_color = "2 "
+                            if curr_block == num:
+                                block_color = "7 "
+                            
+                            y_offset = -3#-24
+
+                            x_lego = x * 20  + config.map_width - 1
+                            y_lego =  0#(1)*(LegoDimsDict[lego_block_name][1])
+                            z_lego = z * 20 + config.map_width - 1
+
+                            #print(block.x, block.y, block.z)
+                            
+                            f.write("1 ")
+                            f.write(block_color)
+                            f.write(str(x_lego) + ' ' + str(y_lego) + ' ' + str(z_lego) + ' ')
+                            f.write("1 0 0 0 1 0 0 0 1 ")
+                            f.write(lego_block_name + ".dat")
+                            f.write("\n")
+                    
+                    y_offset = -24
+                    for b in range(curr_blocks.shape[0]):
+                        lego_block_name = "3005"
+                        block_color = "7 "
+                        x_lego = curr_blocks[b, 0] * 20  + config.map_width - 1
+                        y_lego = curr_blocks[b, 1] * (-24) + y_offset
+                        z_lego = curr_blocks[b, 2] * 20 + config.map_width - 1
+
+                        f.write("1 ")
+                        f.write(block_color)
+                        f.write(str(x_lego) + ' ' + str(y_lego) + ' ' + str(z_lego) + ' ')
+                        f.write("1 0 0 0 1 0 0 0 1 ")
+                        f.write(lego_block_name + ".dat")
+                        f.write("\n")
+                    f.close()
+
         def render_episodes(network_params):
             _, (states, rewards, dones, infos, frames, blocks) = jax.lax.scan(
                 step_env_render, (rng_r, obsv_r, env_state_r, network_params),
@@ -238,8 +362,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             frames = jnp.concatenate(jnp.stack(frames, 1))
             blocks = jnp.concatenate(jnp.stack(blocks, 1))
-
-           
             return frames, states, blocks
 
         def step_env_render(carry, _):
@@ -251,22 +373,35 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             rng_step = jax.random.split(_rng_r, config.n_render_eps)
 
+            # rng_step_r = rng_step_r.reshape((config.n_gpus, -1) + rng_step_r.shape[1:])
             vmap_step_fn = jax.vmap(env_r.step, in_axes=(0, 0, 0, None))
-
+            # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
             obs_r, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
                             rng_step, env_state_r, action_r,
                             env_params)
             vmap_render_fn = jax.vmap(env_r.render, in_axes=(0,))
-
+            # pmap_render_fn = jax.pmap(vmap_render_fn, in_axes=(0,))
             frames = vmap_render_fn(env_state_r)
+            # Get rid of the gpu dimension
+            # frames = jnp.concatenate(jnp.stack(frames, 1))
+            if config.env_name == 'Lego':
+                vmap_block_fn = jax.vmap(env_r.get_blocks, in_axes = (0,))
+                blocks = vmap_block_fn(env_state_r)
 
-            vmap_block_fn = jax.vmap(env_r.get_blocks, in_axes = (0,))
-            blocks = vmap_block_fn(env_state_r)
-
-
+                return (rng_r, obs_r, env_state_r, network_params),\
+                    (env_state_r, reward_r, done_r, info_r, frames, blocks)
+            
             return (rng_r, obs_r, env_state_r, network_params),\
-                (env_state_r, reward_r, done_r, info_r, frames, blocks)
+                    (env_state_r, reward_r, done_r, info_r, frames)
 
+        def loss_log(train_losses, batch_size):
+            filename = f"{config.exp_dir}/loss.png"
+            x_axis = [i*batch_size for i in range(len(losses))]
+            plt.plot(x_axis, train_losses, label = "Training Loss")
+            plt.xlabel("Timesteps")
+            plt.ylabel("Loss")
+            plt.title("Loss")
+            plt.savefig(filename)
 
         def save_checkpoint(runner_state, info, steps_prev_complete):
             try:
@@ -287,16 +422,13 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         checkpoint_manager.save(t, ckpt, save_kwargs={
                                                 'save_args': save_args})
                     break
-
+        
         frames, states, blocks = render_episodes(train_state.params)
         jax.debug.callback(render_frames, frames, runner_state.update_i, states)
         jax.debug.callback(render_mpds, blocks, runner_state.update_i, states)
         old_render_results = (frames, states, blocks)
-
-        # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
-
-        # TRAIN LOOP
-        def _update_step(runner_state, unused):
+        
+        def _update_step(runner_state, batch):
             # COLLECT TRAJECTORIES
             def _env_step(runner_state: RunnerState, unused):
                 train_state, env_state, last_obs, rng, update_i = (
@@ -308,9 +440,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
                 # Squash the gpu dimension (network only takes one batch dimension)
-                pi, value = network.apply(train_state.params, last_obs)
+                pi, _ = network.apply(train_state.params, last_obs)
                 action = pi.sample(seed=_rng)
                 log_prob = pi.log_prob(action)
+
+                #GET EXPERT ACTION
+                expert_action = get_expert_action(env_state)
 
                 # STEP ENV
                 rng, _rng = jax.random.split(rng)
@@ -323,109 +458,42 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     rng_step, env_state, action, env_params
                 )
                 transition = Transition(
-                    done, action, value, reward, log_prob, last_obs, info
+                    done, action, expert_action, reward, log_prob, last_obs, info
                 )
                 runner_state = RunnerState(
                     train_state, env_state, obsv, rng,
                     update_i=update_i)
                 return runner_state, transition
-
+            
             runner_state, traj_batch = jax.lax.scan(
                 _env_step, runner_state, None, config.max_steps_multiple*config.n_blocks
             )
 
-            # CALCULATE ADVANTAGE
             train_state, env_state, last_obs, rng = runner_state.train_state, runner_state.env_state, \
                 runner_state.last_obs, runner_state.rng
-            
-            _, last_val = network.apply(train_state.params, last_obs)
-
-            def _calculate_gae(traj_batch, last_val):
-                def _get_advantages(gae_and_next_value, transition):
-                    gae, next_value = gae_and_next_value
-                    done, value, reward = (
-                        transition.done,
-                        transition.value,
-                        transition.reward,
-                    )
-                    delta = reward + config.GAMMA * \
-                        next_value * (1 - done) - value
-                    gae = (
-                        delta
-                        + config.GAMMA * config.GAE_LAMBDA * (1 - done) * gae
-                    )
-                    return (gae, value), gae
-
-                _, advantages = jax.lax.scan(
-                    _get_advantages,
-                    (jnp.zeros_like(last_val), last_val),
-                    traj_batch,
-                    reverse=True,
-                    unroll=16,
-                )
-                return advantages, advantages + traj_batch.value
-
-            advantages, targets = _calculate_gae(traj_batch, last_val)
 
             # UPDATE NETWORK
             def _update_epoch(update_state, unused):
-                def _update_minbatch(train_state, batch_info):
-                    traj_batch, advantages, targets = batch_info
+                def _update_minbatch(train_state, batch):
+                    traj_batch = batch
 
-                    def _loss_fn(params, traj_batch, gae, targets):
+                    def _loss_fn(params, traj_batch):
                         # RERUN  
-                        # obs = traj_batch.obs[None]
-                        pi, value = network.apply(params, traj_batch.obs)
-                        # action = traj_batch.action.reshape(pi.logits.shape[:-1])
-                        log_prob = pi.log_prob(traj_batch.action)
+                        pi, _ = network.apply(params, traj_batch.obs)
+                        #log_prob = pi.log_prob(traj_batch.action)
 
-                        # CALCULATE VALUE LOSS
-                        value_pred_clipped = traj_batch.value + (
-                            value - traj_batch.value
-                        ).clip(-config.CLIP_EPS, config.CLIP_EPS)
-                        value_losses = jnp.square(value - targets)
-                        value_losses_clipped = jnp.square(
-                            value_pred_clipped - targets)
-                        value_loss = (
-                            0.5 * jnp.maximum(value_losses,
-                                              value_losses_clipped).mean()
-                        )
+                        # CALCULATE LOSS
+                        loss = -jnp.mean(pi.log_prob(traj_batch.expert_action))
+                        return loss
 
-                        # CALCULATE ACTOR LOSS
-                        ratio = jnp.exp(log_prob - traj_batch.log_prob)
-                        gae = (gae - gae.mean()) / (gae.std() + 1e-8)
-
-                        # Some reshaping to accomodate player, x, and y dimensions to action output. (Not used often...)
-                        gae = gae[..., None, None, None]
-
-                        loss_actor1 = ratio * gae
-                        loss_actor2 = (
-                            jnp.clip(
-                                ratio,
-                                1.0 - config.CLIP_EPS,
-                                1.0 + config.CLIP_EPS,
-                            )
-                            * gae
-                        )
-                        loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
-                        loss_actor = loss_actor.mean()
-                        entropy = pi.entropy().mean()
-
-                        total_loss = (
-                            loss_actor
-                            + config.VF_COEF * value_loss
-                            - config.ENT_COEF * entropy
-                        )
-                        return total_loss, (value_loss, loss_actor, entropy)
-
-                    grad_fn = jax.value_and_grad(_loss_fn, has_aux=True)
+                    grad_fn = jax.value_and_grad(_loss_fn)
                     total_loss, grads = grad_fn(
-                        train_state.params, traj_batch, advantages, targets
+                        train_state.params, traj_batch
                     )
                     train_state = train_state.apply_gradients(grads=grads)
                     return train_state, total_loss
 
-                train_state, traj_batch, advantages, targets, rng = \
+                train_state, traj_batch, rng = \
                     update_state
                 rng, _rng = jax.random.split(rng)
                 batch_size = config.MINIBATCH_SIZE * config.NUM_MINIBATCHES
@@ -434,7 +502,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 ), "batch size must be equal to number of steps * number " + \
                     "of envs"
                 permutation = jax.random.permutation(_rng, batch_size)
-                batch = (traj_batch, advantages, targets)
+                batch = traj_batch
                 batch = jax.tree_util.tree_map(
                     lambda x: x.reshape((batch_size,) + x.shape[2:]), batch
                 )
@@ -450,11 +518,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 train_state, total_loss = jax.lax.scan(
                     _update_minbatch, train_state, minibatches
                 )
-                update_state = (train_state, traj_batch,
-                                advantages, targets, rng)
+                update_state = (train_state, traj_batch, rng)
                 return update_state, total_loss
 
-            update_state = (train_state, traj_batch, advantages, targets, rng)
+            update_state = (train_state, traj_batch,rng)
             update_state, loss_info = jax.lax.scan(
                 _update_epoch, update_state, None, config.update_epochs
             )
@@ -477,7 +544,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # Create a tensorboard writer
             writer = SummaryWriter(get_exp_dir(config))
 
-            def log_callback(metric, steps_prev_complete, train_start_time):
+            def log_callback(metric, steps_prev_complete, train_start_time, loss_info):
                 timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
 
                 
@@ -486,6 +553,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     ep_return = (metric["returned_episode_returns"]
                                  [metric["returned_episode"]].mean()
                                  )
+                    losses = loss_info.mean()
 
                     ep_footprint = metric["stats"][metric["returned_episode"]][:,1].mean()
                     ep_avg_height = metric["stats"][metric["returned_episode"]][:,0].mean()
@@ -494,9 +562,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
                     n_envs = metric["last_action"].shape[1]
                     mean_num_actions = sum([len(set(metric["last_action"][:,i])) for i in range(n_envs)])/n_envs
-                    #ep_dominant_action
-                    #ep_dominant_action_frequency
-
                     # Add a row to csv with ep_return
                     with open(os.path.join(get_exp_dir(config),
                                            "progress.csv"), "a") as f:
@@ -512,6 +577,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     #     writer.add_scalar(k, v, t)
                     fps = (t - steps_prev_complete) / (timer() - train_start_time)
                     writer.add_scalar("fps", fps, t)
+                    writer.add_scalar("loss", losses, t)
 
             # FIXME: shouldn't assume size of render map.
             frames_shape = (config.n_render_eps * 1 * env.max_steps, 
@@ -530,7 +596,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
             jax.debug.callback(log_callback, metric,
-                               steps_prev_complete, train_start_time)
+                               steps_prev_complete, train_start_time, loss_info)
 
             runner_state = RunnerState(
                 train_state, env_state, last_obs, rng,
@@ -548,14 +614,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         return {"runner_state": runner_state, "metrics": metric}
 
     return lambda rng: train(rng, config)
-
-
-# def plot_ep_returns(ep_returns, config):
-#     plt.plot(ep_returns)
-#     plt.xlabel("Timesteps")
-#     plt.ylabel("Episodic Return")
-#     plt.title(f"Episodic Return vs. Timesteps ({config.ENV_NAME})")
-#     plt.savefig(os.path.join(get_exp_dir(config), "ep_returns.png"))
 
 
 def init_checkpointer(config: Config):
@@ -610,13 +668,6 @@ def init_checkpointer(config: Config):
             steps_prev_complete, items=target)
         restored_ckpt['steps_prev_complete'] = steps_prev_complete
 
-        # # Load the csv as a dataframe and delete all rows after the last checkpoint
-        # progress_csv_path = os.path.join(get_exp_dir(config), "progress.csv")
-        # progress_df = pd.read_csv(progress_csv_path, names=["timestep", "ep_return"])
-        # # Convert timestep to int
-
-        # progress_df = progress_df[progress_df["timestep"] <= steps_prev_complete]
-        # progress_df.to_csv(progress_csv_path, header=False, index=False)
 
     return checkpoint_manager, restored_ckpt
 
@@ -631,10 +682,12 @@ def gen_dummy_queued_state(config, env, frz_rng):
 
 @hydra.main(version_base=None, config_path='./', config_name='lego_pcgrl')
 def main(config: TrainConfig):
+    config.learning_mode = "IL"
     config = init_config(config, evo=False)
     rng = jax.random.PRNGKey(config.seed)
 
-    exp_dir = get_exp_dir(config)
+    exp_dir = config.exp_dir 
+
 
     # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
     if config.overwrite and os.path.exists(exp_dir):
@@ -643,7 +696,7 @@ def main(config: TrainConfig):
     checkpoint_manager, restored_ckpt = init_checkpointer(config)
 
     # if restored_ckpt is not None:
-    #     ep_returns = restored_ckpt['runner_state'].ep_returns
+    #     ep_return s = restored_ckpt['runner_state'].ep_returns
     #     plot_ep_returns(ep_returns, config)
     # else:
     if restored_ckpt is None:
@@ -653,6 +706,8 @@ def main(config: TrainConfig):
         # Create csv for logging progress
         with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
             f.write("timestep,ep_return\n")
+
+    
 
     train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
     out = train_jit(rng)

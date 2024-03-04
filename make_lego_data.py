@@ -5,6 +5,7 @@ import hydra
 import jax.numpy as jnp
 from tqdm import tqdm
 
+
 from envs.probs.lego import LegoProblemState
 from envs.lego_env import LegoEnvState, LegoEnvParams
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
@@ -22,6 +23,28 @@ moves = np.array([
             #(-1,1),
             #(-1,-1)   
         ])
+
+
+def compute_returns(rewards, discount_factor):
+    """
+    Compute discounted returns.
+    Args:
+        rewards (jnp.ndarray): An array of shape (batch_size, timesteps) representing
+            rewards collected after each action.
+        discount_factor (float): Discount factor (gamma), should be in range [0, 1].
+    Returns:
+        jnp.ndarray: Array of shape (batch_size, timesteps) representing the
+            discounted returns for each time step.
+    """
+    length = rewards.shape[0]
+    returns = jnp.zeros_like(rewards)
+    next_return = 0  # next_return is the accumulated reward from the next timestep onwards
+
+    for t in reversed(range(length)):
+        next_return = rewards[t] + discount_factor * next_return
+        returns = returns.at[t].set(next_return)
+
+    return returns
 
 def get_action(env_state):
     blocks = env_state.rep_state.blocks
@@ -43,7 +66,7 @@ def get_action(env_state):
 @hydra.main(version_base=None, config_path='./', config_name='lego_pcgrl')
 def main(config: TrainConfig):
         
-    dataset_size = 10000
+    dataset_size = 1000
 
     rng = jax.random.PRNGKey(42)
     rng, subkey = jax.random.split(rng)
@@ -78,9 +101,11 @@ def main(config: TrainConfig):
 
    
 
+    returns = compute_returns(rewards_arr, 0.5)
     obs_action_fn = os.path.join(savedir, "obs_action_pairs.npz")
-    np.savez_compressed(obs_action_fn, actions = actions_arr, observations = observations_arr, rewards = rewards_arr)
-    
+    np.savez_compressed(obs_action_fn, returns = returns, actions = actions_arr, observations = observations_arr, rewards = rewards_arr)
+    np.savez_compressed(obs_action_fn, actions = actions_arr, observations = observations_arr)
+   
     
     tmp3 = np.load(obs_action_fn)
     t = tmp3["actions"]

@@ -90,8 +90,9 @@ class TrainConfig(Config):
 
 @dataclass
 class LegoConfig(Config):
+    learning_mode: str = "RL"
     lr: float = 1.0e-4
-    num_envs: int = 4
+    num_envs: int = 1
     #num_steps: int = 
     max_steps_multiple:int = 15
     n_blocks:int = 7

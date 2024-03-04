@@ -5,6 +5,9 @@ from typing import NamedTuple
 
 from matplotlib import pyplot as plt
 
+os.environ['XLA_PYTHON_CLIENT_ALLOCATOR']='platform'
+os.environ['XLA_PYTHON_CLIENT_PREALLOCATE']='false'
+
 import hydra
 import jax
 import jax.numpy as jnp
@@ -21,7 +24,7 @@ from config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
-                   init_config)
+                   init_config, NPZDataLoader)
 from envs.probs.lego import LegoProblemState
 from envs.lego_env import LegoEnvState
 
@@ -46,26 +49,7 @@ class Transition(NamedTuple):
     info: jnp.ndarray
     # rng_act: jnp.ndarray
 
-def compute_returns(rewards, discount_factor):
-    """
-    Compute discounted returns.
-    Args:
-        rewards (jnp.ndarray): An array of shape (batch_size, timesteps) representing
-            rewards collected after each action.
-        discount_factor (float): Discount factor (gamma), should be in range [0, 1].
-    Returns:
-        jnp.ndarray: Array of shape (batch_size, timesteps) representing the
-            discounted returns for each time step.
-    """
-    length = rewards.shape[0]
-    returns = jnp.zeros_like(rewards)
-    next_return = 0  # next_return is the accumulated reward from the next timestep onwards
 
-    for t in reversed(range(length)):
-        next_return = rewards[t] + discount_factor * next_return
-        returns = returns.at[t].set(next_return)
-
-    return returns
 
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
@@ -87,16 +71,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             / config.NUM_UPDATES
         )
         return config["LR"] * frac
-    
-    
-    def get_data():
-        data_dir = os.path.join(os.getcwd(), "saves", "lego_data")
-        data_filename = os.path.join(data_dir, "obs_action_pairs.npz")
-        data = jnp.load(data_filename)
-        actions = data["actions"]
-        observations = data["observations"]
-        rewards = data["rewards"]
-        return actions, observations, rewards
         
 
     def train(rng, config: TrainConfig):
@@ -142,19 +116,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         # Apply pmap
         
-        # reset_rng_r = reset_rng_r.reshape((config.n_gpus, -1) + reset_rng_r.shape[1:])
         vmap_reset_fn = jax.vmap(env_r.reset, in_axes=(0, None, None))
-        # pmap_reset_fn = jax.pmap(vmap_reset_fn, in_axes=(0, None))
         obsv_r, env_state_r = vmap_reset_fn(reset_rng_r, env_params, dummy_queued_state)  # Replace None with your env_params if any
-        #env_state_r = env_state_r.replace(prob_state = LegoProblemState(reward = 0.0))
-
-        # obsv_r, env_state_r = jax.vmap(
-        #     env_r.reset, in_axes=(0, None))(reset_rng_r, env_params)
 
         rng, _rng = jax.random.split(rng)
-#       ep_returns = jnp.full(shape=config.NUM_UPDATES,
-#       ep_returns = jnp.full(shape=1,
-#                             fill_value=jnp.nan, dtype=jnp.float32)
+
         steps_prev_complete = 0
         runner_state = RunnerState(
             train_state, env_state, obsv, rng,
@@ -193,9 +159,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 gif_name = f"{config.exp_dir}/update-{i}_ep-{ep_is}.gif"
                 dones = is_finished[:,ep_is]
                 done_ind = jnp.argmax(dones)
+                done_ind = jax.lax.cond(done_ind == 0, lambda: env.max_steps-1, lambda: done_ind)
 
                 ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
-                ep_frames = ep_frames[:done_ind+1]
+                ep_frames = ep_frames[:done_ind]
 
                 try:
                     imageio.v3.imwrite(
@@ -209,6 +176,82 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             print(f"Done rendering episode gifs at update {i}")
 
         def render_mpds(blocks, i, states):
+
+            if i % config.render_freq != 0:
+                return
+            
+            is_finished = states.done
+
+            for ep_is in range(config.n_render_eps):
+                dones = is_finished[:,ep_is]
+                done_ind = jnp.argmax(dones)
+                done_ind = jax.lax.cond(done_ind == 0, lambda: env.max_steps-1, lambda: done_ind)
+
+                ep_blocks = blocks[ep_is*env.max_steps:ep_is*env.max_steps+done_ind-1]
+
+                ep_end_avg_height = states.prob_state.stats[done_ind, ep_is, 0]
+                ep_footprint = states.prob_state.stats[done_ind, ep_is, 1]
+                ep_cntr_dist = states.prob_state.stats[done_ind, ep_is, 3]
+                #ep_rotations = states.rep_state.rotation[:done_ind+1,ep_is]
+                ep_curr_blocks = states.rep_state.curr_block[:done_ind,ep_is]
+                actions = states.rep_state.last_action[:done_ind,ep_is]
+
+                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_fp{ep_footprint:.2f}_ctrdist{ep_cntr_dist:.2f}/"
+                if not os.path.exists(savedir):
+                    os.makedirs(savedir)
+                
+                for num in range(ep_blocks.shape[0]):
+                    curr_blocks = ep_blocks[num,:,:]
+                    #rotation = ep_rotations[num]
+                    curr_block = ep_curr_blocks[num]
+                    action = actions[num]
+
+                    savename = os.path.join(savedir, f"{num}_a{action}.mpd")
+                    
+                    f = open(savename, "a")
+                    f.write("0/n")
+                    f.write("0 Name: New Model.ldr\n")
+                    f.write("0 Author:\n")
+                    f.write("\n")
+
+                    for x in range(config.map_width):
+                        for z in range(config.map_width):
+                            lego_block_name = "3005"
+                            block_color = "2 "
+                            if curr_block == num:
+                                block_color = "7 "
+                            
+                            y_offset = -3#-24
+
+                            x_lego = x * 20  + config.map_width - 1
+                            y_lego =  0#(1)*(LegoDimsDict[lego_block_name][1])
+                            z_lego = z * 20 + config.map_width - 1
+
+                            #print(block.x, block.y, block.z)
+                            
+                            f.write("1 ")
+                            f.write(block_color)
+                            f.write(str(x_lego) + ' ' + str(y_lego) + ' ' + str(z_lego) + ' ')
+                            f.write("1 0 0 0 1 0 0 0 1 ")
+                            f.write(lego_block_name + ".dat")
+                            f.write("\n")
+                    
+                    y_offset = -24
+                    for b in range(curr_blocks.shape[0]):
+                        lego_block_name = "3005"
+                        block_color = "7 "
+                        x_lego = curr_blocks[b, 0] * 20  + config.map_width - 1
+                        y_lego = curr_blocks[b, 1] * (-24) + y_offset
+                        z_lego = curr_blocks[b, 2] * 20 + config.map_width - 1
+
+                        f.write("1 ")
+                        f.write(block_color)
+                        f.write(str(x_lego) + ' ' + str(y_lego) + ' ' + str(z_lego) + ' ')
+                        f.write("1 0 0 0 1 0 0 0 1 ")
+                        f.write(lego_block_name + ".dat")
+                        f.write("\n")
+                    f.close()
+
 
             if i % config.render_freq != 0:
                 return
@@ -324,42 +367,41 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     (env_state_r, reward_r, done_r, info_r, frames)
 
         def save_checkpoint(runner_state):
-            if i>0:
-                print(f"Saving checkpoint at step {i}")
-                ckpt = {'runner_state': runner_state,
+            i = runner_state.update_i
+            print(f"Saving checkpoint")
+            ckpt = {'runner_state': runner_state,
                         'config': config, 'step_i': i}
-                # ckpt = {'step_i': t}
-                save_args = orbax_utils.save_args_from_target(ckpt)
-                checkpoint_manager.save(i, ckpt, save_kwargs={
-                    'save_args': save_args})
+            # ckpt = {'step_i': t}
+            save_args = orbax_utils.save_args_from_target(ckpt)
+            checkpoint_manager.save(i, ckpt, save_kwargs={
+                'save_args': save_args})
                 
-        def compute_loss(logits, actions, values, returns):
-            onehot_actions = onehot(actions, num_classes = logits.num_categories)
-            policy_loss = -jnp.mean(jnp.sum( onehot_actions* logits.logits, axis=-1) * returns)
-            value_loss = jnp.mean((returns - values)**2)
-            return policy_loss + value_loss
+        #def compute_loss(logits, actions, values, returns):
+        #    onehot_actions = onehot(actions, num_classes = logits.num_categories)
+        #    policy_loss = -jnp.mean(jnp.sum( onehot_actions* logits.logits, axis=-1) * returns)
+        #    value_loss = jnp.mean((returns - values)**2)
+        #    return policy_loss + value_loss
         
-
+        def compute_loss(logits, actions):
+            onehot_actions = onehot(actions, num_classes = logits.num_categories)
+            policy_loss = -jnp.mean(jnp.sum(onehot_actions* logits.logits, axis=-1))
+            return policy_loss 
+        
         frames, states, blocks = render_episodes(train_state.params)
         jax.debug.callback(render_frames, frames, runner_state.update_i, states)
         jax.debug.callback(render_mpds, blocks, runner_state.update_i, states)
-        old_render_results = (frames, states, blocks)
-
         
-        actions, observations, rewards = get_data()
-        #returns = compute_returns(rewards, 0.99)
-        returns = rewards
         
         def _update_step(runner_state, batch, rng):
             train_state = runner_state.train_state
             def loss_fn(params):
-                actions, obs, returns = batch
+                actions, obs = batch
                 pcgrl_obs = PCGRLObs(
                     map_obs = obs,
                     flat_obs = jnp.tile(init_x.flat_obs, reps = (obs.shape[0], 1))
                 )
                 logits, values = train_state.apply_fn(params, pcgrl_obs)
-                loss = compute_loss(logits, actions, values.squeeze(), returns)
+                loss = compute_loss(logits, actions)
                 return loss
             
             grad_fn = jax.value_and_grad(loss_fn)
@@ -372,19 +414,23 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             metrics = {'loss': loss}
             return new_runner_state, metrics
-            
-        batch_size = 20 
-
-        n_epochs =len(observations)//batch_size
+    
 
         losses = []
-        for i in range(n_epochs):
-            rng, _rng = jax.random.split(_rng)
-            batch = (actions[i*batch_size:(i+1)*batch_size], observations[i*batch_size:(i+1)*batch_size], returns[i*batch_size:(i+1)*batch_size])
-            runner_state, metrics = _update_step(runner_state, batch, _rng)
-            losses.append(metrics['loss'])
-            jax.debug.print("Batch {b}/{batches}, Loss: {loss}", loss = metrics['loss'], b = i+1, batches = n_epochs)
-        
+        ctr = 0
+        data_dir = os.path.join(os.getcwd(), "saves", "lego_data")
+        data_filename = os.path.join(data_dir, "obs_action_pairs.npz")
+
+        with NPZDataLoader(data_filename, batch_size = 20) as dataloader:
+            for actions, observations in dataloader:
+                batch = (actions, observations)
+                rng, _rng = jax.random.split(_rng)
+                runner_state, metrics = _update_step(runner_state, batch, _rng)
+                losses.append(metrics['loss'])
+                batch_size = actions.shape[0]
+                ctr += 1
+                jax.debug.print("Batch {b}, Loss: {loss}", loss = metrics['loss'], b = ctr)
+            
          
         jax.debug.callback(save_checkpoint, runner_state)
         
@@ -480,7 +526,7 @@ def main(config: TrainConfig):
     checkpoint_manager, restored_ckpt = init_checkpointer(config)
 
     # if restored_ckpt is not None:
-    #     ep_returns = restored_ckpt['runner_state'].ep_returns
+    #     ep_return s = restored_ckpt['runner_state'].ep_returns
     #     plot_ep_returns(ep_returns, config)
     # else:
     if restored_ckpt is None:
@@ -490,6 +536,8 @@ def main(config: TrainConfig):
         # Create csv for logging progress
         with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
             f.write("timestep,ep_return\n")
+
+    
 
     train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
     out = train_jit(rng)

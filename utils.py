@@ -46,7 +46,7 @@ def get_exp_dir(config: Config):
         exp_dir = os.path.join(
             'saves',
             'lego_' + \
-            f'{config.seed}_{config.exp_name}_reps-{config.max_steps_multiple}_blocks-{config.n_blocks}_reward-{config.reward}',
+            f'{config.seed}_{config.exp_name}_reps-{config.max_steps_multiple}_blocks-{config.n_blocks}_reward-{config.reward}_{config.learning_mode}',        
         )
     else:
         exp_dir = os.path.join(
@@ -240,3 +240,34 @@ def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
         env = LegoEnv(env_params)
 
     return env, env_params
+
+class NPZDataLoader:
+    def __init__(self, file_path, batch_size):
+        self.file_path = file_path
+        self.batch_size = batch_size
+        self.dataset = None
+
+    def __enter__(self):
+        self.dataset = np.load(self.file_path, mmap_mode='r')
+        self.actions = self.dataset['actions']
+        self.observations = self.dataset['observations']
+       
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        del self.dataset
+
+    def __iter__(self):
+        self.n_batches = len(self.actions) // self.batch_size
+        self.current_batch = 0
+        return self
+
+    def __next__(self):
+        if self.current_batch < self.n_batches:
+            i = self.current_batch * self.batch_size
+            j = (self.current_batch + 1) * self.batch_size
+            self.current_batch += 1
+            return (self.actions[i:j], self.observations[i:j])
+        else:
+            raise StopIteration
