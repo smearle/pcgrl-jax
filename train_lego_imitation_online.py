@@ -58,8 +58,8 @@ def get_expert_action(log_env_state):
 
     n_envs = blocks.shape[0]
 
-    center_x = map_shape[0]-1//2
-    center_z = map_shape[2]-1//2
+    center_x = (map_shape[0]-1)//2
+    center_z = (map_shape[2]-1)//2
 
     curr_blocks = jnp.array([blocks[i, curr_block_inds[i], :] for i in range(blocks.shape[0])])
     curr_x = curr_blocks[:,0]
@@ -215,11 +215,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 done_ind = jnp.argmax(dones)
                 done_ind = jax.lax.cond(done_ind == 0, lambda: env.max_steps-1, lambda: done_ind)
 
-                ep_blocks = blocks[ep_is*env.max_steps:ep_is*env.max_steps+done_ind-1]
+                ep_blocks = blocks[ep_is*env.max_steps:(ep_is+1)]
+                ep_blocks = ep_blocks[:done_ind]
 
-                ep_end_avg_height = states.prob_state.stats[done_ind, ep_is, 0]
-                ep_footprint = states.prob_state.stats[done_ind, ep_is, 1]
-                ep_cntr_dist = states.prob_state.stats[done_ind, ep_is, 3]
+                ep_end_avg_height = states.prob_state.stats[done_ind-1, ep_is, 0]
+                ep_footprint = states.prob_state.stats[done_ind-1, ep_is, 1]
+                ep_cntr_dist = states.prob_state.stats[done_ind-1, ep_is, 3]
                 #ep_rotations = states.rep_state.rotation[:done_ind+1,ep_is]
                 ep_curr_blocks = states.rep_state.curr_block[:done_ind,ep_is]
                 actions = states.rep_state.last_action[:done_ind,ep_is]
@@ -683,6 +684,7 @@ def gen_dummy_queued_state(config, env, frz_rng):
 @hydra.main(version_base=None, config_path='./', config_name='lego_pcgrl')
 def main(config: TrainConfig):
     config.learning_mode = "IL"
+    config.render_freq = 50
     config = init_config(config, evo=False)
     rng = jax.random.PRNGKey(config.seed)
 

@@ -167,9 +167,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
                 ep_blocks = blocks[ep_is*env.max_steps:ep_is*env.max_steps+done_ind-1]
 
-                ep_end_avg_height = states.prob_state.stats[done_ind, ep_is, 0]
-                ep_footprint = states.prob_state.stats[done_ind, ep_is, 1]
-                ep_cntr_dist = states.prob_state.stats[done_ind, ep_is, 3]
+                ep_end_avg_height = states.prob_state.stats[done_ind-1, ep_is, 0]
+                ep_footprint = states.prob_state.stats[done_ind-1, ep_is, 1]
+                ep_cntr_dist = states.prob_state.stats[done_ind-1, ep_is, 3]
                 #ep_rotations = states.rep_state.rotation[:done_ind+1,ep_is]
                 ep_curr_blocks = states.rep_state.curr_block[:done_ind,ep_is]
                 actions = states.rep_state.last_action[:done_ind,ep_is]
