@@ -481,12 +481,27 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     def _loss_fn(params, traj_batch):
                         # RERUN  
                         pi, _ = network.apply(params, traj_batch.obs)
-                        #log_prob = pi.log_prob(traj_batch.action)
+                        log_prob = pi.log_prob(traj_batch.action)
 
                         # CALCULATE LOSS
                         loss = -jnp.mean(pi.log_prob(traj_batch.expert_action))
                         return loss
+                    
+                    #def cross_entropy_loss_fn(params, traj_batch):
+                    #def _loss_fn(params, traj_batch):
+                    #   logits = network.apply(params, traj_batch.obs)
+                    #   log_softmax_logits = jax.nn.log_softmax(logits[1])
+                    #   loss = -jnp.mean(log_softmax_logits * traj_batch.expert_action)
+                    #   return loss
 
+                    #def kl_divergence_loss_fn(params, traj_batch):
+                    #    pi, _ = network.apply(params, traj_batch.obs)
+                    #    expert_pi = some_expert_distribution(traj_batch)
+                    #    loss = jnp.mean(jax.scipy.stats.entropy(pi, expert_pi))
+                    #    return loss
+
+                    
+                    
                     grad_fn = jax.value_and_grad(_loss_fn)
                     total_loss, grads = grad_fn(
                         train_state.params, traj_batch
