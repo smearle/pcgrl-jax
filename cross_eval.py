@@ -397,7 +397,20 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
 
     for sc in sweep_configs:
         exp_dir = sc.exp_dir
-        sc_stats = json.load(open(f'{exp_dir}/misc_stats.json'))
+        
+        # Load the `progress.csv`
+        csv_path = os.path.join(exp_dir, 'progress.csv')
+        if not os.path.isfile(csv_path):
+            continue
+        train_metrics = pd.read_csv(csv_path)
+        train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
+
+        # misc_stats_path = os.path.join(exp_dir, 'misc_stats.json')
+        # if os.path.exists(misc_stats_path):
+        #     sc_stats = json.load(open(f'{exp_dir}/misc_stats.json'))
+        # else:
+        max_timestep = train_metrics['timestep'].max()
+        sc_stats = {'n_timesteps_trained': max_timestep}
 
         row_tpl = tuple(getattr(sc, k) for k in row_headers)
         row_tpl = tuple(tuple(v) if isinstance(v, list) else v for v in row_tpl)
@@ -409,6 +422,12 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
 
         row_vals.append(vals)
         
+        
+        # Load the `progress.csv`
+        train_metrics = pd.read_csv(f'{exp_dir}/progress.csv')
+        train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
+
+
         # Load the `progress.csv`
         train_metrics = pd.read_csv(f'{exp_dir}/progress.csv')
         train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
@@ -498,7 +517,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     all_timesteps = np.sort(np.unique(np.concatenate(all_timesteps)))
 
     row_vals_curves = []
-    for sc in sweep_configs:
+    for i, sc in enumerate(sweep_configs):
         if hasattr(sc, "obs_size"):
             if sc.obs_size == -1:
                 if eval_config.eval_map_width is not None:
@@ -508,7 +527,10 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
                 # Why exactly is this necessary? And should we really be inheriting from *eval* map width?
                 sc.obs_size = mw * 2 - 1
         exp_dir = sc.exp_dir
-        train_metrics = pd.read_csv(f'{exp_dir}/progress.csv')
+        csv_path = os.path.join(exp_dir, 'progress.csv')
+        if not os.path.isfile(csv_path):
+            continue
+        train_metrics = pd.read_csv(csv_path)
         train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
         ep_returns = train_metrics['ep_return']
         sc_timesteps = train_metrics['timestep']
@@ -524,7 +546,9 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
 
     # Create a line plot of the metric curves w.r.t. timesteps. Each row in the
     # column corresponds to a different line
-    fig, ax = plt.subplots(figsize=(20, 10))
+    fig, ax = plt.subplots(
+        # figsize=(20, 10)
+    )
     for i, row in metric_curves_df.iterrows():
         ax.plot(row, label=str(i))
     ax.set_xlabel('Timesteps')
@@ -540,6 +564,9 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     # columns = columns[100:-100]
     for i, row in metric_curves_mean.iterrows():
 
+        if len(row) == 0:
+            continue
+
         # Apply a convolution to smooth the curve
         row = np.convolve(row, np.ones(10), 'same') / 10
         # row = row[100:-100]
@@ -548,8 +575,9 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
         row = pd.Series(row, index=columns)
         
         # drop the first 100 timesteps to remove outliers caused by conv
-        row = row.drop(row.index[:25])
-        row = row.drop(row.index[-25:])
+        if row.index.shape[0] > 100:
+            row = row.drop(row.index[:25])
+            row = row.drop(row.index[-25:])
 
         
 
@@ -559,10 +587,13 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     ax.set_ylabel('Return')
 
     # To get the ymin, drop the first timesteps where there tend to be outliers
-    ymin = metric_curves_mean.drop(columns=metric_curves_mean.columns[:100]).min().min()
+    if metric_curves_mean.shape[1] > 100:
+        ymin = metric_curves_mean.drop(columns=metric_curves_mean.columns[:100]).min().min()
+    else:
+        ymin = metric_curves_mean.drop(columns=metric_curves_mean.columns).min().min()
 
     # Can manually set these bounds to tweak the visualization
-    ax.set_ylim(ymin, 1.1 * metric_curves_mean.max().max())
+    # ax.set_ylim(ymin, 1.1 * np.nanmax(metric_curves_mean))
 
     legend_title = ', '.join(levels_to_keep).replace('_', ' ')
     ax.legend(title=legend_title)
