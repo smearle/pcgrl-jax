@@ -123,7 +123,66 @@ class ConvForward(nn.Module):
 
         return act, jnp.squeeze(critic, axis=-1)
 
+
 class ConvForward3d(nn.Module):
+    action_dim: Sequence[int]
+    act_shape: Tuple[int, int]
+    arf_size: int
+    vrf_size: int
+    activation: str = "relu"
+
+    @nn.compact
+    def __call__(self, map_x, flat_x):
+        if self.activation == "relu":
+            activation = nn.relu
+        else:
+            activation = nn.tanh
+
+        flat_action_dim = self.action_dim * math.prod(self.act_shape)
+
+        # act, critic = crop_arf_vrf(map_x, self.arf_size, self.vrf_size)
+
+        
+        map_x = nn.Conv(
+            features=128, kernel_size=(5,5,5), strides=(1, 1, 1), padding=(0, 0, 0)
+        )(map_x)
+        map_x = activation(map_x)
+        map_x = nn.Conv(
+            features=256, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(0, 0, 0)
+        )(map_x)
+        map_x = activation(map_x)
+        map_x = nn.Conv(
+            features=256, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(0, 0, 0)
+        )(map_x)
+        map_x = activation(map_x)
+        #map_x = nn.Conv(
+        #    features=64, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(3, 3,3)
+        #)(map_x)
+        #map_x = activation(map_x)
+
+        map_x = map_x.reshape((map_x.shape[0], -1))
+        x = jnp.concatenate((map_x, flat_x), axis=-1)
+
+        x = nn.Dense(
+            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+        )(x)
+        x = activation(x)
+
+        act = nn.Dense(
+            flat_action_dim, kernel_init=orthogonal(0.01),
+            bias_init=constant(0.0)
+        )(map_x)
+        
+
+        critic = nn.Dense(
+            1, kernel_init=orthogonal(0.01),
+            bias_init=constant(0.0)
+        )(x)
+
+        return act, jnp.squeeze(critic, axis=-1)
+
+
+class ConvForward3dMegaChonk(nn.Module):
     action_dim: Sequence[int]
     act_shape: Tuple[int, int]
     arf_size: int
