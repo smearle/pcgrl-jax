@@ -481,10 +481,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     def _loss_fn(params, traj_batch):
                         # RERUN  
                         pi, _ = network.apply(params, traj_batch.obs)
-                        log_prob = pi.log_prob(traj_batch.action)
+                        #log_prob = pi.log_prob(traj_batch.action)
+
 
                         # CALCULATE LOSS
                         loss = -jnp.mean(pi.log_prob(traj_batch.expert_action))
+                        jax.debug.print("loss: {x}",x = loss)
                         return loss
                     
                     #def cross_entropy_loss_fn(params, traj_batch):
@@ -595,10 +597,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     writer.add_scalar("fps", fps, t)
                     writer.add_scalar("loss", losses, t)
 
-            # FIXME: shouldn't assume size of render map.
-            frames_shape = (config.n_render_eps * 1 * env.max_steps, 
-                            env.tile_size * (env.map_shape[0] + 2),
-                            env.tile_size * (env.map_shape[1] + 2), 4)
 
             # FIXME: Inside vmap, both conditions are likely to get executed. Any way around this?
             # Currently not vmapping the train loop though, so it's ok.

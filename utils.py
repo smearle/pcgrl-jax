@@ -12,7 +12,7 @@ from envs.lego_env import PROB_CLASSES, LegoEnvParams, LegoEnv, ProbEnum, RepEnu
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
 from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
-from models import ActorCritic, ActorCriticPCGRL, ActorCriticLEGO, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, Dense, NCA, SeqNCA, ConvForward3d
+from models import ActorCritic, ActorCriticPCGRL, ActorCriticLEGO, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, Dense, NCA, SeqNCA, ConvForward3d, DenseForward3d
 
 
 def get_exp_dir(config: Config):
@@ -46,7 +46,7 @@ def get_exp_dir(config: Config):
         exp_dir = os.path.join(
             'saves',
             'lego_' + \
-            f'{config.seed}_{config.exp_name}_reps-{config.max_steps_multiple}_blocks-{config.n_blocks}_reward-{config.reward}_{config.learning_mode}',        
+            f'{config.seed}_{config.exp_name}_{config.model}_reps-{config.max_steps_multiple}_blocks-{config.n_blocks}_reward-{config.reward}_{config.learning_mode}',        
         )
     else:
         exp_dir = os.path.join(
@@ -88,14 +88,17 @@ def get_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     else:
         action_dim = env.num_actions
 
-    if config.model != "conv" and config.is_3d == True:
-        raise NotImplementedError
 
     if config.model == "dense":
-        network = Dense(
-            action_dim, activation=config.activation,
-            arf_size=config.arf_size, vrf_size=config.vrf_size,
-        )
+        if config.is_3d == True:
+            network = DenseForward3d(
+                action_dim=action_dim, activation=config.activation, act_shape=config.act_shape,
+            )
+        else:  
+            network = Dense(
+                action_dim, activation=config.activation,
+                arf_size=config.arf_size, vrf_size=config.vrf_size,
+            )
     if config.model == "conv":
         if config.is_3d:
             network = ConvForward3d(

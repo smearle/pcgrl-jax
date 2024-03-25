@@ -142,21 +142,16 @@ class ConvForward3d(nn.Module):
         # act, critic = crop_arf_vrf(map_x, self.arf_size, self.vrf_size)
 
         
-
-        #map_x = nn.Conv(
-        #    features=32, kernel_size=(5,5,5), strides=(2, 2, 2), padding=(3, 3,3)
-        #)(map_x)
-        #map_x = activation(map_x)
         map_x = nn.Conv(
-            features=64, kernel_size=(2,2,2), strides=(1, 1, 1), padding=(3, 3,3)
+            features=128, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(3, 3,3)
         )(map_x)
         map_x = activation(map_x)
         map_x = nn.Conv(
-            features=64, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(3, 3,3)
+            features=256, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(3, 3,3)
         )(map_x)
         map_x = activation(map_x)
         map_x = nn.Conv(
-            features=64, kernel_size=(5,5,5), strides=(2, 2, 2), padding=(3, 3,3)
+            features=256, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(3, 3,3)
         )(map_x)
         map_x = activation(map_x)
         #map_x = nn.Conv(
@@ -185,6 +180,62 @@ class ConvForward3d(nn.Module):
 
         return act, jnp.squeeze(critic, axis=-1)
 
+class DenseForward3d(nn.Module):
+    action_dim: Sequence[int]
+    act_shape: Tuple[int, int]
+    activation: str = "relu"
+
+    @nn.compact
+    def __call__(self, map_x, flat_x):
+        if self.activation == "relu":
+            activation = nn.relu
+        else:
+            activation = nn.tanh
+
+        flat_action_dim = self.action_dim * math.prod(self.act_shape)
+        
+
+        # Flatten the 3D observation space
+        map_x = map_x.reshape((map_x.shape[0], -1))
+        x = jnp.concatenate((map_x, flat_x), axis=-1)
+
+        # First Dense layer
+        x = nn.Dense(
+            128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+        )(x)
+        x = activation(x)
+
+        # Second Dense layer
+        x = nn.Dense(
+            128, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+        )(x)
+        x = activation(x)
+        
+        # Third Dense layer
+        x = nn.Dense(
+            64, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+        )(x)
+        x = activation(x)
+
+        # Action output layer
+        act = nn.Dense(
+            flat_action_dim, kernel_init=orthogonal(0.01),
+            bias_init=constant(0.0)
+        )(x)
+
+        # Critic output layer
+        critic = nn.Dense(
+            1, kernel_init=orthogonal(0.01),
+            bias_init=constant(0.0)
+        )(x)
+        
+
+        critic = nn.Dense(
+            1, kernel_init=orthogonal(0.01),
+            bias_init=constant(0.0)
+        )(x)
+
+        return act, jnp.squeeze(critic, axis=-1)
 
 class SeqNCA(nn.Module):
     action_dim: Sequence[int]
