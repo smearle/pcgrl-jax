@@ -114,10 +114,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         init_x = env.gen_dummy_obs(env_params)
         # init_x = env.observation_space(env_params).sample(_rng)[None]
         network_params = network.init(_rng, init_x)
+
+        # Print network architecture and number of learnable parameters
         print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
         # print(network.subnet.tabulate(_rng, init_x, jnp.zeros((init_x.shape[0], 0))))
 
-        # Print number of learnable parameters in the network
         if config.ANNEAL_LR:
             tx = optax.chain(
                 optax.clip_by_global_norm(config.MAX_GRAD_NORM),

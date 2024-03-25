@@ -6,6 +6,7 @@ from flax import struct
 from functools import partial
 from typing import Optional, Tuple, Union, Any
 from gymnax.environments import environment, spaces
+from envs.pcgrl_env import PCGRLObs
 
 from envs.probs.problem import get_loss
 # from brax import envs
@@ -40,7 +41,11 @@ class FlattenObservationWrapper(GymnaxWrapper):
         self, key: chex.PRNGKey, params: Optional[environment.EnvParams] = None
     ) -> Tuple[chex.Array, environment.EnvState]:
         obs, state = self._env.reset(key, params)
-        obs = jnp.reshape(obs, (-1,))
+        if isinstance(obs, PCGRLObs):
+            obs = jax.tree_util.tree_map(lambda x: jnp.reshape(x, (-1,)), obs)
+            obs = jnp.concatenate([obs.map_obs, obs.flat_obs[:len(self.prob.ctrl_metrics)]])
+        else:
+            obs = jnp.reshape(obs, (-1,))
         return obs, state
 
     @partial(jax.jit, static_argnums=(0,))
@@ -52,7 +57,11 @@ class FlattenObservationWrapper(GymnaxWrapper):
         params: Optional[environment.EnvParams] = None,
     ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
         obs, state, reward, done, info = self._env.step(key, state, action, params)
-        obs = jnp.reshape(obs, (-1,))
+        if isinstance(obs, PCGRLObs):
+            obs = jax.tree_util.tree_map(lambda x: jnp.reshape(x, (-1,)), obs)
+            obs = jnp.concatenate([obs.map_obs, obs.flat_obs[:len(self.prob.ctrl_metrics)]])
+        else:
+            obs = jnp.reshape(obs, (-1,))
         return obs, state, reward, done, info
 
 @struct.dataclass

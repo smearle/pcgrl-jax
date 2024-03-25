@@ -114,7 +114,8 @@
 #         'NAME': 'bs_binary',
 #         'max_board_scans': [1, 5, 10],
 #         'change_pct': [-1.0],
-#         'seed': list(range(6)),
+#         # 'seed': list(range(6)),
+#         'seed': list(range(3)),
 #         'n_envs': [600],
 #         'total_timesteps': [1_000_000_000],
 #     }
@@ -130,7 +131,6 @@
 #         'n_envs': [600],
 #         'max_board_scans': [4],
 #         'total_timesteps': [200_000_000],
-#       'eval_map_width': [16, 18, 20],
 #     },
 # ]
 
@@ -142,7 +142,8 @@
 #         'arf_size': [8],
 #         'vrf_size': [8, 12, 16, 23, -1],
 #         'change_pct': [-1.0],
-#         'seed': list(range(3, 6)),
+#         # 'seed': list(range(3, 6)),
+#         'seed': list(range(0, 3)),
 #         'n_envs': [600],
 #         'max_board_scans': [5],
 #         'total_timesteps': [1_000_000_000],
@@ -205,21 +206,21 @@
 # ]
 
 
-# hypers = [
-#     {
-#         'NAME': 'obss_hiddims_dungeon_conv2_ctrl_path',
-#         'problem': ['dungeon'],
-#         'ctrl_metrics': [['path_length']],
-#         # 'obs_size': [3, 5, 8, 16, -1],
-#         'obs_size_hid_dims': [3, 5, 8, 16],
-#         'model': ['conv2'],
-#         'change_pct': [-1.0],
-#         'seed': list(range(3,6)),
-#         'n_envs': [100],
-#         'max_board_scans': [5],
-#         'total_timesteps': [1_000_000_000],
-#     },
-# ]
+hypers = [
+    {
+        'NAME': 'obss_hiddims_dungeon_conv2_ctrl_path',
+        'problem': ['dungeon'],
+        'ctrl_metrics': [['path_length']],
+        # 'obs_size': [16, -1],
+        'obs_size_hid_dims': [3, 5, 8, 16, -1],
+        'model': ['conv2'],
+        'change_pct': [-1.0],
+        'seed': list(range(3,6)),
+        'n_envs': [100],
+        'max_board_scans': [5],
+        'total_timesteps': [1_000_000_000],
+    },
+]
 
 
 # hypers = [
@@ -231,7 +232,8 @@
 #         # 'obs_size': [-1],
 #         'change_pct': [0.6, 0.8, 1.0],
 #         'model': ['conv2'],
-#         'seed': list(range(3)),
+#         'seed': [0, 1, 2],
+#         # 'seed': list(range(6)),
 #         'n_envs': [600],
 #         'max_board_scans': [5],
 #         'total_timesteps': [1_000_000_000],
@@ -262,7 +264,6 @@
 #         'n_envs': [200],
 #         'max_board_scans': [5],
 #         'total_timesteps': [1_000_000_000],
-#      #  'eval_map_width': [16, 18, 20],
 #     },
 # ]
 
@@ -301,7 +302,7 @@
 
 # hypers = [
 #     {
-#         'NAME': 'arf_seqnca_dungeon',
+#         'NAME': 'arf_seqnca_dungeon',    # FIXME looks like we don't have arf conv dungeon??
 #         'model': ['seqnca'],
 #         'problem': ['dungeon'],
 #         'arf_size': [3, 5, 8, 16, -1],
@@ -374,12 +375,12 @@
 #         'problem': ['maze'],
 #         'map_width': [16],
 #         'obs_size': [8, 16, 24, -1],
-#         'change_pct': [-1.0],
-#         'seed': [3, 4, 5],
-#         # 'seed': [0, 1, 2],
-#         'n_envs': [600],
 #         'randomize_map_shape': [True, False],
 #         # 'randomize_map_shape': [True],
+#         'change_pct': [-1.0],
+#         # 'seed': [3, 4, 5],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
 #         'empty_start': [True],
 #         # 'pinpoints': [True, False],
 #         'pinpoints': [True],
@@ -447,29 +448,32 @@
 #     },
 # ]
  
-# hypers = [
-#     {
-#         'NAME': 'everything_dungeon',
-#         'model': ['conv2'],
-#         'problem': ['dungeon'],
-# #         'seed': [3, 4, 5],
-#         'seed': [0, 1, 2],
-#         'n_envs': [600],
-#         'randomize_map_shape': [True, False],
-#         'ctrl_metrics': [['path_length', 'nearest_enemy']],
-#         'empty_start': [True],
-#         'pinpoints': [True, False],
-#         'max_board_scans': [5],
-#         'total_timesteps': [1_000_000_000],
-#         'timestep_chunk_size': [10_000_000],
-#         'obs_size_hid_dims': [8, 16, 24, 31],
-#     },
-# ]
+hypers = [
+    {
+        'NAME': 'everything_dungeon',
+        'model': ['conv2'],
+        'problem': ['dungeon'],
+#         'seed': [3, 4, 5],
+        'seed': [0, 1, 2],
+        'n_envs': [600],
+        'randomize_map_shape': [True, False],
+        'ctrl_metrics': [['path_length', 'nearest_enemy']],
+        'empty_start': [True],
+        'pinpoints': [True, False],
+        'max_board_scans': [5],
+        'total_timesteps': [1_000_000_000],
+        'timestep_chunk_size': [10_000_000],
+        'obs_size_hid_dims': [8, 16, 24, 31],
+    },
+]
 
 eval_hypers = {
+    'eval_randomize_map_shape': [True, False],
+    # 'eval_randomize_map_shape': [False],
+    # 'eval_randomize_map_shape': [False],
     'eval_map_width': [8, 16, 24, 32],
+    # 'eval_map_width': [8, 16, 24, 32],
     # 'eval_max_board_scans': [10],
-    'eval_randomize_map_shape': [True],
 }
 
 ########################

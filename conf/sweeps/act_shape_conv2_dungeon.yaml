@@ -24,7 +24,7 @@ change_pct:
 - -1.0
 eval_hypers:
   eval_randomize_map_shape:
-  # - true
+  - true
   - false
   eval_map_width:
   - 8

@@ -1,39 +1,43 @@
-NAME: diffshape_pinpoint_maze_emptystart
-change_pct:
-- -1.0
+NAME: everything_dungeon
+ctrl_metrics:
+- - path_length
+  - nearest_enemy
 empty_start:
 - true
 eval_hypers:
   eval_map_width:
-  # - 8
-  # - 16
-  # - 24
+  - 8
+  - 16
+  - 24
   - 32
   eval_randomize_map_shape:
+  - true
   - false
-map_width:
-- 16
 max_board_scans:
 - 5
 model:
 - conv2
+# - seqnca
 n_envs:
 - 600
-obs_size:
+obs_size_hid_dims:
 - 8
-# - 16
-# - 24
-# - -1
+- 16
+- 24
+- 31
 pinpoints:
 - true
+# - false
 problem:
-- maze
+- dungeon
 randomize_map_shape:
 - true
-- false
+# - false
 seed:
 - 0
-# - 1
-# - 2
+- 1
+- 2
+timestep_chunk_size:
+- 10000000
 total_timesteps:
 - 1000000000

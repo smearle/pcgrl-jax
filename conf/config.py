@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Iterable, List, Optional, Tuple, Union
 from hydra.core.config_store import ConfigStore
 from dataclasses import dataclass
 

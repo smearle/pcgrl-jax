@@ -2,13 +2,14 @@ NAME: obss_conv2_dungeon
 change_pct:
 - -1.0
 eval_hypers:
+  eval_randomize_map_shape:
+  - true
+  - false
   eval_map_width:
   - 8
   - 16
   - 24
   - 32
-  eval_randomize_map_shape:
-  - true
 max_board_scans:
 - 5
 model:

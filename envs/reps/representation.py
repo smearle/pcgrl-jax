@@ -37,16 +37,16 @@ class Representation(ABC):
     def observation_space(self) -> spaces.Box:
         """Observation space of the environment."""
         observation_shape = self.observation_shape()
-        low = 0
-        high = 1
-#       low = jnp.zeros(
-#           observation_shape,
-#           dtype=jnp.float32,
-#       )
-#       high = jnp.zeros(
-#           observation_shape,
-#           dtype=jnp.float32,
-#       )
+        # low = 0
+        # high = 1
+        low = jnp.zeros(
+            observation_shape,
+            dtype=jnp.float32,
+        )
+        high = jnp.zeros(
+            observation_shape,
+            dtype=jnp.float32,
+        )
         return spaces.Box(
             low, high, observation_shape, jnp.float32
         )

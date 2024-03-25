@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PCGRL</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <!-- Center everything below -->
+    <style>
+        /* body { */
+            /* display: flex; */
+            /* justify-content: center; */
+            /* align-items: center; */
+            /* height: 100vh; */
+            /* margin: 0; */
+        /* } */
+    </style>
+    <!-- <img id="PCGRL" src="/image" alt="Interactive" onclick="imageClicked(event)"> -->
+
+    <!-- <input type="file" id="fileInput"> -->
+    <!-- <button onclick="uploadFile()">Load</button> -->
+
+    <h1>PCGRL</h1>
+
+    <!-- <div id="pathmap" style="width: 256px; height: 256px;"></div> -->
+    <!-- <div id="mapContainer"> -->
+        <!-- <div id="tilemap"></div> -->
+    <canvas id="pathmap" width="256" height="256"></div>
+    <!-- </div> -->
+
+    <!-- Add a space to make up for tilemap-->
+    <div style="height: 256px;"></div>
+
+    <button onclick="initEnv()">Init Brush</button>
+    <button onclick="resetEnv()">Reset</button>
+    <button onclick="tickEnv()">Tick</button>
+    <button id="pauseButton">Pause</button>
+    <button onclick=clearMap()>Clear</button>
+
+    <!-- add a checkbox next to an image -->
+    <h1>brush</h1>
+    <div id="tileCheckboxes"></div>
+
+
+    <h1>select checkpoint folder</h1>
+    <select id="folderSelect">
+
+    <script src="{{ url_for('static', filename='index.js') }}"></script>
+</body>
+</html>

@@ -20,6 +20,8 @@ class Stats(IntEnum):
 @struct.dataclass
 class ProblemState:
     stats: Optional[chex.Array] = None
+
+    # FIXME: A bit weird how we handle this, setting as None all over the place in problem classes...
     ctrl_trgs: Optional[chex.Array] = None
 
 
@@ -175,9 +177,9 @@ class Problem:
     def get_stats(self, env_map: chex.Array, prob_state: ProblemState):
         raise NotImplementedError
 
-    def queue_ctrl_trgs(self, queued_state, ctrl_trgs):
-        queued_state = queued_state.replace(queued_ctrl_trgs=ctrl_trgs, has_queued_ctrl_trgs=True)
-        return queued_state
+    # def queue_ctrl_trgs(self, queued_state, ctrl_trgs):
+    #     queued_state = queued_state.replace(queued_ctrl_trgs=ctrl_trgs, has_queued_ctrl_trgs=True)
+    #     return queued_state
 
     def init_graphics(self):
         self.graphics = jnp.array([np.array(g) for g in self.graphics])
