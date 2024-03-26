@@ -154,6 +154,11 @@ class EnjoyConfig(Config):
 
     
 @dataclass
+class EnjoyLegoConfig(LegoConfig, EnjoyConfig):
+    pass
+
+    
+@dataclass
 class EvalConfig(Config):
     reevaluate: bool = True
     random_agent: bool = False
@@ -179,6 +184,7 @@ cs.store(name="config", node=Config)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="lego_pcgrl", node=LegoConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
+cs.store(name="enjoy_lego", node=EnjoyLegoConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
 cs.store(name="batch_pcgrl", node=BatchConfig)

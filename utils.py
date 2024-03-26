@@ -4,7 +4,7 @@ import gymnax
 import jax
 import numpy as np
 
-from config import Config, TrainConfig
+from config import Config, LegoConfig, TrainConfig
 from envs.binary_0 import Binary0
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
@@ -43,6 +43,7 @@ def get_exp_dir(config: Config):
             f'{config.seed}_{config.exp_name}',
         )
     elif config.env_name == 'Lego':
+        config: LegoConfig
         exp_dir = os.path.join(
             'saves',
             'lego_' + \

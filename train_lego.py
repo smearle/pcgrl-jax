@@ -416,6 +416,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                             + config.VF_COEF * value_loss
                             - config.ENT_COEF * entropy
                         )
+                        # jax.debug.print(f"total_loss={total_loss}, value_loss={value_loss}, loss_actor={loss_actor}, entropy={entropy}")
                         return total_loss, (value_loss, loss_actor, entropy)
 
                     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True)
