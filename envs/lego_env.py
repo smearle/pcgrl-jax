@@ -261,8 +261,6 @@ class LegoEnv(Environment):
             rng = subkey
         )
 
-        obs = self.get_obs(env_state.rep_state, env_state.prob_state)
-
         reward, prob_state = self.prob.step(env_map, state=env_state.prob_state, blocks=rep_state.blocks)
 
         env_state = LegoEnvState(
@@ -274,8 +272,9 @@ class LegoEnv(Environment):
  
         env_state = env_state.replace(done=done)
 
+        obs = self.get_obs(env_state.rep_state, env_state.prob_state)
         
-        self.render(env_state)
+        # self.render(env_state)
 
         return (
             jax.lax.stop_gradient(obs),
