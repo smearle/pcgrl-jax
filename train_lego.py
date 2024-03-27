@@ -45,10 +45,10 @@ class Transition(NamedTuple):
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     config.NUM_UPDATES = (
-        config.total_timesteps // (config.max_steps_multiple*config.n_blocks )// config.n_envs
+        config.total_timesteps // config.num_steps // config.n_envs
     )
     config.MINIBATCH_SIZE = (
-        config.n_envs * config.n_blocks * config.max_steps_multiple // config.NUM_MINIBATCHES
+        config.n_envs * config.num_steps // config.NUM_MINIBATCHES
     )
     env_r, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     env = LogWrapper(env_r)
@@ -331,7 +331,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 return runner_state, transition
 
             runner_state, traj_batch = jax.lax.scan(
-                _env_step, runner_state, None, config.max_steps_multiple*config.n_blocks
+                _env_step, runner_state, None, config.num_steps
             )
 
             # CALCULATE ADVANTAGE
@@ -431,7 +431,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 rng, _rng = jax.random.split(rng)
                 batch_size = config.MINIBATCH_SIZE * config.NUM_MINIBATCHES
                 assert (
-                    batch_size == config.n_blocks * config.max_steps_multiple * config.n_envs
+                    batch_size == config.num_steps * config.n_envs
                 ), "batch size must be equal to number of steps * number " + \
                     "of envs"
                 permutation = jax.random.permutation(_rng, batch_size)

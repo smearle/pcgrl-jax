@@ -209,7 +209,7 @@ class LegoEnv(Environment):
         
         env_map = jnp.zeros(self.map_shape) #self.prob.gen_init_map(rng)    
 
-        frz_map = jnp.zeros(self.map_shape)
+        # frz_map = jnp.zeros(self.map_shape)
         #frz_map = #jax.lax.select(
             #queued_state.has_queued_frz_map,
             #queued_state.frz_map,

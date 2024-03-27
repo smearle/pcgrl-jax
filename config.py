@@ -13,7 +13,7 @@ from dataclasses import dataclass
 class Config:
     lr: float = 1.0e-4
     n_envs: int = 4
-    #num_steps: int = 128
+    num_steps: int = 128
     total_timesteps: int = int(5e7)
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4

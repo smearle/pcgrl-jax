@@ -213,18 +213,37 @@ class LegoRearrangeRepresentation(Representation):
     def reset(self, rng: chex.PRNGKey):
         env_map = jnp.zeros(self.env_shape)
         blocks = jnp.zeros((self.num_blocks, 3), dtype="int32")
-        for i in range(self.num_blocks):
-            rng, subkey = jax.random.split(rng)
-            pos = jax.random.randint(subkey, shape=(2,), minval = 0, maxval = self.env_shape[0], dtype=int)
-            x = pos[0]
-            z = pos[1]
-            y = jnp.count_nonzero(env_map, 1)[x, z]
 
-            blocks = blocks.at[i, 0].set(x)
-            blocks = blocks.at[i, 1].set(y)
-            blocks = blocks.at[i, 2].set(z)
+        # for i in range(self.num_blocks):
+        #     rng, subkey = jax.random.split(rng)
+        #     pos = jax.random.randint(subkey, shape=(2,), minval = 0, maxval = self.env_shape[0], dtype=int)
+        #     x = pos[0]
+        #     z = pos[1]
+        #     y = jnp.count_nonzero(env_map, 1)[x, z]
+
+        #     blocks = blocks.at[i, 0].set(x)
+        #     blocks = blocks.at[i, 1].set(y)
+        #     blocks = blocks.at[i, 2].set(z)
             
-            env_map = env_map.at[x,y,z].set(1)
+        #     env_map = env_map.at[x,y,z].set(1)
+
+        # As above, but in parallel
+        rng, subkey = jax.random.split(rng)
+        poss = jax.random.randint(subkey, shape=(self.num_blocks, 2), minval = 0, maxval = self.env_shape[0], dtype=int) 
+        x = poss[:,0]
+        z = poss[:,1]
+
+        def stack_blocks(carry, i):
+            blocks, env_map, x, z = carry
+            y = jnp.count_nonzero(env_map, 1)[x[i], z[i]]
+            blocks = blocks.at[i, 0].set(x[i])
+            blocks = blocks.at[i, 1].set(y)
+            blocks = blocks.at[i, 2].set(z[i])
+            env_map = env_map.at[x[i],y,z[i]].set(1)
+            return (blocks, env_map, x, z), 0
+
+        carry, _ = jax.lax.scan(stack_blocks, (blocks, env_map, x, z), jnp.arange(self.num_blocks))
+        blocks, env_map, _, _ = carry
         
         rotation = 0#jax.random.randint(subkey,shape=(1,), minval =0, maxval=3, dtype=int)[0]
 

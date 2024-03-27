@@ -4,6 +4,7 @@ from typing import Optional
 import chex
 from flax import struct
 import jax
+from jax.experimental import checkify
 import jax.numpy as jnp
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -78,20 +79,31 @@ class LegoProblem(Problem):
         footprint = jnp.count_nonzero(jnp.where(blocks[:,1] == 0, 1, 0))
 
         cntr_x, cntr_z = (env_map.shape[0]-1)//2, (env_map.shape[2]-1)//2
+        # cntr_x, cntr_z = 0, 0
 
-        dists = 0
-        cnt = 0
-        cntr_dist = 0
+        # dists = 0
+        # cnt = 0
+        # cntr_dist = 0
 
-        for i in range(blocks.shape[0]):
-            cntr_dist+= ((blocks[i][0]-cntr_x)**2+(blocks[i][2]-cntr_z)**2)**(.5)
-            for j in range(blocks.shape[0]):
-                dist = ((blocks[i][0] - blocks[j][0])**2+(blocks[i][2] - blocks[j][2])**2)**(.5)
-                dists +=dist
-                cnt+= 1
+        # for i in range(blocks.shape[0]):
+        #     cntr_dist+= ((blocks[i][0]-cntr_x)**2+(blocks[i][2]-cntr_z)**2)**(.5)
+        #     for j in range(blocks.shape[0]):
+        #         dist = ((blocks[i][0] - blocks[j][0])**2+(blocks[i][2] - blocks[j][2])**2)**(.5)
+        #         dists +=dist
+        #         cnt+= 1
 
-        avg_euclidean = dists/cnt
+        # avg_euclidean = dists/cnt
+        # avg_cntr_dist = cntr_dist/blocks.shape[0]
+        
+        # Get average distance of blocks to center
+        xy_diffs_cntr = jnp.abs(blocks[:,(0,2)] - jnp.array([cntr_x, cntr_z]))
+        cntr_dist = jnp.sum(jnp.linalg.norm(xy_diffs_cntr, axis=1))
         avg_cntr_dist = cntr_dist/blocks.shape[0]
+
+        # Get average euclidean distance between (unique) blocks
+        xy_diffs_pairwise = jnp.abs(blocks[:,(0,2)][:,None] - blocks[:,(0,2)])
+        pair_dist = jnp.linalg.norm(xy_diffs_pairwise, axis=2)
+        avg_euclidean = jnp.sum(pair_dist) / (blocks.shape[0] * (blocks.shape[0] - 1))
 
         stats = jnp.zeros(len(LegoMetrics))
         stats = stats.at[LegoMetrics.AVG_HEIGHT].set(avg_height)
