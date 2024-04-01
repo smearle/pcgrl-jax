@@ -19,7 +19,7 @@ from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
                    init_config)
-from envs.probs.lego import LegoProblemState
+from envs.probs.lego import LegoProblemState, tileNames
 from envs.lego_env import LegoEnvState
 
 class RunnerState(struct.PyTreeNode):
@@ -216,11 +216,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     
                     y_offset = -24
                     for b in range(curr_blocks.shape[0]):
-                        lego_block_name = "3005"
+                        lego_block_name = tileNames[curr_blocks[b][3]]
                         block_color = "7 "
-                        x_lego = curr_blocks[b, 0] * 20  + config.map_width - 1
+                        x_lego = curr_blocks[b, 2] * 20  + config.map_width - 1 + 10*(curr_blocks[b][3]-1)
                         y_lego = curr_blocks[b, 1] * (-24) + y_offset
-                        z_lego = curr_blocks[b, 2] * 20 + config.map_width - 1
+                        z_lego = curr_blocks[b, 0] * 20  + config.map_width - 1 
 
                         f.write("1 ")
                         f.write(block_color)
@@ -460,6 +460,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 _update_epoch, update_state, None, config.update_epochs
             )
             train_state = update_state[0]
+            traj_batch = update_state[1]
             metric = traj_batch.info
             rng = update_state[-1]
             if config.DEBUG:

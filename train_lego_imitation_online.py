@@ -19,7 +19,7 @@ from config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make, init_config)
-from envs.probs.lego import LegoProblemState
+from envs.probs.lego import LegoProblemState, tileNames
 from envs.lego_env import LegoEnvState
 
 class RunnerState(struct.PyTreeNode):
@@ -267,11 +267,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     
                     y_offset = -24
                     for b in range(curr_blocks.shape[0]):
-                        lego_block_name = "3005"
+                        lego_block_name = tileNames[curr_blocks[b][3]]
                         block_color = "7 "
-                        x_lego = curr_blocks[b, 0] * 20  + config.map_width - 1
+                        x_lego = curr_blocks[b, 2] * 20  + config.map_width - 1 + 10*(curr_blocks[b][3]-1)
                         y_lego = curr_blocks[b, 1] * (-24) + y_offset
-                        z_lego = curr_blocks[b, 2] * 20 + config.map_width - 1
+                        z_lego = curr_blocks[b, 0] * 20  + config.map_width - 1 
 
                         f.write("1 ")
                         f.write(block_color)
@@ -282,79 +282,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     f.close()
 
 
-            if i % config.render_freq != 0:
-                return
             
-            is_finished = states.done
-
-            for ep_is in range(config.n_render_eps):
-                dones = is_finished[:,ep_is]
-                done_ind = jnp.argmax(dones)
-
-                ep_blocks = blocks[ep_is*env.max_steps:ep_is*env.max_steps+done_ind+1]
-
-                ep_end_avg_height = states.prob_state.stats[done_ind, ep_is, 0]
-                ep_footprint = states.prob_state.stats[done_ind, ep_is, 1]
-                ep_cntr_dist = states.prob_state.stats[done_ind, ep_is, 3]
-                #ep_rotations = states.rep_state.rotation[:done_ind+1,ep_is]
-                ep_curr_blocks = states.rep_state.curr_block[:done_ind+1,ep_is]
-                actions = states.rep_state.last_action[:done_ind+1,ep_is]
-
-                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_fp{ep_footprint:.2f}_ctrdist{ep_cntr_dist:.2f}/"
-                if not os.path.exists(savedir):
-                    os.makedirs(savedir)
-                
-                for num in range(ep_blocks.shape[0]):
-                    curr_blocks = ep_blocks[num,:,:]
-                    #rotation = ep_rotations[num]
-                    curr_block = ep_curr_blocks[num]
-                    action = actions[num]
-
-                    savename = os.path.join(savedir, f"{num}_a{action}.mpd")
-                    
-                    f = open(savename, "a")
-                    f.write("0/n")
-                    f.write("0 Name: New Model.ldr\n")
-                    f.write("0 Author:\n")
-                    f.write("\n")
-
-                    for x in range(config.map_width):
-                        for z in range(config.map_width):
-                            lego_block_name = "3005"
-                            block_color = "2 "
-                            if curr_block == num:
-                                block_color = "7 "
-                            
-                            y_offset = -3#-24
-
-                            x_lego = x * 20  + config.map_width - 1
-                            y_lego =  0#(1)*(LegoDimsDict[lego_block_name][1])
-                            z_lego = z * 20 + config.map_width - 1
-
-                            #print(block.x, block.y, block.z)
-                            
-                            f.write("1 ")
-                            f.write(block_color)
-                            f.write(str(x_lego) + ' ' + str(y_lego) + ' ' + str(z_lego) + ' ')
-                            f.write("1 0 0 0 1 0 0 0 1 ")
-                            f.write(lego_block_name + ".dat")
-                            f.write("\n")
-                    
-                    y_offset = -24
-                    for b in range(curr_blocks.shape[0]):
-                        lego_block_name = "3005"
-                        block_color = "7 "
-                        x_lego = curr_blocks[b, 0] * 20  + config.map_width - 1
-                        y_lego = curr_blocks[b, 1] * (-24) + y_offset
-                        z_lego = curr_blocks[b, 2] * 20 + config.map_width - 1
-
-                        f.write("1 ")
-                        f.write(block_color)
-                        f.write(str(x_lego) + ' ' + str(y_lego) + ' ' + str(z_lego) + ' ')
-                        f.write("1 0 0 0 1 0 0 0 1 ")
-                        f.write(lego_block_name + ".dat")
-                        f.write("\n")
-                    f.close()
 
         def render_episodes(network_params):
             _, (states, rewards, dones, infos, frames, blocks) = jax.lax.scan(
@@ -544,6 +472,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 _update_epoch, update_state, None, config.update_epochs
             )
             train_state = update_state[0]
+            traj_batch = update_state[1]
             metric = traj_batch.info
             rng = update_state[-1]
             if config.DEBUG:

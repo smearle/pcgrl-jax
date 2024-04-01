@@ -12,6 +12,7 @@ import jax.numpy as jnp
 
 from envs.utils import Tiles
 from .representation import Representation, RepresentationState
+from ..probs.lego import tileNames
 
 def render_mpds(blocks, i, savedir, config):
 
@@ -55,7 +56,7 @@ def render_mpds(blocks, i, savedir, config):
                     
                     y_offset = -24
                     for b in range(curr_blocks.shape[0]):
-                        lego_block_name = "3005"
+                        lego_block_name = tileNames[curr_block[b][3]]
                         block_color = "7 "
                         x_lego = curr_blocks[b, 0] * 20  + config.map_width - 1
                         y_lego = curr_blocks[b, 1] * (-24) + y_offset
@@ -115,7 +116,7 @@ class LegoRearrangeRepresentation(Representation):
     def observation_shape(self):
         # Always observe static tile channel
         obs_shape = (2*(self.env_shape[0])+1, 2*(self.env_shape[1])+1, 2*(self.env_shape[2])+1)
-        return (*obs_shape, len(self.tile_enum)+2)
+        return (*obs_shape, len(self.tile_enum)+1)
 
 
 
@@ -195,14 +196,10 @@ class LegoRearrangeRepresentation(Representation):
             (x_offset, y_offset, z_offset),
         )
         
-        obs = obs.at[blocks[:, 0]+x_offset, blocks[:, 1]+y_offset, blocks[:, 2]+z_offset].set(2)
-
-        #mark current block
-        obs = obs.at[blocks[curr_block,0]+x_offset, blocks[curr_block,1]+y_offset,blocks[curr_block,2]+z_offset].set(3)
-        #mark center block
-        #obs = obs.at[(self.env_shape[0]-1)//2+x_offset, (self.env_shape[1]-1)//2+y_offset, (self.env_shape[2]-1)//2+z_offset].set(4)
+        obs = obs.at[blocks[:, 0]+x_offset, blocks[:, 1]+y_offset, blocks[:, 2]+z_offset].set(blocks[:, 3])
+        obs = obs.at[blocks[:, 0]+x_offset, blocks[:, 1]+y_offset, blocks[:, 2]+z_offset+blocks[:, 3]-1].set(blocks[:, 3])
         
-        obs = jax.nn.one_hot(obs, num_classes=len(self.tile_enum)+2, axis=-1)
+        obs = jax.nn.one_hot(obs, num_classes=len(self.tile_enum)+1, axis=-1)
         return obs
 
     #@property
@@ -212,40 +209,69 @@ class LegoRearrangeRepresentation(Representation):
 
     def reset(self, rng: chex.PRNGKey):
         env_map = jnp.zeros(self.env_shape)
-        blocks = jnp.zeros((self.num_blocks, 3), dtype="int32")
+        blocks = jnp.zeros((self.num_blocks, 4), dtype="int32")
 
-        # for i in range(self.num_blocks):
-        #     rng, subkey = jax.random.split(rng)
-        #     pos = jax.random.randint(subkey, shape=(2,), minval = 0, maxval = self.env_shape[0], dtype=int)
-        #     x = pos[0]
-        #     z = pos[1]
-        #     y = jnp.count_nonzero(env_map, 1)[x, z]
-
-        #     blocks = blocks.at[i, 0].set(x)
-        #     blocks = blocks.at[i, 1].set(y)
-        #     blocks = blocks.at[i, 2].set(z)
-            
-        #     env_map = env_map.at[x,y,z].set(1)
-
-        # As above, but in parallel
         rng, subkey = jax.random.split(rng)
-        poss = jax.random.randint(subkey, shape=(self.num_blocks, 2), minval = 0, maxval = self.env_shape[0], dtype=int) 
-        x = poss[:,0]
-        z = poss[:,1]
+        #blocks of size 1 along z dim
+        pos1 = jax.random.randint(subkey, shape=(self.num_blocks//2, 2), minval = 0, maxval = self.env_shape[0], dtype=int) 
+        #blocks of size 2 along z dim
+        pos2 = jax.random.randint(subkey, shape=(self.num_blocks-self.num_blocks//2, 2), minval = 0, maxval = self.env_shape[0]-1, dtype=int) 
+        pos = jnp.concatenate([pos1, pos2], axis=0)
+        x = pos[:,0]
+        z = pos[:,1]
+
+        
 
         def stack_blocks(carry, i):
             blocks, env_map, x, z = carry
-            y = jnp.count_nonzero(env_map, 1)[x[i], z[i]]
+            blocktype = 1 + (i>=self.num_blocks//2)
+            y = self.get_max_height
             blocks = blocks.at[i, 0].set(x[i])
             blocks = blocks.at[i, 1].set(y)
             blocks = blocks.at[i, 2].set(z[i])
-            env_map = env_map.at[x[i],y,z[i]].set(1)
+            blocks = blocks.at[i, 3].set(blocktype)
+            env_map = env_map.at[x[i],y,z[i]].set(blocktype)
+            env_map = env_map.at[x[i],y,z[i]+blocktype-1].set(blocktype)
             return (blocks, env_map, x, z), 0
-
+        
         carry, _ = jax.lax.scan(stack_blocks, (blocks, env_map, x, z), jnp.arange(self.num_blocks))
+
         blocks, env_map, _, _ = carry
+        blocks = blocks.at[0].set(blocks[1])
+
+        def block_fall_fn(block):
+            temp_map = self.get_env_map(blocks)
+            def cond_fn(state):
+                block, temp_map = state
+                return jnp.logical_and(
+                    block[1] > 0, 
+                    (temp_map[block[0], block[1]-1, block[2]] + temp_map[block[0], block[1]-1, block[2] + block[3]-1])== 0
+                )
+
+            def body_fn(state):
+                block, temp_map = state
+                temp_map = temp_map.at[block[0], block[1], block[2]].set(0)
+                temp_map = temp_map.at[block[0], block[1], block[2]+block[3]-1].set(0)
+                block = block.at[1].set(block[1] - 1)
+                temp_map = temp_map.at[block[0], block[1], block[2]].set(1)
+                temp_map = temp_map.at[block[0], block[1], block[2]+block[3]-1].set(1)
+                return block, temp_map
+
+            block, temp_map = jax.lax.while_loop(cond_fn, body_fn, (block, temp_map))
+
+            return block
+
+
+
+        for rownum in range(blocks.shape[0]):
+            #jax.debug.breakpoint()
+            block = block_fall_fn(blocks[rownum])
+            #jax.debug.breakpoint()
+            blocks = blocks.at[rownum].set(block)
         
         rotation = 0#jax.random.randint(subkey,shape=(1,), minval =0, maxval=3, dtype=int)[0]
+
+
 
         return LegoRearrangeRepresentationState(curr_block = 0, blocks = blocks, rotation=rotation, last_action = 0)
 
@@ -253,56 +279,75 @@ class LegoRearrangeRepresentation(Representation):
         
         rotation = rep_state.rotation
 
-        #rotation = 4
-
         x_step, z_step = self.moves[action[0][0][0]]
 
-        #x_step, z_step = -1, 0
-        x_step, z_step = self.unperturb_action(x_step, z_step, rotation)
+        #x_step, z_step = self.unperturb_action(x_step, z_step, rotation)
         
-        curr_y = rep_state.blocks[rep_state.curr_block, 1]
-        curr_x = rep_state.blocks[rep_state.curr_block, 0]
-        curr_z = rep_state.blocks[rep_state.curr_block, 2]
+        curr_block_type = rep_state.blocks[rep_state.curr_block, 3]
 
-        def subtract_if_condition_met(arr):
-            def update_row(row):
-                def subtract_one(row):
-                    return row - jnp.array([0, 1, 0])
-
-                def identity(row):
-                    return row
-
-                cond = (row[0] == curr_x) * (row[2] == curr_z) * (row[1] > curr_y)
-                subtracted_row = jax.lax.cond(cond, subtract_one, identity, row)
-                return subtracted_row
-
-            updated_arr = jax.vmap(update_row)(arr)
-            return updated_arr
-
-        new_blocks = subtract_if_condition_met(rep_state.blocks)
-
-        new_blocks = new_blocks.at[rep_state.curr_block, 0].add(x_step)
+        #move block
+        new_blocks = rep_state.blocks.at[rep_state.curr_block, 0].add(x_step)
         new_blocks = new_blocks.at[rep_state.curr_block, 2].add(z_step)
 
-
+        #check for out of bounds
         new_blocks_x = jnp.clip(new_blocks[:,0], a_min = 0, a_max = self.env_shape[0]-1)
-        new_blocks_z = jnp.clip(new_blocks[:,2], a_min = 0, a_max = self.env_shape[2]-1)
+        new_blocks_z = jnp.clip(new_blocks[:,2], a_min = 0, a_max = self.env_shape[2] + curr_block_type - 2)
         new_blocks = new_blocks.at[:,0].set(new_blocks_x)
         new_blocks = new_blocks.at[:,2].set(new_blocks_z)
-       
-        x = new_blocks[rep_state.curr_block, 0]
-        z = new_blocks[rep_state.curr_block, 2]
-     
-        new_height = jnp.count_nonzero(env_map, 1)[x, z]
- 
-        max_height = self.get_max_height
-        new_blocks = new_blocks.at[rep_state.curr_block, 1].set(jnp.count_nonzero(env_map, 1)[x, z])        
 
-        return_blocks = jax.lax.select(new_height > max_height, rep_state.blocks, new_blocks)
+        #set height to max to start with. will fall to top of existing blocks, or cancel move if overlap
+        max_height = self.get_max_height
+        new_blocks = new_blocks.at[rep_state.curr_block,1].set(max_height)
+
+        #all blocks fall if empty space below them    
+        #row 1 falls
+        #row 2 falls
+        #row 3 falls
+        #temp_map = self.get_env_map(new_blocks)
+        
+        ordered_inds = jnp.argsort(new_blocks[:,1])
+        ordered_blocks = new_blocks[ordered_inds]
 
         
+        def block_fall_fn(block):
+            temp_map = self.get_env_map(ordered_blocks)
+            def cond_fn(state):
+                block, temp_map = state
+                return jnp.logical_and(
+                    block[1] > 0, 
+                    (temp_map[block[0], block[1]-1, block[2]] + temp_map[block[0], block[1]-1, block[2] + block[3]-1])== 0
+                )
 
-        return_blocks = jax.lax.select(((x == curr_x) & (z == curr_z)), rep_state.blocks, new_blocks)
+            def body_fn(state):
+                block, temp_map = state
+                temp_map = temp_map.at[block[0], block[1], block[2]].set(0)
+                temp_map = temp_map.at[block[0], block[1], block[2]+block[3]-1].set(0)
+                block = block.at[1].set(block[1] - 1)
+                temp_map = temp_map.at[block[0], block[1], block[2]].set(1)
+                temp_map = temp_map.at[block[0], block[1], block[2]+block[3]-1].set(1)
+                return block, temp_map
+
+            block, temp_map = jax.lax.while_loop(cond_fn, body_fn, (block, temp_map))
+
+
+
+            return block
+
+        #ordered_blocks = jax.lax.map(block_fall_fn, ordered_blocks)
+
+        for rownum in range(ordered_blocks.shape[0]):
+            block = block_fall_fn(ordered_blocks[rownum])
+            ordered_blocks = ordered_blocks.at[rownum].set(block)
+
+        new_blocks = ordered_blocks[jnp.argsort(ordered_inds)]
+            
+        curr_block = new_blocks[rep_state.curr_block].at[1].set(max_height+1)
+        curr_block = block_fall_fn(curr_block)
+
+        new_height = new_blocks[rep_state.curr_block,1]
+        
+
+        return_blocks = jax.lax.select(new_height > max_height, rep_state.blocks, new_blocks)
 
         return_map = self.get_env_map(return_blocks)
         
@@ -325,6 +370,9 @@ class LegoRearrangeRepresentation(Representation):
     def get_env_map(self, blocks):
         env_map = jnp.zeros(self.env_shape)
         for block in blocks:
-            env_map = env_map.at[block[0], block[1], block[2]].set(1)
+            env_map = env_map.at[block[0], block[1], block[2]].set(block[3])
+            env_map = env_map.at[block[0], block[1], block[2] + block[3]-1].set(block[3])
+
+        
         
         return env_map

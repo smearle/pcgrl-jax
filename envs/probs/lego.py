@@ -1,4 +1,4 @@
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from typing import Optional
 
 import chex
@@ -15,6 +15,9 @@ from .problem import Problem
 class LegoTiles(IntEnum):
     EMPTY = 0
     N3005 = 1 #1x1 piece, number 3005
+    N3004 = 2 #2x1 piece, number 3005
+
+tileNames = ["empty", "3005", "3004"]
 
 @struct.dataclass
 class LegoProblemState:
@@ -79,21 +82,6 @@ class LegoProblem(Problem):
         footprint = jnp.count_nonzero(jnp.where(blocks[:,1] == 0, 1, 0))
 
         cntr_x, cntr_z = (env_map.shape[0]-1)//2, (env_map.shape[2]-1)//2
-        # cntr_x, cntr_z = 0, 0
-
-        # dists = 0
-        # cnt = 0
-        # cntr_dist = 0
-
-        # for i in range(blocks.shape[0]):
-        #     cntr_dist+= ((blocks[i][0]-cntr_x)**2+(blocks[i][2]-cntr_z)**2)**(.5)
-        #     for j in range(blocks.shape[0]):
-        #         dist = ((blocks[i][0] - blocks[j][0])**2+(blocks[i][2] - blocks[j][2])**2)**(.5)
-        #         dists +=dist
-        #         cnt+= 1
-
-        # avg_euclidean = dists/cnt
-        # avg_cntr_dist = cntr_dist/blocks.shape[0]
         
         # Get average distance of blocks to center
         xy_diffs_cntr = jnp.abs(blocks[:,(0,2)] - jnp.array([cntr_x, cntr_z]))
