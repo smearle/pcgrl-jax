@@ -19,7 +19,7 @@ from config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make, init_config)
-from envs.probs.lego import LegoProblemState, tileNames, LegoMetrics
+from envs.probs.lego import LegoProblemState, tileNames, LegoMetrics, tileDims
 from envs.lego_env import LegoEnvState
 
 class RunnerState(struct.PyTreeNode):
@@ -64,6 +64,7 @@ def get_expert_action(env_state):
     curr_blocks = jnp.array([blocks[i, curr_block_inds[i], :] for i in range(blocks.shape[0])])
     curr_x = curr_blocks[:,0]
     curr_z = curr_blocks[:,2]
+    curr_block_type = curr_blocks[:,3]
     
     x_dir = center_x - curr_x
     z_dir = center_z - curr_z
@@ -207,6 +208,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     return
             print(f"Done rendering episode gifs at update {i}")
 
+  
         def render_mpds(blocks, i, states):
 
             if i % config.render_freq != 0:
@@ -219,7 +221,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 done_ind = jnp.argmax(dones)
                 done_ind = jax.lax.cond(done_ind == 0, lambda: env.max_steps-1, lambda: done_ind)
 
-                ep_blocks = blocks[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
+                ep_blocks = blocks[ep_is*env.max_steps:(ep_is+1)*env.max_steps]#[:2]
 
                 ep_end_avg_height = states.prob_state.stats[done_ind-1, ep_is, 0]
                 ep_footprint = states.prob_state.stats[done_ind-1, ep_is, 1]
@@ -238,6 +240,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     curr_block = ep_curr_blocks[num]
                     action = actions[num]
 
+
                     savename = os.path.join(savedir, f"{num}_a{action}.mpd")
                     
                     f = open(savename, "a")
@@ -255,11 +258,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                             
                             y_offset = -3#-24
 
-                            x_lego = x * 20  + config.map_width - 1
+                            x_lego = x * 20 + 10
                             y_lego =  0#(1)*(LegoDimsDict[lego_block_name][1])
-                            z_lego = z * 20 + config.map_width - 1
-
-                            #print(block.x, block.y, block.z)
+                            z_lego = z * 20 + 10
                             
                             f.write("1 ")
                             f.write(block_color)
@@ -267,19 +268,31 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                             f.write("1 0 0 0 1 0 0 0 1 ")
                             f.write(lego_block_name + ".dat")
                             f.write("\n")
-                    
-                    y_offset = -24
-                    for b in range(curr_blocks.shape[0]):
-                        lego_block_name = tileNames[curr_blocks[b][3]]
-                        block_color = "7 "
-                        x_lego = curr_blocks[b, 2] * 20  + config.map_width - 1 + 10*(curr_blocks[b][3]-1)
-                        y_lego = curr_blocks[b, 1] * (-24) + y_offset
-                        z_lego = curr_blocks[b, 0] * 20  + config.map_width - 1 
 
+                            max_x = x_lego
+                            max_z = z_lego
+                            min_x = config.map_width-1
+                            min_z = config.map_width-1
+                    
+                    y_offset = -24 #1 brick height (plate is 8)
+                    #if num == 82:
+                    #    print("starting")
+                    #    print(curr_blocks)
+                    #    tempmap=env._env.rep.get_env_map(curr_blocks)
+                    #    for row in range(tempmap.shape[1]):
+                    #        print(tempmap[:,row,:])
+                    for b in range(curr_blocks.shape[0]):
+                        blocktype = curr_blocks[b,3]
+                        lego_block_name = tileNames[blocktype]
+                        block_color = "7 "
+                        x_lego = curr_blocks[b, 2] * 20 + 10*(tileDims[blocktype][2])
+                        y_lego = curr_blocks[b, 1] * (y_offset)/3 + (y_offset/3)*(tileDims[blocktype][1])
+                        z_lego = curr_blocks[b, 0] * 20 + 10*(tileDims[blocktype][0])
+                        
                         f.write("1 ")
                         f.write(block_color)
                         f.write(str(x_lego) + ' ' + str(y_lego) + ' ' + str(z_lego) + ' ')
-                        f.write("1 0 0 0 1 0 0 0 1 ")
+                        f.write("1 0 0 0 1 0 0 0 1 ") #orientation matrix stays set for now. TO DO: block rotation
                         f.write(lego_block_name + ".dat")
                         f.write("\n")
                     f.close()
@@ -404,6 +417,7 @@ def gen_dummy_queued_state(config, env, frz_rng):
 @hydra.main(version_base=None, config_path='./', config_name='lego_pcgrl')
 def main(config: TrainConfig):
     config.learning_mode = "TEST"
+    config.reward = "house"
     config = init_config(config, evo=False)
     rng = jax.random.PRNGKey(config.seed)
 

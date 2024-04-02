@@ -182,7 +182,7 @@ def get_env_params_from_config(config: Config):
 def get_lego_params_from_config(config: Config):
     map_shape = ((config.map_width, config.map_width) if not config.is_3d
         #else (config.map_width, config.map_width*3-2, config.map_width))
-        else (config.map_width, config.map_width, config.map_width))
+        else (config.map_width, config.map_width*3-2, config.map_width))
 
     max_steps_multiple = config.max_steps_multiple
 

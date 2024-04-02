@@ -19,7 +19,7 @@ from config import Config, TrainConfig
 from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make, init_config)
-from envs.probs.lego import LegoProblemState, tileNames, tileDims
+from envs.probs.lego import LegoProblemState, tileNames, LegoMetrics, tileDims
 from envs.lego_env import LegoEnvState
 
 class RunnerState(struct.PyTreeNode):
@@ -42,8 +42,8 @@ class Transition(NamedTuple):
     info: jnp.ndarray
     # rng_act: jnp.ndarray
 
-def get_expert_action(log_env_state):
-    env_state = log_env_state.env_state
+def get_expert_action(env_state):
+    #env_state = log_env_state.env_state
     moves = jnp.array([
             (0,0),
             (0,1),
@@ -88,7 +88,11 @@ def get_expert_action(log_env_state):
 
     actions = find_indices(combined_actions, moves)
     
-    return actions.reshape(actions.shape[0], 1, 1, 1)
+    #jax.debug.print("goal: {goalx} {goaly}", goalx = center_x, goaly=center_z)
+    #jax.debug.print("current x pos: {x}.\n current z pos: {z}.\n xmoves: {xmoves}.\n zmoves: {zmoves}.\n combined: {combined_actions}.\n actions: {acts}", x = curr_x, z = curr_z, xmoves = x_moves, zmoves = z_moves, acts = actions, combined_actions = combined_actions)
+    
+    actions = actions.reshape(actions.shape[0], 1, 1, 1)
+    return actions
 
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
@@ -203,8 +207,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     return
             print(f"Done rendering episode gifs at update {i}")
 
-        
-        
         def render_mpds(blocks, i, states):
 
             if i % config.render_freq != 0:
@@ -307,7 +309,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             rng_r, _rng_r = jax.random.split(rng_r)
             
             pi, value = network.apply(network_params, obs_r)
-            action_r = pi.sample(seed=rng_r)
+            action_r = get_expert_action(env_state_r)#pi.sample(seed=rng_r)
 
             rng_step = jax.random.split(_rng_r, config.n_render_eps)
 
@@ -332,231 +334,16 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             return (rng_r, obs_r, env_state_r, network_params),\
                     (env_state_r, reward_r, done_r, info_r, frames)
 
-      
-
-        def save_checkpoint(runner_state, info, steps_prev_complete):
-            try:
-                timesteps = info["timestep"][info["returned_episode"]
-                                             ] * config.n_envs
-            except jax.errors.NonConcreteBooleanIndexError:
-                return
-            for t in timesteps:
-                if t > 0:
-                    latest_ckpt_step = checkpoint_manager.latest_step()
-                    if (latest_ckpt_step is None or
-                            t - latest_ckpt_step >= config.ckpt_freq):
-                        print(f"Saving checkpoint at step {t}")
-                        ckpt = {'runner_state': runner_state,
-                                'config': config, 'step_i': t}
-                        # ckpt = {'step_i': t}
-                        save_args = orbax_utils.save_args_from_target(ckpt)
-                        checkpoint_manager.save(t, ckpt, save_kwargs={
-                                                'save_args': save_args})
-                    break
+        
         
         frames, states, blocks = render_episodes(train_state.params)
         jax.debug.callback(render_frames, frames, runner_state.update_i, states)
         jax.debug.callback(render_mpds, blocks, runner_state.update_i, states)
         old_render_results = (frames, states, blocks)
         
-        def _update_step(runner_state, batch):
-            # COLLECT TRAJECTORIES
-            def _env_step(runner_state: RunnerState, unused):
-                train_state, env_state, last_obs, rng, update_i = (
-                    runner_state.train_state, runner_state.env_state,
-                    runner_state.last_obs,
-                    runner_state.rng, runner_state.update_i,
-                )
+        
 
-                # SELECT ACTION
-                rng, _rng = jax.random.split(rng)
-                # Squash the gpu dimension (network only takes one batch dimension)
-                pi, _ = network.apply(train_state.params, last_obs)
-                action = pi.sample(seed=_rng)
-                log_prob = pi.log_prob(action)
-
-                #GET EXPERT ACTION
-                expert_action = get_expert_action(env_state)
-
-                # STEP ENV
-                rng, _rng = jax.random.split(rng)
-                rng_step = jax.random.split(_rng, config.n_envs)
-
-                # rng_step = rng_step.reshape((config.n_gpus, -1) + rng_step.shape[1:])
-                vmap_step_fn = jax.vmap(env.step, in_axes=(0, 0, 0, None))
-                # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
-                obsv, env_state, reward, done, info = vmap_step_fn(
-                    rng_step, env_state, action, env_params
-                )
-                transition = Transition(
-                    done, action, expert_action, reward, log_prob, last_obs, info
-                )
-                runner_state = RunnerState(
-                    train_state, env_state, obsv, rng,
-                    update_i=update_i)
-                return runner_state, transition
-            
-            runner_state, traj_batch = jax.lax.scan(
-                _env_step, runner_state, None, config.max_steps_multiple*config.n_blocks
-            )
-
-            train_state, env_state, last_obs, rng = runner_state.train_state, runner_state.env_state, \
-                runner_state.last_obs, runner_state.rng
-
-            # UPDATE NETWORK
-            def _update_epoch(update_state, unused):
-                def _update_minbatch(train_state, batch):
-                    traj_batch = batch
-
-                    def _loss_fn(params, traj_batch):
-                        # RERUN  
-                        pi, _ = network.apply(params, traj_batch.obs)
-                        #log_prob = pi.log_prob(traj_batch.action)
-
-
-                        # CALCULATE LOSS
-                        loss = -jnp.mean(pi.log_prob(traj_batch.expert_action))
-                        #jax.debug.print("loss: {x}",x = loss)
-                        return loss
-                    
-                    #def cross_entropy_loss_fn(params, traj_batch):
-                    #def _loss_fn(params, traj_batch):
-                    #   logits = network.apply(params, traj_batch.obs)
-                    #   log_softmax_logits = jax.nn.log_softmax(logits[1])
-                    #   loss = -jnp.mean(log_softmax_logits * traj_batch.expert_action)
-                    #   return loss
-
-                    #def kl_divergence_loss_fn(params, traj_batch):
-                    #    pi, _ = network.apply(params, traj_batch.obs)
-                    #    expert_pi = some_expert_distribution(traj_batch)
-                    #    loss = jnp.mean(jax.scipy.stats.entropy(pi, expert_pi))
-                    #    return loss
-
-                    
-                    
-                    grad_fn = jax.value_and_grad(_loss_fn)
-                    total_loss, grads = grad_fn(
-                        train_state.params, traj_batch
-                    )
-                    train_state = train_state.apply_gradients(grads=grads)
-                    return train_state, total_loss
-
-                train_state, traj_batch, rng = \
-                    update_state
-                rng, _rng = jax.random.split(rng)
-                batch_size = config.MINIBATCH_SIZE * config.NUM_MINIBATCHES
-                assert (
-                    batch_size == config.n_blocks * config.max_steps_multiple * config.n_envs
-                ), "batch size must be equal to number of steps * number " + \
-                    "of envs"
-                permutation = jax.random.permutation(_rng, batch_size)
-                batch = traj_batch
-                batch = jax.tree_util.tree_map(
-                    lambda x: x.reshape((batch_size,) + x.shape[2:]), batch
-                )
-                shuffled_batch = jax.tree_util.tree_map(
-                    lambda x: jnp.take(x, permutation, axis=0), batch
-                )
-                minibatches = jax.tree_util.tree_map(
-                    lambda x: jnp.reshape(
-                        x, [config.NUM_MINIBATCHES, -1] + list(x.shape[1:])
-                    ),
-                    shuffled_batch,
-                )
-                train_state, total_loss = jax.lax.scan(
-                    _update_minbatch, train_state, minibatches
-                )
-                update_state = (train_state, traj_batch, rng)
-                return update_state, total_loss
-
-            update_state = (train_state, traj_batch,rng)
-            update_state, loss_info = jax.lax.scan(
-                _update_epoch, update_state, None, config.update_epochs
-            )
-            train_state = update_state[0]
-            traj_batch = update_state[1]
-            metric = traj_batch.info
-            rng = update_state[-1]
-            if config.DEBUG:
-                def callback(info, steps_prev_complete):
-                    return_values = info["returned_episode_returns"][info["returned_episode"]]
-                    timesteps = info["timestep"][info["returned_episode"]
-                                                 ] * config.n_envs
-                    for t in range(len(timesteps)):
-                        print(
-                            f"global step={timesteps[t]}, episodic return={return_values[t]}")
-                jax.debug.callback(callback, metric, steps_prev_complete)
-
-            jax.debug.callback(save_checkpoint, runner_state,
-                               metric, steps_prev_complete)
-
-            # Create a tensorboard writer
-            writer = SummaryWriter(get_exp_dir(config))
-
-            def log_callback(metric, steps_prev_complete, train_start_time, loss_info):
-                timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
-
-                
-                if len(timesteps) > 0:
-                    t = timesteps[0]
-                    ep_return = (metric["returned_episode_returns"]
-                                 [metric["returned_episode"]].mean()
-                                 )
-                    losses = loss_info.mean()
-
-                    ep_footprint = metric["stats"][metric["returned_episode"]][:,1].mean()
-                    ep_avg_height = metric["stats"][metric["returned_episode"]][:,0].mean()
-                    ep_ctr_dist = metric["stats"][metric["returned_episode"]][:,3].mean()
-                    ep_length = metric["step"][metric["returned_episode"]].mean()+1
-
-                    n_envs = metric["last_action"].shape[1]
-                    mean_num_actions = sum([len(set(metric["last_action"][:,i])) for i in range(n_envs)])/n_envs
-                    # Add a row to csv with ep_return
-                    with open(os.path.join(get_exp_dir(config),
-                                           "progress.csv"), "a") as f:
-                        f.write(f"{t},{ep_return}\n")
-
-                    writer.add_scalar("ep_return", ep_return, t)
-                    writer.add_scalar("ep_stats/ep_length", ep_length, t)
-                    writer.add_scalar("ep_stats/ep_end_footprint", ep_footprint,t)
-                    writer.add_scalar("ep_stats/ep_end_avg_height", ep_avg_height, t)
-                    writer.add_scalar("ep_stats/num_actions", mean_num_actions, t)
-                    writer.add_scalar("ep_stats/ep_end_dist_ctr", ep_ctr_dist,t)
-                    # for k, v in zip(env.prob.metric_names, env.prob.stats):
-                    #     writer.add_scalar(k, v, t)
-                    fps = (t - steps_prev_complete) / (timer() - train_start_time)
-                    writer.add_scalar("fps", fps, t)
-                    writer.add_scalar("loss", losses, t)
-
-
-            # FIXME: Inside vmap, both conditions are likely to get executed. Any way around this?
-            # Currently not vmapping the train loop though, so it's ok.
-            # start_time = timer()
-            frames, states, blocks = jax.lax.cond(
-                runner_state.update_i % config.render_freq == 0,
-                lambda: render_episodes(train_state.params),
-                lambda: old_render_results,)
-            jax.debug.callback(render_frames, frames, runner_state.update_i, states)
-            jax.debug.callback(render_mpds, blocks, runner_state.update_i, states)
-            # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
-
-            jax.debug.callback(log_callback, metric,
-                               steps_prev_complete, train_start_time, loss_info)
-
-            runner_state = RunnerState(
-                train_state, env_state, last_obs, rng,
-                update_i=runner_state.update_i+1)
-
-            return runner_state, metric
-
-        runner_state, metric = jax.lax.scan(
-            _update_step, runner_state, None, config.NUM_UPDATES
-        )
-
-        jax.debug.callback(save_checkpoint, runner_state,
-                           metric, steps_prev_complete)
-
-        return {"runner_state": runner_state, "metrics": metric}
+       
 
     return lambda rng: train(rng, config)
 
@@ -627,8 +414,7 @@ def gen_dummy_queued_state(config, env, frz_rng):
 
 @hydra.main(version_base=None, config_path='./', config_name='lego_pcgrl')
 def main(config: TrainConfig):
-    config.learning_mode = "IL"
-    config.render_freq = 50
+    config.learning_mode = "TEST"
     config = init_config(config, evo=False)
     rng = jax.random.PRNGKey(config.seed)
 

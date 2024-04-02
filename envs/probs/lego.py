@@ -1,4 +1,4 @@
-from enum import IntEnum, StrEnum
+from enum import IntEnum
 from typing import Optional
 
 import chex
@@ -16,8 +16,10 @@ class LegoTiles(IntEnum):
     EMPTY = 0
     N3005 = 1 #1x1 piece, number 3005
     N3004 = 2 #2x1 piece, number 3005
+    N3031 = 3 #4x4 plate, number 3031
 
-tileNames = ["empty", "3005", "3004"]
+tileNames = ["empty", "3005", "3004", "3031"]
+tileDims = jnp.array([(0,0,0), (1,3,1), (1,3,2), (4,1,4)])
 
 @struct.dataclass
 class LegoProblemState:

@@ -320,7 +320,7 @@ class LegoEnv(Environment):
     
     @property
     def default_params(self) -> LegoEnvParams:
-        return LegoEnvParams(map_shape=(16, 16))
+        return LegoEnvParams(map_shape=(6, 6*3-2, 6))
     
     @property
     def num_actions(self) -> int:

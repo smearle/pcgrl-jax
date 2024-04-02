@@ -92,13 +92,13 @@ class TrainConfig(Config):
 class LegoConfig(Config):
     learning_mode: str = "RL"
     lr: float = 1.0e-4
-    num_envs: int = 1
+    num_envs: int = 100
     #num_steps: int = 
     max_steps_multiple:int = 15
     n_blocks:int = 7
     total_timesteps: int = int(5e7)
     update_epochs: int = 10
-    NUM_MINIBATCHES: int = 4
+    NUM_MINIBATCHES: int=1 #int = 4
     GAMMA: float = 0.99
     GAE_LAMBDA: float = 0.95
     CLIP_EPS: float = 0.2
