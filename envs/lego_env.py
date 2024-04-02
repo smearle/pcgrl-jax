@@ -310,8 +310,10 @@ class LegoEnv(Environment):
     """
 
     def render(self, env_state):
-        #TO DO: For real, the leocad/ldraw rendering
-        flatmap = jnp.count_nonzero(env_state.env_map, 1)
+        #flatmap = jnp.count_nonzero(env_state.env_map, 1)
+        inds = jnp.arange(env_state.env_map.shape[1])[jnp.newaxis, :, jnp.newaxis]
+        nonzeros = env_state.env_map != 0
+        flatmap = jnp.argmax(nonzeros*inds, axis=1)
         return render_map(env_state, flatmap, tile_size = self.prob.tile_size)
 
     def get_blocks(self, env_state):
