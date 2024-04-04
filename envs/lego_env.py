@@ -87,6 +87,7 @@ class LegoEnvParams:
     n_blocks: int = 20
     #max_board_scans: float = 3.0
     ctrl_metrics: Tuple = (1,1)
+    reward: Optional[chex.Array] = None
   
     #change_pct: float = -1.0
 
@@ -159,9 +160,9 @@ def get_prob_cls(problem: str):
 class LegoEnv(Environment):
     prob: Problem
     def __init__(self, env_params: LegoEnvParams):
-        map_shape, act_shape, problem, representation, n_agents, n_blocks, max_steps_multiple = (
+        map_shape, act_shape, problem, representation, n_agents, n_blocks, max_steps_multiple, reward = (
             env_params.map_shape, env_params.act_shape, env_params.problem,
-            env_params.representation, env_params.n_agents, env_params.n_blocks, env_params.max_steps_multiple)
+            env_params.representation, env_params.n_agents, env_params.n_blocks, env_params.max_steps_multiple, env_params.reward)
 
         self.map_shape = map_shape
         self.act_shape = act_shape
@@ -172,7 +173,7 @@ class LegoEnv(Environment):
     
 
         prob_cls = PROB_CLASSES[problem]
-        self.prob = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics, n_blocks = n_blocks)
+        self.prob = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics, n_blocks = n_blocks, reward = reward)
         
 
         rng = jax.random.PRNGKey(0)  # Dummy random key
@@ -284,7 +285,7 @@ class LegoEnv(Environment):
             {"discount": self.discount(env_state, env_params), 
              "footprint": prob_state.stats[LegoMetrics.FOOTPRINT], 
              "avg_height": prob_state.stats[LegoMetrics.AVG_HEIGHT], 
-             "ctr_dist": prob_state.stats[LegoMetrics.DIST_TO_CENTER],
+             "ctr_dist": prob_state.stats[LegoMetrics.CENTER],
              "last_action": action[0][0][0],
              "stats": prob_state.stats,
              "rotation": rep_state.rotation,

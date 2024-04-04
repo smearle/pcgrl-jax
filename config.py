@@ -96,9 +96,9 @@ class LegoConfig(Config):
     #num_steps: int = 
     max_steps_multiple:int = 15
     n_blocks:int = 7
-    total_timesteps: int = int(5e7)
+    total_timesteps: int = int(2e7)
     update_epochs: int = 10
-    NUM_MINIBATCHES: int=1 #int = 4
+    NUM_MINIBATCHES: int = 4
     GAMMA: float = 0.99
     GAE_LAMBDA: float = 0.95
     CLIP_EPS: float = 0.2
@@ -112,12 +112,12 @@ class LegoConfig(Config):
     exp_name: str = "0"
     seed: int = 0
 
-    reward: str = "center"
+    reward: tuple[str] = ("CENTER"), #("AVG_HEIGHT", "FOOTPRINT", "AVG_EUCLIDEAN", "CENTER", "HOUSE", "SQUARE")
     problem: str = "lego"
     representation: str = "lego_rearrange"
     model: str = "conv"
 
-    map_width: int = 7#12
+    map_width: int = 9#12
     is_3d: bool = True
     n_render_eps: int = 3
 

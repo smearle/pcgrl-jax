@@ -415,6 +415,7 @@ def gen_dummy_queued_state(config, env, frz_rng):
 @hydra.main(version_base=None, config_path='./', config_name='lego_pcgrl')
 def main(config: TrainConfig):
     config.learning_mode = "TEST"
+    config.reward = ("CENTER",)
     config = init_config(config, evo=False)
     rng = jax.random.PRNGKey(config.seed)
 

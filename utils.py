@@ -12,6 +12,7 @@ from envs.lego_env import PROB_CLASSES, LegoEnvParams, LegoEnv, ProbEnum, RepEnu
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
 from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
+from envs.probs.lego import LegoMetrics
 from models import ActorCritic, ActorCriticPCGRL, ActorCriticLEGO, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, Dense, NCA, SeqNCA, ConvForward3d, DenseForward3d
 
 
@@ -47,7 +48,7 @@ def get_exp_dir(config: Config):
         exp_dir = os.path.join(
             'saves',
             'lego_' + \
-            f'{config.seed}_{config.exp_name}_{config.model}_reps-{config.max_steps_multiple}_blocks-{config.n_blocks}_reward-{config.reward}_{config.learning_mode}',        
+            f'{config.seed}_{config.exp_name}_{config.model}_reps-{config.max_steps_multiple}_blocks-{config.n_blocks}_reward-{"-".join(config.reward).lower()}_{config.learning_mode}',        
         )
     else:
         exp_dir = os.path.join(
@@ -182,7 +183,7 @@ def get_env_params_from_config(config: Config):
 def get_lego_params_from_config(config: Config):
     map_shape = ((config.map_width, config.map_width) if not config.is_3d
         #else (config.map_width, config.map_width*3-2, config.map_width))
-        else (config.map_width, config.map_width*3-2, config.map_width))
+        else (config.map_width, config.n_blocks*3, config.map_width))
 
     max_steps_multiple = config.max_steps_multiple
 
@@ -204,7 +205,7 @@ def get_lego_params_from_config(config: Config):
         n_blocks =config.n_blocks,
         #n_freezies=config.n_freezies,
         n_agents=config.n_agents,
-        
+        reward = tuple([prob_cls.metrics_enum[r.upper()] for r in config.reward]),
         #max_board_scans=config.max_board_scans,
         #ctrl_metrics=ctrl_metrics,
         #change_pct=config.change_pct,
