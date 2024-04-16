@@ -63,6 +63,12 @@ def init_config(config: Config, evo=True):
     if config.env_name == 'Candy':
         config.exp_dir = get_exp_dir(config)
         return config
+    
+    if config.env_name == 'Lego':
+        if 'HOUSE' in config.reward:
+            config.n_blocks = 17
+        if 'TABLE' in config.reward:
+            config.n_blocks = 17
 
     config.arf_size = (2 * config.map_width -
                       1 if config.arf_size is None else config.arf_size)

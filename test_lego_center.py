@@ -55,6 +55,7 @@ def get_expert_action(env_state):
     blocks = env_state.rep_state.blocks
     curr_block_inds = env_state.rep_state.curr_block
     map_shape = env_state.env_map[0].shape
+   
 
     n_envs = blocks.shape[0]
 

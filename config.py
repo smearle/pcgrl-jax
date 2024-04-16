@@ -94,7 +94,7 @@ class LegoConfig(Config):
     lr: float = 1.0e-4
     num_envs: int = 100
     #num_steps: int = 
-    max_steps_multiple:int = 15
+    max_steps_multiple:int = 20
     n_blocks:int = 7
     total_timesteps: int = int(2e7)
     update_epochs: int = 10
@@ -112,7 +112,7 @@ class LegoConfig(Config):
     exp_name: str = "0"
     seed: int = 0
 
-    reward: tuple[str] = ("CENTER"), #("AVG_HEIGHT", "FOOTPRINT", "AVG_EUCLIDEAN", "CENTER", "HOUSE", "SQUARE")
+    reward: tuple[str] = ("AVG_HEIGHT",) #("CENTER"), #("AVG_HEIGHT", "FOOTPRINT", "AVG_EUCLIDEAN", "CENTER", "HOUSE", "SQUARE", "TABLE")
     problem: str = "lego"
     representation: str = "lego_rearrange"
     model: str = "conv"

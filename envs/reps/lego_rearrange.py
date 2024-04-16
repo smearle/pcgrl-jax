@@ -12,7 +12,7 @@ import jax.numpy as jnp
 
 from envs.utils import Tiles, pad_env_map
 from .representation import Representation, RepresentationState
-from ..probs.lego import tileNames, tileDims
+from ..probs.lego import tileNames, tileDims, LegoMetrics
 
 block_masks = jnp.zeros((4,6,3,6))
 for i in range(4):
@@ -37,14 +37,15 @@ class LegoRearrangeRepresentation(Representation):
             act_shape: Tuple[int, int], 
             env_shape: Tuple[int, int, int], 
             n_blocks: int,
-            max_steps_multiple: int
+            max_steps_multiple: int,
+            reward: Tuple[str]
             ):
 
         self.tile_enum = tile_enum
         #self.act_shape = act_shape
         self.env_shape = env_shape
         self.num_blocks = n_blocks
-
+        self.reward = reward
         
         self.max_steps = max_steps_multiple*self.num_blocks
 
@@ -120,9 +121,6 @@ class LegoRearrangeRepresentation(Representation):
         perturbed_obs = jax.lax.select(rotation == 5, jnp.rot90(obs, 3, (0,2)), obs) # rotate 270
         return perturbed_obs
 
-
-
-
     def get_obs(self, rep_state: LegoRearrangeRepresentationState) -> chex.Array:
         blocks = rep_state.blocks
         curr_block = rep_state.curr_block
@@ -179,6 +177,10 @@ class LegoRearrangeRepresentation(Representation):
     #@property
     #def per_tile_action_dim(self):
     #    return len(self.tile_enum) - 1
+
+    @property
+    def is_house_or_table_builder(self):
+        return LegoMetrics.HOUSE in self.reward or LegoMetrics.TABLE in self.reward
     
 
     def reset(self, rng: chex.PRNGKey):
@@ -192,12 +194,16 @@ class LegoRearrangeRepresentation(Representation):
         #blocks of size 1 along z dim
         zpos1 = jax.random.randint(subkey, shape=(self.num_blocks//2,), minval = 0, maxval = self.env_shape[0], dtype=int) 
         #blocks of size 2 along z dim
+        rng, subkey = jax.random.split(rng)
         zpos2 = jax.random.randint(subkey, shape=(self.num_blocks-self.num_blocks//2-1,), minval = 0, maxval = self.env_shape[0]-1, dtype=int)
         #blocks of size 6 along z dim
-        zpos3 = jax.random.randint(subkey, shape=(1,), minval = 0, maxval = self.env_shape[0]-6, dtype=int)
+        rng, subkey = jax.random.split(rng)
+        zpos3 = jax.random.randint(subkey, shape=(1,), minval = 0, maxval = self.env_shape[0]-4, dtype=int)
 
+        rng, subkey = jax.random.split(rng)
         xpos1 = jax.random.randint(subkey, shape=(self.num_blocks-1,), minval = 0, maxval = self.env_shape[0], dtype=int) 
-        xpos2 = jax.random.randint(subkey, shape=(1,), minval = 0, maxval = self.env_shape[0]-6, dtype=int)
+        rng, subkey = jax.random.split(rng)
+        xpos2 = jax.random.randint(subkey, shape=(1,), minval = 0, maxval = self.env_shape[2]-4, dtype=int)
 
         z = jnp.concatenate([zpos1, zpos2, zpos3], axis=0)
         x = jnp.concatenate([xpos1, xpos2], axis=0)
@@ -231,6 +237,9 @@ class LegoRearrangeRepresentation(Representation):
         carry, _ = jax.lax.scan(stack_blocks, (blocks, env_map, x, z), jnp.arange(self.num_blocks)-1)
 
         blocks, env_map, _, _ = carry
+
+        #if we are making a house, keep things simple for now
+        blocks = jax.lax.select(self.is_house_or_table_builder, blocks.at[:, 3].set(1), blocks)
         
         #add one large flat block 
         blocks = blocks.at[self.num_blocks-1, 3].set(3)#TEST
@@ -292,9 +301,6 @@ class LegoRearrangeRepresentation(Representation):
 
         x_step, z_step = self.moves[action[0][0][0]]
 
-        #x_step, z_step = self.unperturb_action(x_step, z_step, rotation)
-        
-        #curr_block_type = rep_state.blocks[rep_state.curr_block, 3]
 
         #move block
         new_blocks = rep_state.blocks.at[rep_state.curr_block, 0].add(x_step)

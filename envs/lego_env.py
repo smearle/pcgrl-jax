@@ -187,7 +187,8 @@ class LegoEnv(Environment):
                 act_shape=act_shape,
                 env_shape = map_shape,
                 n_blocks = n_blocks,
-                max_steps_multiple = max_steps_multiple
+                max_steps_multiple = max_steps_multiple,
+                reward = reward
                 #max_board_scans=env_params.max_board_scans,
             )
         else:

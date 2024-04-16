@@ -30,10 +30,11 @@ class LegoProblemState:
 
 class LegoMetrics(IntEnum):
     AVG_HEIGHT = 0
-    FOOTPRINT = 1 #num blocks touching the floor
+    FOOTPRINT = 5 #num blocks touching the floor
     AVG_EUCLIDEAN = 2
     CENTER = 3
     HOUSE = 4
+    TABLE = 1
 
 class LegoProblem(Problem):
     #tile_size = np.int8(16)
@@ -52,6 +53,7 @@ class LegoProblem(Problem):
         stat_trgs[LegoMetrics.AVG_EUCLIDEAN] = 0
         stat_trgs[LegoMetrics.CENTER] = 0
         stat_trgs[LegoMetrics.HOUSE] = 1
+        stat_trgs[LegoMetrics.TABLE] = 1
         self.stat_trgs = jnp.array(stat_trgs)
 
         self.stat_weights = jnp.where(jnp.isin(jnp.arange(self.stat_weights.size), jnp.array(reward)), 1, self.stat_weights)
@@ -69,6 +71,7 @@ class LegoProblem(Problem):
         bounds[LegoMetrics.FOOTPRINT] = [1, map_shape[0] * map_shape[2]]
         bounds[LegoMetrics.AVG_EUCLIDEAN] = [1, (map_shape[0]**2+map_shape[2]**2)**(0.5)]
         bounds[LegoMetrics.HOUSE] = [0, 1]
+        bounds[LegoMetrics.TABLE] = [0, 1]
 
         cntr_x, cntr_z = (map_shape[0]-1)//2, (map_shape[2]-1)//2        
 
@@ -102,6 +105,32 @@ class LegoProblem(Problem):
         stats = stats.at[LegoMetrics.AVG_EUCLIDEAN].set(avg_euclidean)
         stats = stats.at[LegoMetrics.CENTER].set(avg_cntr_dist)
 
+        # TO DO: fix this
+        #table_ness
+        roof_x = blocks[-1,0]
+        roof_z = blocks[-1,2]
+
+        not_table = 0
+        for block in blocks[:-1,:]:
+            curr_x, curr_y, curr_z, _ = block
+            truth_cond = jnp.logical_and(
+                jnp.logical_or(
+                    curr_x == roof_x,
+                    curr_x == roof_x + 3
+                ),
+                jnp.logical_and(
+                    jnp.logical_or(
+                        curr_z == roof_z,
+                        curr_z == roof_z + 3
+                    ),
+                    curr_y < blocks.shape[1]/4
+                ) 
+                )
+            in_position = jnp.where(truth_cond, 0, 1)
+            not_table += in_position
+        not_table += jnp.where(blocks[-1,1] == blocks.shape[1]//4, 0, 1)
+        stats = stats.at[LegoMetrics.TABLE].set(not_table == 0)
+        
         done = jnp.sum(jnp.where(stats == self.stat_trgs, 0, 1) * self.stat_weights) == 0
         
         state = LegoProblemState(

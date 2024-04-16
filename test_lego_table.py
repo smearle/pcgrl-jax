@@ -54,53 +54,81 @@ def get_expert_action(env_state):
     
     blocks = env_state.rep_state.blocks
     curr_block_inds = env_state.rep_state.curr_block
-    map_shape = env_state.env_map[0].shape
-    jax.debug.print("{c}", c=curr_block_inds)
-    n_envs = blocks.shape[0]
+    env_map = env_state.env_map
 
-    #center_x = (map_shape[0]-1)//2
-    #center_z = (map_shape[2]-1)//2
-    x_mean = jnp.mean(blocks[:,:,0], axis=1)
-    z_mean = jnp.mean(blocks[:,:,2], axis=1)
-
-    center_x = jnp.clip(jnp.round(x_mean), a_min = 2, a_max = map_shape[0]-2)
-    center_z = jnp.clip(jnp.round(z_mean), a_min = 2, a_max = map_shape[2]-2)
-
-    walls_x = jnp.concatenate(((center_x - 2)[:,jnp.newaxis], (center_x + 1)[:,jnp.newaxis]), axis=1)
-    walls_z = jnp.concatenate(((center_z - 2)[:,jnp.newaxis], (center_z + 1)[:,jnp.newaxis]), axis=1)
-    roof_x = center_x - 2
-    roof_z = center_z - 2
+    legs_x = jnp.concatenate(((blocks[:,-1,0])[:,jnp.newaxis], (blocks[:,-1,0]+3)[:,jnp.newaxis]), axis=1)#.astype(jnp.int32)
+    legs_z = jnp.concatenate(((blocks[:,-1,2])[:,jnp.newaxis], (blocks[:,-1,2]+3)[:,jnp.newaxis]), axis=1)#.astype(jnp.int32)
 
     curr_blocks = jnp.array([blocks[i, curr_block_inds[i], :] for i in range(blocks.shape[0])])
     curr_x = curr_blocks[:,0]
     curr_z = curr_blocks[:,2]
+    curr_y = curr_blocks[:,1]
     curr_block_type = curr_blocks[:,3] 
 
-    #when curr block is roof, move to roof x and roof z
-    def move_roof(curr_x, curr_z):
-        x_dir = roof_x - curr_x
-        z_dir = roof_z - curr_z
-        return x_dir, z_dir
- 
-    #when curr block is not roof, move to closest wall with an empty space
-    def move_brick(curr_x, curr_z):
-        diff_x = walls_x - curr_x[:,jnp.newaxis]
-        abs_x = jnp.abs(diff_x)
-        min_index_x = jnp.argmin(abs_x, axis=1)
-        x_dir = jnp.take_along_axis(diff_x, min_index_x[:,jnp.newaxis], axis=1).squeeze()
-
-        diff_z = walls_z - curr_z[:,jnp.newaxis]
-        abs_z = jnp.abs(diff_z)
-        min_index_z = jnp.argmin(abs_z, axis=1)
-        z_dir = jnp.take_along_axis(diff_z, min_index_z[:,jnp.newaxis], axis=1).squeeze()
-        return x_dir, z_dir
-
+    leg_num = env_state.rep_state.curr_block % 4
     
-    x_dir, z_dir = jax.lax.cond(jnp.any(curr_block_type == 3), lambda _: move_roof(curr_x, curr_z), lambda _: move_brick(curr_x, curr_z), None)
+    roof_x = blocks[:,-1,0]
+    roof_z = blocks[:,-1,2]
+
+    table_mask = jnp.zeros((4, env_map.shape[2], 4)).at[[0, -1], :, [0, -1]].set(1)
+    table_mask = table_mask.at[0,:,-1].set(1).at[-1,:,0].set(1)
+    test = jnp.count_nonzero(table_mask, axis=1)
+
+    def slice_map(carry, args):
+        env_map_i, roof_x_i, roof_z_i = args
+        sliced= jax.lax.dynamic_slice(env_map_i, start_indices=(roof_x_i, 0, roof_z_i), slice_sizes=(4, env_map_i.shape[1], 4))
+        masked_slice = jnp.where(table_mask==0, 0, sliced)
+        table_map = jax.lax.dynamic_update_slice(jnp.zeros(env_map.shape[1:]), masked_slice, (roof_x_i, 0, roof_z_i))  
+        return None, table_map
+
+    _, table_map = jax.lax.scan(slice_map, None, (env_map, roof_x, roof_z))
+
+    leg_heights = jnp.count_nonzero(table_map, axis=2)
+    leg_mask = leg_heights != 0
+    leg_heights_adjusted = jnp.where(leg_mask, leg_heights, jnp.inf)
+    min_leg_hts = jnp.argmin(leg_heights_adjusted.reshape(leg_heights.shape[0], -1), axis=1)
+    min_leg_hts_stacked = jnp.stack((min_leg_hts//leg_heights.shape[2], min_leg_hts%leg_heights.shape[2]), axis=1)
+
+    legs_x_pos = min_leg_hts_stacked[:,0]
+    legs_z_pos = min_leg_hts_stacked[:,1]
+
+    #legs_x_pos = jax.lax.select(leg_num < 2, legs_x[:,0], legs_x[:,1])
+    #legs_z_pos = jax.lax.select(leg_num % 2==0, legs_z[:,0], legs_z[:,1])
+    #legs_x_pos = jax.lax.select(curr_block_type == 3, legs_x[:,0], legs_x_pos)
+    #legs_z_pos = jax.lax.select(curr_block_type == 3, legs_z[:,0], legs_z_pos)
+        
+    x_dir = legs_x_pos-curr_x
+    z_dir = legs_z_pos-curr_z
+
+    #when block is large flat, don't move
+    x_dir = jnp.where(curr_block_type == 3, 0, x_dir)
+    z_dir = jnp.where(curr_block_type == 3, 0, z_dir)
+
     #jax.debug.breakpoint()
+
+
+    #when block is already in a leg, don't move
+    truth_cond = jnp.logical_and(
+        jnp.logical_or(
+            curr_x == roof_x,
+            curr_x == roof_x + 3
+        ),
+        jnp.logical_and(
+            jnp.logical_or(
+                curr_z == roof_z,
+                curr_z == roof_z + 3
+            ),
+            curr_y < blocks.shape[1]/4
+        ) 
+        )
+    x_dir = jnp.where(truth_cond, 0, x_dir)
+    z_dir = jnp.where(truth_cond, 0, z_dir)
+
     x_moves = jnp.clip(x_dir, a_min = -1, a_max = 1).reshape(x_dir.shape[0], 1)
     z_moves = jnp.clip(z_dir, a_min = -1, a_max = 1).reshape(x_dir.shape[0], 1)
     z_moves = jnp.where(x_moves==0, z_moves, 0)
+    
+    #jax.debug.breakpoint()
     
     #get action for each env
     combined_actions = jnp.concatenate((x_moves, z_moves), axis=1)
@@ -116,12 +144,10 @@ def get_expert_action(env_state):
         return indices
 
     actions = find_indices(combined_actions, moves)
-    
-    #jax.debug.print("goal: {goalx} {goaly}", goalx = center_x, goaly=center_z)
-    #jax.debug.print("current x pos: {x}.\n current z pos: {z}.\n xmoves: {xmoves}.\n zmoves: {zmoves}.\n combined: {combined_actions}.\n actions: {acts}", x = curr_x, z = curr_z, xmoves = x_moves, zmoves = z_moves, acts = actions, combined_actions = combined_actions)
-    
     actions = actions.reshape(actions.shape[0], 1, 1, 1)
+
     return actions
+
 
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
@@ -206,7 +232,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             # TODO: Overwrite certain config values
 
-        
         def render_frames(frames, i, env_states=None):
             if i % config.render_freq != 0:
             # if jnp.all(frames == 0):
@@ -214,7 +239,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             
             is_finished = env_states.done
            
-        
             # Save gifs.
             for ep_is in range(config.n_render_eps):
                 gif_name = f"{config.exp_dir}/update-{i}_ep-{ep_is}.gif"
@@ -236,7 +260,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     return
             print(f"Done rendering episode gifs at update {i}")
 
-  
         def render_mpds(blocks, i, states):
 
             if i % config.render_freq != 0:
@@ -267,7 +290,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     #rotation = ep_rotations[num]
                     curr_block = ep_curr_blocks[num]
                     action = actions[num]
-
 
                     savename = os.path.join(savedir, f"{num}_a{action}.mpd")
                     
@@ -445,7 +467,7 @@ def gen_dummy_queued_state(config, env, frz_rng):
 @hydra.main(version_base=None, config_path='./', config_name='lego_pcgrl')
 def main(config: TrainConfig):
     config.learning_mode = "TEST"
-    config.reward = ("HOUSE",)
+    config.reward = ("TABLE",)
     config = init_config(config, evo=False)
     rng = jax.random.PRNGKey(config.seed)
 
