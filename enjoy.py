@@ -27,9 +27,11 @@ def main_enjoy(enjoy_config: EnjoyConfig):
         runner_state = restored_ckpt['runner_state']
         network_params = runner_state.train_state.params
         steps_prev_complete = restored_ckpt['steps_prev_complete']
-    elif not os.path.exists(exp_dir):
-        os.makedirs(exp_dir)
+    else:
+        if not os.path.exists(exp_dir):
+            os.makedirs(exp_dir)
         steps_prev_complete = 0
+    
 
 
     if enjoy_config.render_ims:
@@ -68,7 +70,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
         rng, obs, env_state = carry
         rng, rng_act = jax.random.split(rng)
         if enjoy_config.random_agent:
-            action = env.action_space(env_params).sample(rng_act)
+            action = env.action_space(env_params).sample(rng_act)[None, None, None, None]
         else:
             # obs = jax.tree_map(lambda x: x[None, ...], obs)
             action = network.apply(network_params, obs)[
