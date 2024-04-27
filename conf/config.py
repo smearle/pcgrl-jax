@@ -32,7 +32,7 @@ class Config:
     seed: int = 0
 
     problem: str = "binary"
-    representation: str = "turtle"
+    representation: str = "narrow"
     model: str = "conv"
 
     map_width: int = 16
@@ -54,7 +54,7 @@ class Config:
 
     static_tile_prob: Optional[float] = 0.0
     n_freezies: int = 0
-    n_agents: int = 12   # multi-agent is fake and broken
+    n_agents: int = 1   # multi-agent is fake and broken
     max_board_scans: float = 3.0
 
     # How many milliseconds to wait between frames of the rendered gifs

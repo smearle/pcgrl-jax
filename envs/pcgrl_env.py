@@ -408,7 +408,8 @@ class PCGRLEnv(Environment):
         return self.rep.observation_space()
 
     def action_shape(self):
-        return (self.n_agents, *self.act_shape, self.rep.tile_action_dim)
+        return (*self.act_shape, self.rep.tile_action_dim)
+        #return (self.n_agents, *self.act_shape, self.rep.tile_action_dim)
 
     def gen_dummy_obs(self, env_params: PCGRLEnvParams):
         map_x = jnp.zeros((1,) + self.observation_space(env_params).shape)

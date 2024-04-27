@@ -31,11 +31,15 @@ def main(config):
     dummy_queued_state = gen_dummy_queued_state(env)
     obs, state = env.reset_env(jax.random.key(0), env_params, dummy_queued_state)
 
+    vmap_sample_action = jax.vmap(env.sample_action)
+
     frames = []
     rng = jax.random.key(94)
     for _ in range(1000):
         rng, this_rng, that_rng = jax.random.split(rng, 3)
-        obs, state, reward, done, info = env.step(this_rng, state, jnp.squeeze(env.sample_action(that_rng)), env_params)
+        sample_action_keys = jax.random.split(that_rng, env_params.n_agents)
+        actions = vmap_sample_action(sample_action_keys)
+        obs, state, reward, done, info = env.step(this_rng, state, actions, env_params)
         frame = env.render(state)
         frames.append(frame)
 

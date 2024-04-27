@@ -52,10 +52,9 @@ class TurtleRepresentation(Representation):
     def step_turtle(self, env_map, action, a_pos):
         action = action[..., 0]
         # Sum directions over tilewise actions (jumping turtle).
-        #print("action is: ", action)
-        #print(jnp.array(self.directions)[action])
-        #deltas = jnp.array(self.directions)[action].sum((0, 1))
-        new_pos = a_pos + self.directions[action]
+        deltas = jnp.array(self.directions)[action].sum((0, 1))
+        new_pos = a_pos + deltas
+        # new_pos = a_pos + self.directions[action]
         new_pos = jnp.clip(
             new_pos,
             np.array((0, 0)),
@@ -65,7 +64,7 @@ class TurtleRepresentation(Representation):
         new_pos = jax.lax.select(can_move, new_pos, a_pos)
 
         # Meaningless if agent is moving.
-        build = self.builds[action].reshape((1,1))
+        build = self.builds[action]
         # nem = env_map.at[new_pos[0], new_pos[1]].set(jnp.array(b, int))
         new_env_map = jax.lax.dynamic_update_slice(env_map, build, new_pos)
         new_env_map = jnp.where(new_env_map != -1, new_env_map, env_map)
@@ -124,8 +123,8 @@ class MultiTurtleRepresentation(TurtleRepresentation):
             # unpack both carry and x
             new_env_map, map_changed = carry
             a_pos, a_action = x
-
-            new_env_map, a_map_changed, new_a_pos = self.step_turtle(new_env_map, a_action, a_pos)
+            
+            new_env_map, a_map_changed, new_a_pos = self.step_turtle(new_env_map, jnp.squeeze(a_action, axis=0), a_pos)
             map_changed = jnp.logical_or(map_changed, a_map_changed)
         
             carry = new_env_map, map_changed
