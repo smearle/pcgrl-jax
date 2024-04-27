@@ -153,21 +153,12 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     elif config.model == "conv":
          
         network = ConvForward(
-<<<<<<< HEAD
                 action_dim=action_dim, activation=config.activation,
                 arf_size=config.arf_size, act_shape=config.act_shape,
                 vrf_size=config.vrf_size,
                 hidden_dims=config.hidden_dims,
             )  
              
-=======
-            action_dim=action_dim, activation=config.activation,
-            arf_size=config.arf_size, act_shape=config.act_shape,
-            vrf_size=config.vrf_size,
-            hidden_dims=config.hidden_dims,
-        )
-            
->>>>>>> 2430a109b1e064b95a69185114fcc6e1300f7e79
     elif config.model == "conv2":
         network = ConvForward2(
             action_dim=action_dim, activation=config.activation,
