@@ -94,8 +94,6 @@ def init_config(config: Config):
     
     else:
 
-        assert config.arf_size==-1 and config.vrf_size==-1, "Bug in Turtle get_ego_obs for non full observation, check jax.lax.dynamic_slice, line 76 in representation.py"
-
         config.arf_size = (2 * config.map_width -
                         1 if config.arf_size==-1 else config.arf_size)
         
