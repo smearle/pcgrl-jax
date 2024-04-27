@@ -32,7 +32,7 @@ class Config:
     seed: int = 0
 
     problem: str = "binary"
-    representation: str = "narrow"
+    representation: str = "turtle"
     model: str = "conv"
 
     map_width: int = 16
@@ -40,6 +40,7 @@ class Config:
     is_3d: bool = False
     # ctrl_metrics: Tuple[str] = ('diameter', 'n_regions')
     ctrl_metrics: Tuple[str] = ()
+    
     # Size of the receptive field to be fed to the action subnetwork.
     vrf_size: Optional[int] = -1  # -1 means 2 * map_width - 1, i.e. full observation, 31 if map_width=16
     # Size of the receptive field to be fed to the value subnetwork.
@@ -53,7 +54,7 @@ class Config:
 
     static_tile_prob: Optional[float] = 0.0
     n_freezies: int = 0
-    n_agents: int = 1  # multi-agent is fake and broken
+    n_agents: int = 12   # multi-agent is fake and broken
     max_board_scans: float = 3.0
 
     # How many milliseconds to wait between frames of the rendered gifs

@@ -14,6 +14,7 @@ from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
 from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, ConvForward2, Dense, NCA, SeqNCA
 
+import flax
 
 def get_exp_dir_evo_map(config: EvoMapConfig):
     exp_dir = os.path.join(
@@ -92,6 +93,9 @@ def init_config(config: Config):
         config.act_shape = (config.map_width, config.map_width)
     
     else:
+
+        assert config.arf_size==-1 and config.vrf_size==-1, "Bug in Turtle get_ego_obs for non full observation, check jax.lax.dynamic_slice, line 76 in representation.py"
+
         config.arf_size = (2 * config.map_width -
                         1 if config.arf_size==-1 else config.arf_size)
         
@@ -142,19 +146,36 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     
     else:
         action_dim = env.num_actions
-
+    
     if config.model == "dense":
         network = Dense(
             action_dim, activation=config.activation,
             arf_size=config.arf_size, vrf_size=config.vrf_size,
         )
     elif config.model == "conv":
+         
         network = ConvForward(
-            action_dim=action_dim, activation=config.activation,
-            arf_size=config.arf_size, act_shape=config.act_shape,
-            vrf_size=config.vrf_size,
-            hidden_dims=config.hidden_dims,
-        )
+                action_dim=action_dim, activation=config.activation,
+                arf_size=config.arf_size, act_shape=config.act_shape,
+                vrf_size=config.vrf_size,
+                hidden_dims=config.hidden_dims,
+            )  
+        
+        if config.n_agents > 1:
+    
+            print("Creating multiple models")
+            batched_conv  = flax.linen.vmap(ConvForward,
+                            in_axes=0, out_axes=0,
+                            variable_axes={'params': 0}, # should vectorize across parameters
+                            split_rngs={'params': True}) # vectorize the rng too -> diff params
+            network = batched_conv(
+                    action_dim=action_dim, activation=config.activation,
+                    arf_size=config.arf_size, act_shape=config.act_shape,
+                    vrf_size=config.vrf_size,
+                    hidden_dims=config.hidden_dims
+                    )
+            print("Successfully created batch_conv networks")
+            
     elif config.model == "conv2":
         network = ConvForward2(
             action_dim=action_dim, activation=config.activation,
@@ -184,7 +205,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     else:
         raise Exception(f"Unknown model {config.model}")
     # if config.env_name == 'PCGRL':
-    if 'PCGRL' in config.env_name:
+    if 'PCGRL' in config.env_name: 
         network = ActorCriticPCGRL(network, act_shape=config.act_shape,
                             n_agents=config.n_agents, n_ctrl_metrics=len(config.ctrl_metrics))
     # elif config.env_name == 'PlayPCGRL':
