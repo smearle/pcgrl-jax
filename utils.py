@@ -94,8 +94,6 @@ def init_config(config: Config):
     
     else:
 
-        assert config.arf_size==-1 and config.vrf_size==-1, "Bug in Turtle get_ego_obs for non full observation, check jax.lax.dynamic_slice, line 76 in representation.py"
-
         config.arf_size = (2 * config.map_width -
                         1 if config.arf_size==-1 else config.arf_size)
         
@@ -155,12 +153,21 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     elif config.model == "conv":
          
         network = ConvForward(
+<<<<<<< HEAD
                 action_dim=action_dim, activation=config.activation,
                 arf_size=config.arf_size, act_shape=config.act_shape,
                 vrf_size=config.vrf_size,
                 hidden_dims=config.hidden_dims,
             )  
              
+=======
+            action_dim=action_dim, activation=config.activation,
+            arf_size=config.arf_size, act_shape=config.act_shape,
+            vrf_size=config.vrf_size,
+            hidden_dims=config.hidden_dims,
+        )
+            
+>>>>>>> 2430a109b1e064b95a69185114fcc6e1300f7e79
     elif config.model == "conv2":
         network = ConvForward2(
             action_dim=action_dim, activation=config.activation,
