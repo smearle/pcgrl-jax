@@ -157,22 +157,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 arf_size=config.arf_size, act_shape=config.act_shape,
                 vrf_size=config.vrf_size,
                 hidden_dims=config.hidden_dims,
-            )  
-        
-        if config.n_agents > 1:
-    
-            print("Creating multiple models")
-            batched_conv  = flax.linen.vmap(ConvForward,
-                            in_axes=0, out_axes=0,
-                            variable_axes={'params': 0}, # should vectorize across parameters
-                            split_rngs={'params': True}) # vectorize the rng too -> diff params
-            network = batched_conv(
-                    action_dim=action_dim, activation=config.activation,
-                    arf_size=config.arf_size, act_shape=config.act_shape,
-                    vrf_size=config.vrf_size,
-                    hidden_dims=config.hidden_dims
-                    )
-            print("Successfully created batch_conv networks")
+            )
             
     elif config.model == "conv2":
         network = ConvForward2(
