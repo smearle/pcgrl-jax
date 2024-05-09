@@ -69,10 +69,11 @@ def get_ego_obs(self, env_map: chex.Array, static_map: chex.Array,
                 rep_state: RepresentationState):
     # Do not observe the frozenness of BORDER tiles used to crop the map with `randomize_map_shape`
     static_map = jnp.where(env_map == self.tile_enum.BORDER, 0, static_map)
-
+    
     padded_env_map = jnp.pad(
         env_map, self.rf_off, mode='constant',
         constant_values=self.tile_enum.BORDER)
+
     rf_map_obs = jax.lax.dynamic_slice(
         padded_env_map,
         rep_state.pos,

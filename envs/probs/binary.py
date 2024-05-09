@@ -13,7 +13,6 @@ from envs.pathfinding import FloodPath, FloodPathState, FloodRegions, FloodRegio
 from envs.probs.problem import Problem, ProblemState, get_reward
 from envs.utils import Tiles
 
-
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
 class BinaryTiles(IntEnum):
@@ -57,13 +56,25 @@ class BinaryProblem(Problem):
 
     passable_tiles = jnp.array([BinaryTiles.EMPTY])
 
-    def __init__(self, map_shape, ctrl_metrics, pinpoints):
+    def __init__(self, map_shape, ctrl_metrics, pinpoints, num_agents=1):
         self.flood_path_net = FloodPath()
         self.flood_path_net.init_params(map_shape)
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
         self.max_path_len = get_max_path_length_static(map_shape)
+        self.n_agents = num_agents
         super().__init__(map_shape=map_shape, ctrl_metrics=ctrl_metrics, pinpoints=pinpoints)
+
+        if self.n_agents > 1:
+            stat_weights = np.zeros((len(BinaryMetrics), self.n_agents))
+            stat_weights[BinaryMetrics.DIAMETER] = jnp.array([1.0] * self.n_agents)
+            stat_weights[BinaryMetrics.N_REGIONS] = jnp.array([1.0] * self.n_agents)
+            self.stat_weights = jnp.array(stat_weights)
+
+            stat_trgs = np.zeros((len(BinaryMetrics), self.n_agents))
+            stat_trgs[BinaryMetrics.DIAMETER] = jnp.array([jnp.inf] * self.n_agents)
+            stat_trgs[BinaryMetrics.N_REGIONS] = jnp.array([1] * self.n_agents)
+            self.stat_trgs = stat_trgs
 
     def get_metric_bounds(self, map_shape):
         bounds = [None] * len(BinaryMetrics)

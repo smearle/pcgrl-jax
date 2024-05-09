@@ -30,19 +30,29 @@ def get_reward(stats, old_stats, stat_weights, stat_trgs, ctrl_threshes):
     ctrl_threshes: A vector of thresholds for each metric. If the metric is within
         an interval of this size centered at its target value, it has 0 loss.
     """
+    if stat_trgs.ndim > 1: # for multi-agent setting
+        stats = stats[..., None]
+        old_stats = old_stats[..., None]
+        ctrl_threshes = ctrl_threshes[..., None]
     prev_loss = jnp.abs(stat_trgs - old_stats)
-    prev_loss = jnp.clip(prev_loss - ctrl_threshes, 0)
+    prev_loss = jnp.clip(prev_loss - ctrl_threshes, 0)    
     loss = jnp.abs(stat_trgs - stats)
     loss = jnp.clip(loss - ctrl_threshes, 0)
     reward = prev_loss - loss
     reward = jnp.where(stat_trgs == jnp.inf, stats - old_stats, reward)
     reward = jnp.where(stat_trgs == -jnp.inf, old_stats - stats, reward)
     reward *= stat_weights
-    reward = jnp.sum(reward)
+    if stat_trgs.ndim > 1:
+        reward = jnp.sum(reward, axis=0)
+    else:
+        reward = jnp.sum(reward)
     return reward
 
     
 def get_max_loss(stat_weights, stat_trgs, ctrl_threshes, metric_bounds):
+    if stat_trgs.ndim > 1:
+        metric_bounds = metric_bounds[..., None]
+        ctrl_threshes = ctrl_threshes[..., None]
     stat_trgs = jnp.clip(stat_trgs, metric_bounds[:, 0], metric_bounds[:, 1])
     loss_0 = jnp.abs(stat_trgs - metric_bounds[:, 0])
     loss_1 = jnp.abs(stat_trgs - metric_bounds[:, 1])
@@ -141,6 +151,7 @@ class Problem:
         self.ctrl_metrics = np.array(ctrl_metrics, dtype=int)
         self.ctrl_metrics_mask = np.array([i in ctrl_metrics for i in range(len(self.stat_trgs))])
 
+
         if self.ctrl_threshes is None:
             self.ctrl_threshes = np.zeros(len(self.stat_trgs))
 
@@ -209,8 +220,12 @@ class Problem:
         #     self.ascii_chars_to_ims[char] = char_im
 
     def observe_ctrls(self, prob_state: ProblemState):
-        obs = jnp.zeros(len(self.metrics_enum))
-        obs = jnp.where(self.ctrl_metrics_mask, jnp.sign(prob_state.ctrl_trgs - prob_state.stats), obs)
+        if self.n_agents > 1:
+            obs = jnp.zeros((len(self.metrics_enum), self.n_agents))
+            obs = jnp.where(self.ctrl_metrics_mask[..., None], jnp.sign(prob_state.ctrl_trgs - prob_state.stats[..., None]), obs)
+        else:
+            obs = jnp.zeros(len(self.metrics_enum))
+            obs = jnp.where(self.ctrl_metrics_mask, jnp.sign(prob_state.ctrl_trgs - prob_state.stats), obs)
         # Return a vector of only the metrics we're controlling
         obs = obs[self.ctrl_metric_obs_idxs]
         return obs
@@ -218,24 +233,37 @@ class Problem:
     def gen_rand_ctrl_trgs(self, rng, actual_map_shape):
         metric_bounds = self.get_metric_bounds(actual_map_shape)
         # Randomly sample some control targets
-        ctrl_trgs =  jnp.where(
-            self.ctrl_metrics_mask,
-            gen_ctrl_trgs(metric_bounds, rng),
-            self.stat_trgs,
-        )
+        if self.n_agents > 1:
+            vmap_gen = jax.vmap(gen_ctrl_trgs, in_axes=(None, 0))
+            new_keys = jax.random.split(rng, self.n_agents)
+            ctrl_trgs = jnp.where(
+                jnp.expand_dims(self.ctrl_metrics_mask, 1),
+                vmap_gen(metric_bounds, new_keys).T, #Transpose because VMAP outputs [n_agents, num_ctrl_metrics]
+                self.stat_trgs # while this is defined as [num_ctrl_metrics, n_agents]
+                )
+        else:
+            ctrl_trgs =  jnp.where(
+                self.ctrl_metrics_mask,
+                gen_ctrl_trgs(metric_bounds, rng),
+                self.stat_trgs,
+            )
         return ctrl_trgs
 
     def reset(self, env_map: chex.Array, rng, queued_state, actual_map_shape):
+        if self.n_agents > 1:
+            queued_state = queued_state.replace(ctrl_trgs=jnp.tile(queued_state.ctrl_trgs, (3,1)).T)
+        
         ctrl_trgs = jax.lax.select(
             queued_state.has_queued_ctrl_trgs,
             queued_state.ctrl_trgs,
             self.gen_rand_ctrl_trgs(rng, actual_map_shape),
         )
-
+        
         state = self.get_curr_stats(env_map)
         state = state.replace(
             ctrl_trgs=ctrl_trgs,
         )
+
         reward = None
         return reward, state
 

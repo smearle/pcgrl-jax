@@ -101,13 +101,14 @@ class DungeonProblem(Problem):
                                 # DungeonTiles.SCORPION, DungeonTiles.SPIDER,
                                 # DungeonTiles.BAT])
 
-    def __init__(self, map_shape, ctrl_metrics, pinpoints):
+    def __init__(self, map_shape, ctrl_metrics, pinpoints, num_agents=1):
         self.flood_path_net = FloodPath()
         self.flood_path_net.init_params(map_shape)
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
         self.max_path_len = get_max_path_length_static(map_shape)
         self.n_tiles = math.prod(map_shape)
+        self.n_agents = num_agents
 
         # Note that we implement target intervals by using target floats
         # and thresholds (i.e. allowable margins of error around the target
@@ -129,6 +130,36 @@ class DungeonProblem(Problem):
         self.stat_trgs = idx_dict_to_arr(stat_trgs)
         self.ctrl_threshes[DungeonMetrics.N_ENEMIES] = 3
         self.ctrl_threshes[DungeonMetrics.NEAREST_ENEMY] = self.n_tiles - 2
+
+        if self.n_agents > 1:
+            
+            stat_weights = {
+                DungeonMetrics.N_REGIONS: jnp.array([5]*self.n_agents),
+                DungeonMetrics.N_PLAYERS: jnp.array([3]*self.n_agents),
+                DungeonMetrics.N_ENEMIES: jnp.array([3]*self.n_agents),
+                DungeonMetrics.N_KEYS: jnp.array([3]*self.n_agents),
+                DungeonMetrics.N_DOORS: jnp.array([3]*self.n_agents),
+                DungeonMetrics.NEAREST_ENEMY: jnp.array([2]*self.n_agents),
+                DungeonMetrics.PATH_LENGTH: jnp.array([1]*self.n_agents),
+            }
+            self.stat_weights = idx_dict_to_arr(stat_weights)
+
+
+            stat_trgs = {
+                DungeonMetrics.N_REGIONS: jnp.array([1]*self.n_agents),
+                DungeonMetrics.N_PLAYERS: jnp.array([1]*self.n_agents),
+                DungeonMetrics.N_KEYS: jnp.array([1]*self.n_agents),
+                DungeonMetrics.N_DOORS: jnp.array([1]*self.n_agents),
+                # DungeonMetrics.N_ENEMIES: (2, 5),
+                DungeonMetrics.N_ENEMIES: jnp.array([3.5]*self.n_agents),
+                DungeonMetrics.PATH_LENGTH: jnp.array([np.inf]*self.n_agents),
+                # DungeonMetrics.NEAREST_ENEMY: (2, np.inf),
+
+                # FIXME: This should be max_path_len
+                DungeonMetrics.NEAREST_ENEMY: jnp.array([self.n_tiles]*self.n_agents),
+            }
+
+            self.stat_trgs = idx_dict_to_arr(stat_trgs) 
 
         super().__init__(map_shape=map_shape, ctrl_metrics=ctrl_metrics, pinpoints=pinpoints)
 
