@@ -72,12 +72,33 @@ class MazeProblem(Problem):
 
     passable_tiles = jnp.array([MazeTiles.EMPTY, MazeTiles.PLAYER, MazeTiles.DOOR])
 
-    def __init__(self, map_shape, ctrl_metrics, pinpoints):
+    def __init__(self, map_shape, ctrl_metrics, pinpoints, num_agents=1):
         self.flood_path_net = FloodPath()
         self.flood_path_net.init_params(map_shape)
         self.flood_regions_net = FloodRegions()
         self.flood_regions_net.init_params(map_shape)
         self.max_path_len = get_max_path_length_static(map_shape)
+        self.n_agents = num_agents
+
+        if self.n_agents > 1:
+            
+            stat_weights = np.zeros((len(MazeMetrics), self.n_agents))
+            stat_weights[MazeMetrics.PATH_LENGTH] = jnp.array([1.0] * self.n_agents)
+            stat_weights[MazeMetrics.N_REGIONS] = jnp.array([1.0] * self.n_agents)
+            stat_weights[MazeMetrics.N_PLAYERS] = jnp.array([1.0] * self.n_agents)
+            stat_weights[MazeMetrics.N_DOORS] = jnp.array([1.0] * self.n_agents)
+            self.stat_weights = jnp.array(stat_weights)
+
+            stat_trgs = np.zeros((len(MazeMetrics), self.n_agents))
+            stat_trgs[MazeMetrics.PATH_LENGTH] = jnp.array([np.inf] * self.n_agents)
+            stat_trgs[MazeMetrics.N_REGIONS] = jnp.array([1] * self.n_agents)
+            stat_trgs[MazeMetrics.N_PLAYERS] = jnp.array([1] * self.n_agents)
+            stat_trgs[MazeMetrics.N_DOORS] = jnp.array([1] * self.n_agents)
+            self.stat_trgs = jnp.array(stat_trgs)
+
+
+
+
         super().__init__(map_shape, ctrl_metrics, pinpoints)
 
     def get_metric_bounds(self, map_shape):

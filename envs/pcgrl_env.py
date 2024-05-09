@@ -194,7 +194,7 @@ class PCGRLEnv(Environment):
 
         prob_cls = PROB_CLASSES[problem]
         self.prob: Problem = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics,
-                                      pinpoints=self.pinpoints)
+                                      pinpoints=self.pinpoints, num_agents=n_agents)
 
         self.tile_enum = self.prob.tile_enum
         self.tile_probs = self.prob.tile_probs
@@ -323,13 +323,17 @@ class PCGRLEnv(Environment):
         rng, _ = jax.random.split(rng)
         _, prob_state = self.prob.reset(env_map=env_map, rng=rng, queued_state=queued_state,
                                         actual_map_shape=actual_map_shape)
-
+        
         obs = self.get_obs(
             env_map=env_map, frz_map=frz_map, rep_state=rep_state, prob_state=prob_state)
-
+        
+        # reward change here
+        reward = 0.0
+        if self.n_agents > 1:
+            reward = jnp.zeros(self.n_agents)
         env_state = PCGRLEnvState(env_map=env_map, static_map=frz_map,
                                   rep_state=rep_state, prob_state=prob_state,
-                                  step_idx=0, done=False, queued_state=queued_state)
+                                  step_idx=0, reward=reward, done=False, queued_state=queued_state)
 
         return obs, env_state
 
@@ -337,13 +341,14 @@ class PCGRLEnv(Environment):
         rep_obs = self.rep.get_obs(env_map, frz_map, rep_state)
         prob_obs = self.prob.observe_ctrls(prob_state)
         obs = PCGRLObs(map_obs=rep_obs, flat_obs=prob_obs)
+
         return obs
 
     @partial(jax.jit, static_argnums=(0, 4))
     def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
         action = action[..., None]
         if self.n_agents == 1:
-            action = action[0]
+            action = action[0][0]
         env_map, map_changed, rep_state = self.rep.step(
             env_map=env_state.env_map, action=action,
             rep_state=env_state.rep_state, step_idx=env_state.step_idx

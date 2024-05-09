@@ -123,7 +123,6 @@ class MultiTurtleRepresentation(TurtleRepresentation):
             # unpack both carry and x
             new_env_map, map_changed = carry
             a_pos, a_action = x
-            
             new_env_map, a_map_changed, new_a_pos = self.step_turtle(new_env_map, jnp.squeeze(a_action, axis=0), a_pos)
             map_changed = jnp.logical_or(map_changed, a_map_changed)
         
