@@ -20,6 +20,18 @@ from flax.training.train_state import TrainState
 import distrax
 
 
+class ActorCategorical(nn.Module):
+    action_dim: Sequence[int]
+    subnet: nn.Module
+
+    @nn.compact
+    def __call__(self, hidden, x):
+        action_logits = self.subnet.__call__(hidden, x)
+        pi = distrax.Categorical(logits=action_logits)
+
+        return hidden, pi
+
+
 class ActorRNN(nn.Module):
     action_dim: Sequence[int]
     config: MultiAgentConfig

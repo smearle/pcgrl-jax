@@ -7,7 +7,7 @@ import hydra
 import submitit
 from tqdm import tqdm
 
-from conf.config import EnjoyConfig, EvalConfig, SweepConfig, TrainConfig
+from conf.config import EnjoyConfig, EvalConfig, MultiAgentConfig, SweepConfig, TrainConfig
 from conf.config_sweeps import eval_hypers
 from utils import get_sweep_conf_path, load_sweep_hypers, write_sweep_confs
 from enjoy import main_enjoy
@@ -15,6 +15,7 @@ from eval import main_eval
 from eval_change_pct import main_eval_cp
 from plot import main as main_plot
 from train import main as main_train
+from mappo import main as main_ma_train
 from gen_hid_params_per_obs_size import get_hiddims_dict_path 
 
 
@@ -175,8 +176,13 @@ def sweep_main(cfg: SweepConfig):
     # This is a hack. Would mean that we can't overwrite trial-specific settings
     # via hydra yamls or command line arguments...
     if cfg.mode == 'train':
-        default_config = TrainConfig()
-        main_fn = main_train
+        # if cfg.n_agents > 1:
+        if cfg.multiagent:
+            default_config = MultiAgentConfig()
+            main_fn = main_ma_train
+        else:
+            default_config = TrainConfig()
+            main_fn = main_train
     elif cfg.mode == 'plot':
         default_config = TrainConfig()
         main_fn = main_plot

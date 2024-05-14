@@ -26,24 +26,12 @@ from time import perf_counter
 
 from marl.environments.spaces import Box
 from marl.environments.multi_agent_env import MultiAgentEnv
-from marl.model import ActorMLP, ActorRNN, CriticRNN, ScannedRNN
+from marl.model import ActorCategorical, ActorMLP, ActorRNN, CriticRNN, ScannedRNN
 
 from conf.config import MultiAgentConfig
 from envs.pcgrl_env import PCGRLEnv, PCGRLEnvState
-from purejaxrl.wrappers import LogEnvState
+from marl.wrappers.baselines import MALogWrapper, MultiAgentWrapper
 from utils import get_env_params_from_config, get_exp_dir, init_config
-
-
-class ActorCategorical(nn.Module):
-    action_dim: Sequence[int]
-    subnet: nn.Module
-
-    @nn.compact
-    def __call__(self, hidden, x):
-        action_logits = self.subnet.__call__(hidden, x)
-        pi = distrax.Categorical(logits=action_logits)
-
-        return hidden, pi
 
 
 @struct.dataclass
@@ -74,154 +62,6 @@ def linear_schedule(config, count):
         / config["NUM_UPDATES"]
     )
     return config["LR"] * frac
-
-
-@struct.dataclass
-class MultiAgentLogState(LogEnvState):
-    pass
-
-
-class JaxMARLWrapper(object):
-    """Base class for all jaxmarl wrappers."""
-
-    def __init__(self, env: MultiAgentEnv):
-        self._env = env
-
-    def __getattr__(self, name: str):
-        return getattr(self._env, name)
-
-    # def _batchify(self, x: dict):
-    #     x = jnp.stack([x[a] for a in self._env.agents])
-    #     return x.reshape((self._env.n_agents, -1))
-
-    def _batchify_floats(self, x: dict):
-        return jnp.stack([x[a] for a in self._env.agents])
-
-
-class LogWrapper(JaxMARLWrapper):
-    """Log the episode returns and lengths.
-    NOTE for now for envs where agents terminate at the same time.
-    """
-
-    def __init__(self, env: MultiAgentEnv, replace_info: bool = False):
-        super().__init__(env)
-        self.replace_info = replace_info
-
-    @partial(jax.jit, static_argnums=(0,))
-    def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, PCGRLEnvState]:
-        obs, env_state = self._env.reset(key)
-        env_state: PCGRLEnvState
-        state = LogEnvState(
-            env_state,
-            jnp.zeros((self._env.n_agents,)),
-            jnp.zeros((self._env.n_agents,)),
-            jnp.zeros((self._env.n_agents,)),
-            jnp.zeros((self._env.n_agents,)),
-            env_state.step_idx,
-        )
-        return obs, state
-
-    @partial(jax.jit, static_argnums=(0,))
-    def step(
-        self,
-        key: chex.PRNGKey,
-        state: LogEnvState,
-        action: Union[int, float],
-    ) -> Tuple[chex.Array, LogEnvState, float, bool, dict]:
-        obs, env_state, reward, done, info = self._env.step(
-            key=key, state=state.env_state, action=action
-        )
-        ep_done = done["__all__"]
-        new_episode_return = state.episode_returns + self._batchify_floats(reward)
-        new_episode_length = state.episode_lengths + 1
-        state = LogEnvState(
-            env_state=env_state,
-            episode_returns=new_episode_return * (1 - ep_done),
-            episode_lengths=new_episode_length * (1 - ep_done),
-            returned_episode_returns=state.returned_episode_returns * (1 - ep_done)
-            + new_episode_return * ep_done,
-            returned_episode_lengths=state.returned_episode_lengths * (1 - ep_done)
-            + new_episode_length * ep_done,
-            timestep=state.timestep + 1,
-        )
-        if self.replace_info:
-            info = {}
-        info["returned_episode_returns"] = state.returned_episode_returns
-        info["returned_episode_lengths"] = state.returned_episode_lengths
-        info["returned_episode"] = jnp.full((self._env.n_agents,), ep_done)
-        return obs, state, reward, done, info
-
-    
-class MultiAgentWrapper(JaxMARLWrapper):
-    def __init__(self, env, env_params):
-        super().__init__(env)
-        self.agents = [f'agent_{i}' for i in range(env.n_agents)]
-
-        self.observation_spaces = {i: env.observation_space(env_params) for i in self.agents}
-        self.action_spaces = {i: env.action_space(env_params) for i in self.agents}
-
-        # TODO: Don't flatten like this!
-        self.observation_spaces = {i: Box(low=-np.inf, high=np.inf, shape=(math.prod(space.shape),))
-                                   for i, space in self.observation_spaces.items()}
-        
-        self.world_state_size = math.prod(self.observation_spaces[self.agents[0]].shape)
-
-    def observation_space(self, agent: str):
-        """Observation space for a given agent."""
-        return self.observation_spaces[agent]
-
-    def action_space(self, agent: str):
-        """Action space for a given agent."""
-        return self.action_spaces[agent]
-
-    def process_observation(self, obs):
-        # TODO: Don't flatten like this!
-        new_obs = {}
-        for i, agent in enumerate(self.agents):
-            # TODO: Observe flat/scalar tings!
-            # new_obs[agent] = jnp.concat((obs.map_obs[i].flatten(), obs.flat_obs.flatten()), axis=0)
-            new_obs[agent] = obs.map_obs[i].flatten()
-        return new_obs
-
-    def reset(self, key):
-        obs, state = self._env.reset(key)
-        obs = self.process_observation(obs)
-        obs['world_state'] = jnp.stack([obs[agent] for agent in self.agents])
-
-        return obs, state
-
-    def step(self, key, state, action):
-        ma_obs = {}
-        ma_reward = {}
-        ma_done = {}
-        ma_info = {}
-        for i, agent in enumerate(self.agents):
-            # TODO: Now that we deal with multi-agent properly, here, take out the bullshit multi-agent stuff in the base
-            #   environment.
-            agent_action = action[agent][None, None]  # that is to say, wtf this garbage lmao
-            obs, state, reward, done, info = self._env.step(key, state, agent_action, agent_id=i)
-            # TODO: Consider flat/scalar tings!
-            agent_obs = obs.map_obs[i].flatten()
-            ma_obs[agent] = agent_obs
-            ma_reward[agent] = reward
-            ma_done[agent] = done
-
-            # Dimensions work differently to be compatible with JaxMARL, can fiddle with this, but meh for now
-            # ma_info[agent] = info
-
-        ma_obs['world_state'] = jnp.stack([ma_obs[agent] for agent in self.agents])
-        ma_done['__all__'] = jnp.any(jnp.stack([ma_done[agent] for agent in self.agents]))
-
-        return ma_obs, state, ma_reward, ma_done, ma_info
-
-    def get_avail_actions(self, state: PCGRLEnvState):
-        return {
-            agent: jnp.ones((self.action_space(agent).n,)) for agent in self.agents
-        }
-
-
-class MALogWrapper(LogWrapper):
-    pass
 
 
 def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
@@ -256,12 +96,13 @@ def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
                                              ))
     critic_network = CriticRNN(config=config)
     rng, _rng_actor, _rng_critic = jax.random.split(rng, 3)
-    ac_init_x = (
-        jnp.zeros((1, config.n_envs, env.observation_space(env.agents[0]).shape[0])),
-        jnp.zeros((1, config.n_envs)),
-        jnp.zeros((1, config.n_envs, env.action_space(env.agents[0]).n)),
-    )
-    ac_init_hstate = ScannedRNN.initialize_carry(config.n_envs, config.hidden_dims[0])
+    # ac_init_x = (
+    #     jnp.zeros((1, config.n_envs, env.observation_space(env.agents[0]).shape[0])),
+    #     jnp.zeros((1, config.n_envs)),
+    #     jnp.zeros((1, config.n_envs, env.action_space(env.agents[0]).n)),
+    # )
+    # ac_init_hstate = ScannedRNN.initialize_carry(config.n_envs, config.hidden_dims[0])
+    ac_init_x, ac_init_hstate = env.gen_dummy_obs(config)
     actor_network_params = actor_network.init(_rng_actor, ac_init_hstate, ac_init_x)
 
     print(actor_network.subnet.tabulate(rngs=_rng_actor, x=ac_init_x, hidden=ac_init_hstate))
