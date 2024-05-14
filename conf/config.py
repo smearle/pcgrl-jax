@@ -117,16 +117,16 @@ class TrainConfig(Config):
 @dataclass
 class MultiAgentConfig(TrainConfig):
     multiagent: bool = True
-    lr: float = 3e-4
-    update_epochs: int = 4
-    num_steps: int = 521
-    gamma: float = 0.99
-    gae_lambda: float = 0.95
-    clip_eps: float = 0.2
-    scale_clip_eps: bool = False
-    ent_coef: float = 0.0
-    vf_coef: float = 0.5
-    max_grad_norm: float = 0.25
+    # lr: float = 3e-4
+    # update_epochs: int = 4
+    # num_steps: int = 521
+    # gamma: float = 0.99
+    # gae_lambda: float = 0.95
+    # clip_eps: float = 0.2
+    # scale_clip_eps: bool = False
+    # ent_coef: float = 0.0
+    # vf_coef: float = 0.5
+    # max_grad_norm: float = 0.25
 
     model: str = 'rnn'
     representation: str = "turtle"
