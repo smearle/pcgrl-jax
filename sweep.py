@@ -4,6 +4,7 @@ import os
 import pprint
 
 import hydra
+from omegaconf import OmegaConf
 import submitit
 from tqdm import tqdm
 
@@ -35,7 +36,9 @@ def get_hiddims_dict(hiddims_dict_path):
     hid_params = json.load(open(hiddims_dict_path, 'r'))
     # Turn the dictionary of (obs_size, hid_dims) to dict with obs_size as key
     hid_dims_dict = {}
-    for obs_size, hid_dims, n_params in hid_params:
+    for model_obs_size, hid_dims, n_params in hid_params:
+        # Should we be using this model info here?
+        model, obs_size = model_obs_size
         hid_dims_dict[obs_size] = hid_dims
     return hid_dims_dict
 
@@ -65,7 +68,7 @@ def get_grid_cfgs(base_config, hypers, mode, eval_hypers={}):
     # Name of hyper, list of values
     hid_dims_dicts = {}
     for k, v in items:
-        if k == 'NAME':
+        if k == 'NAME' or k == 'multiagent':
             continue
 
         if k == 'obs_size':
@@ -171,6 +174,8 @@ def sweep_main(cfg: SweepConfig):
         write_sweep_confs(_hypers, _eval_hypers)
 
         sweep_name = _hypers[0]['NAME']
+    
+    cfg.multiagent = _hypers[0]['multiagent']
 
 
     # This is a hack. Would mean that we can't overwrite trial-specific settings
@@ -179,6 +184,7 @@ def sweep_main(cfg: SweepConfig):
         # if cfg.n_agents > 1:
         if cfg.multiagent:
             default_config = MultiAgentConfig()
+            # default_config = OmegaConf.create(default_config)
             main_fn = main_ma_train
         else:
             default_config = TrainConfig()
@@ -206,6 +212,7 @@ def sweep_main(cfg: SweepConfig):
         setattr(default_config, k, v)
 
     sweep_configs = get_sweep_cfgs(default_config, _hypers, mode=cfg.mode, eval_hypers=_eval_hypers)
+    sweep_configs = [OmegaConf.create(sc) for sc in sweep_configs]
 
     # sweep_configs = [(sc,) for sc in sweep_configs]
 

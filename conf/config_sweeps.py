@@ -471,6 +471,8 @@
 hypers = [
     {
         'NAME': 'ma_obs_size',
+        'multiagent': True,
+
         'problem': ['binary'],
         'map_width': [16],
         'n_agents': [2],
