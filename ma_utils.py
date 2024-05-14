@@ -210,7 +210,7 @@ class MultiAgentWrapper(JaxMARLWrapper):
             # ma_info[agent] = info
 
         ma_obs['world_state'] = jnp.stack([ma_obs[agent] for agent in self.agents])
-        ma_done['__all__'] = ma_done[self.agents[0]]
+        ma_done['__all__'] = jnp.any(jnp.stack([ma_done[agent] for agent in self.agents]))
 
         return ma_obs, state, ma_reward, ma_done, ma_info
 
@@ -411,8 +411,8 @@ def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PCGRLE
     
 def render_callback(env: PCGRLEnv, frames, save_dir: str, t: int, max_steps: int):
 
-    imageio.mimsave(os.path.join(save_dir, f"enjoy_{t}.gif"), np.array(frames), fps=10, loop=0)
-    wandb.log({"video": wandb.Video(os.path.join(save_dir, f"enjoy_{t}.gif"), fps=10, format="gif")})
+    imageio.mimsave(os.path.join(save_dir, f"enjoy_{t}.gif"), np.array(frames), fps=20, loop=0)
+    wandb.log({"video": wandb.Video(os.path.join(save_dir, f"enjoy_{t}.gif"), fps=20, format="gif")})
 
 
 def get_ckpt_dir(config: MultiAgentConfig):
