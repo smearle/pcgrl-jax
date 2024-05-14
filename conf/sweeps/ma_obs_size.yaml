@@ -16,6 +16,7 @@ map_width:
 - 16
 model:
 - rnn
+multiagent: true
 n_agents:
 - 2
 n_envs:
