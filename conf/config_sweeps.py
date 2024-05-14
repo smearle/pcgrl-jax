@@ -368,26 +368,26 @@
 #     },
 # ]
 
-hypers = [
-    {
-        'NAME': 'diffshape_pinpoint_maze_emptystart',
-        'model': ['conv2'],
-        'problem': ['maze'],
-        'map_width': [16],
-        'obs_size': [8, 16, 24, -1],
-        'randomize_map_shape': [True, False],
-        # 'randomize_map_shape': [True],
-        'change_pct': [-1.0],
-        # 'seed': [3, 4, 5],
-        'seed': [0, 1, 2],
-        'n_envs': [600],
-        'empty_start': [True],
-        # 'pinpoints': [True, False],
-        'pinpoints': [True],
-        'max_board_scans': [5],
-        'total_timesteps': [1_000_000_000],
-    },
-]
+# hypers = [
+#     {
+#         'NAME': 'diffshape_pinpoint_maze_emptystart',
+#         'model': ['conv2'],
+#         'problem': ['maze'],
+#         'map_width': [16],
+#         'obs_size': [8, 16, 24, -1],
+#         'randomize_map_shape': [True, False],
+#         # 'randomize_map_shape': [True],
+#         'change_pct': [-1.0],
+#         # 'seed': [3, 4, 5],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'empty_start': [True],
+#         # 'pinpoints': [True, False],
+#         'pinpoints': [True],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
 
 # hypers = [
 #     {
@@ -466,6 +466,30 @@ hypers = [
 #         'obs_size_hid_dims': [8, 16, 24, 31],
 #     },
 # ]
+
+
+hypers = [
+    {
+        'NAME': 'ma_obs_size',
+        'problem': ['binary'],
+        'map_width': [16],
+        'n_agents': [2],
+        'representation': ['turtle'],
+        'model': ['rnn'],
+        'obs_size_hid_dims': [3, 5, 8, 16, -1],
+        # 'randomize_map_shape': [True, False],
+        # 'randomize_map_shape': [True],
+        # 'change_pct': [-1.0],
+        # 'seed': [3, 4, 5],
+        # 'seed': [0, 1, 2],
+        'n_envs': [400],
+        'empty_start': [False],
+        # 'pinpoints': [True, False],
+        'total_timesteps': [1_000_000_000],
+        'ckpt_freq': [100],
+        'render_freq': [100],
+    },
+]
 
 eval_hypers = {
     'eval_randomize_map_shape': [True, False],

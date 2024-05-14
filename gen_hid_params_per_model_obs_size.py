@@ -10,21 +10,29 @@ import numpy as np
 
 from conf.config import EnjoyConfig
 from envs.pcgrl_env import PCGRLEnv
+from marl.wrappers.baselines import MultiAgentWrapper
 from utils import init_network, gymnax_pcgrl_make, init_config
 
 
 models = [
-    'seqnca', 
-    'conv2',
-    'conv'
+    # 'seqnca', 
+    # 'conv2',
+    # 'conv'
+    'rnn'
 ]
 
 def compute_n_params(config):
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     network = init_network(env, env_params, config)
     rng = jax.random.PRNGKey(42)
-    init_x = env.gen_dummy_obs(env_params)
-    network_params = network.init(rng, init_x)
+    if config.model == 'rnn':
+        # FIXME: Hack
+        env = MultiAgentWrapper(env, env_params)
+        init_x, init_hstate = env.gen_dummy_obs(config)
+        network_params = network.init(rng, init_hstate, init_x)
+    else:
+        init_x = env.gen_dummy_obs(env_params)
+        network_params = network.init(rng, init_x)
     _rng = jax.random.PRNGKey(42)
     # print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
 
