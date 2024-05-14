@@ -102,7 +102,7 @@ class MultiTurtleRepresentation(TurtleRepresentation):
                          max_board_scans=max_board_scans, pinpoints=pinpoints, tile_nums=tile_nums)
         self.map_shape = map_shape
         self.max_steps = int(math.ceil(self.max_steps / n_agents))
-        self.n_agents = n_agents
+        self.n_agents = int(n_agents)
         self.act_coords = np.argwhere(np.ones(map_shape))
 
     def observation_shape(self):
@@ -169,7 +169,9 @@ class MultiTurtleRepresentation(TurtleRepresentation):
                                         constant_values=1)  # Border is static
 
         # Iterating through agents
-        for i, a_pos in enumerate(rep_state.pos):
+        # for i, a_pos in enumerate(rep_state.pos):
+        for i in range(self.n_agents):
+            a_pos = rep_state.pos[i]
             rf_map_obs = jax.lax.dynamic_slice(
                 padded_env_map,
                 a_pos,
