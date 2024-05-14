@@ -117,12 +117,14 @@ class TrainConfig(Config):
 class MultiAgentConfig(TrainConfig):
     representation: str = "turtle"
     n_agents: int = 2
+    n_envs: int = 300
     scale_clip_eps: bool = False
-    hidden_dims: Tuple[int] = (256, -1)
+    hidden_dims: Tuple[int] = (512, -1)
     empty_start: bool = True
 
     # Save a checkpoint after (at least) this many ***update*** steps
-    ckpt_freq: int = 1
+    ckpt_freq: int = 40
+    render_freq: int = 20
 
     # WandB Params
     WANDB_MODE: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
