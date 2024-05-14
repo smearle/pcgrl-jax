@@ -114,6 +114,28 @@ class TrainConfig(Config):
 
 
 @dataclass
+class MultiAgentConfig(TrainConfig):
+    representation: str = "turtle"
+    n_agents: int = 2
+    scale_clip_eps: bool = False
+    hidden_dims: Tuple[int] = (256, -1)
+
+    # WandB Params
+    WANDB_MODE: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
+    ENTITY: str = ''
+    PROJECT: str = 'smearle_pcgrl_mappo'
+
+    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
+    _num_actors: int = -1
+    _minibatch_size: int = -1
+    _num_updates: int = -1
+    _exp_dir: Optional[str] = None
+    _ckpt_dir: Optional[str] = None
+    _vid_dir: Optional[str] = None
+    ###########################################################################
+
+
+@dataclass
 class TrainAccelConfig(TrainConfig):
     evo_freq: int = 10
     evo_pop_size: int = 10
@@ -169,6 +191,7 @@ class SweepConfig(EnjoyConfig, EvalConfig):
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
+cs.store(name="ma_config", node=MultiAgentConfig)
 cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
