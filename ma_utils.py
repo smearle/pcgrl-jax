@@ -13,6 +13,7 @@ import jax
 import jax.numpy as jnp
 import flax.linen as nn
 from flax import struct
+from flax.training import orbax_utils
 import numpy as np
 import optax
 import orbax.checkpoint as ocp
@@ -198,10 +199,10 @@ class MultiAgentWrapper(JaxMARLWrapper):
             # TODO: Now that we deal with multi-agent properly, here, take out the bullshit multi-agent stuff in the base
             #   environment.
             agent_action = action[agent][None, None]  # that is to say, wtf this garbage lmao
-            obs, next_state, reward, done, info = self._env.step(key, state, agent_action, agent_id=i)
+            obs, state, reward, done, info = self._env.step(key, state, agent_action, agent_id=i)
             # TODO: Consider flat/scalar tings!
-            obs = obs.map_obs[0].flatten()
-            ma_obs[agent] = obs
+            agent_obs = obs.map_obs[i].flatten()
+            ma_obs[agent] = agent_obs
             ma_reward[agent] = reward
             ma_done[agent] = done
 
@@ -211,7 +212,7 @@ class MultiAgentWrapper(JaxMARLWrapper):
         ma_obs['world_state'] = jnp.stack([ma_obs[agent] for agent in self.agents])
         ma_done['__all__'] = ma_done[self.agents[0]]
 
-        return ma_obs, next_state, ma_reward, ma_done, ma_info
+        return ma_obs, state, ma_reward, ma_done, ma_info
 
     def get_avail_actions(self, state: PCGRLEnvState):
         return {
@@ -325,7 +326,7 @@ def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
 
 def restore_run(config: MultiAgentConfig, runner_state: RunnerState, ckpt_manager, latest_update_step: int):
     if latest_update_step is not None:
-        runner_state = ckpt_manager.restore(latest_update_step, args=ocp.args.StandardRestore(runner_state))
+        runner_state = ckpt_manager.restore(latest_update_step, items=runner_state)
         with open(os.path.join(config._exp_dir, "wandb_run_id.txt"), "r") as f:
             wandb_run_id = f.read()
     else:
@@ -394,7 +395,9 @@ def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PCGRLE
         # Concatenate the init_state to the states
         states = jax.tree.map(lambda x, y: jnp.concatenate([x[None], y], axis=0), init_state, states)
 
-        return states
+        frames = jax.vmap(env.render)(states.env_state)
+
+        return frames
 
     return jax.jit(sim_render_episode)
 
@@ -406,20 +409,10 @@ def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PCGRLE
 #     states.append(state)
 
     
-def render_callback(env: PCGRLEnv, states: MultiAgentLogState, save_dir: str, t: int, max_steps: int):
+def render_callback(env: PCGRLEnv, frames, save_dir: str, t: int, max_steps: int):
 
-    frames = []
-    # for i in range(states.env_state.remaining_timesteps[0].item()):
-    for i in range(max_steps):
-        # if (i == 0) or ((i + 1) % 5 == 0):
-        # state = jax.tree.map(lambda x: x[i] if len(x.shape) > 0 else x, states)
-        state = jax.tree.map(lambda x: x[i], states)
-        state = jax.device_put(state, jax.devices('cpu')[0])
-        with jax.disable_jit():
-            frames.append(env.render(state.env_state))
-
-    imageio.mimsave(os.path.join(save_dir, f"enjoy_{t}.gif"), frames, fps=5, loop=0)
-    wandb.log({"video": wandb.Video(os.path.join(save_dir, f"enjoy_{t}.gif"), fps=5, format="gif")})
+    imageio.mimsave(os.path.join(save_dir, f"enjoy_{t}.gif"), np.array(frames), fps=10, loop=0)
+    wandb.log({"video": wandb.Video(os.path.join(save_dir, f"enjoy_{t}.gif"), fps=10, format="gif")})
 
 
 def get_ckpt_dir(config: MultiAgentConfig):
@@ -435,6 +428,6 @@ def ma_init_config(config: MultiAgentConfig):
 
     
 def save_checkpoint(config: MultiAgentConfig, ckpt_manager, runner_state, t):
-    ckpt_manager.save(t.item(), args=ocp.args.StandardSave(runner_state))
+    save_args = orbax_utils.save_args_from_target(runner_state)
+    ckpt_manager.save(t.item(), runner_state, save_kwargs={'save_args': save_args})
     ckpt_manager.wait_until_finished() 
-
