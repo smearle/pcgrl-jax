@@ -119,6 +119,10 @@ class MultiAgentConfig(TrainConfig):
     n_agents: int = 2
     scale_clip_eps: bool = False
     hidden_dims: Tuple[int] = (256, -1)
+    empty_start: bool = True
+
+    # Save a checkpoint after (at least) this many ***update*** steps
+    ckpt_freq: int = 1
 
     # WandB Params
     WANDB_MODE: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
@@ -174,6 +178,10 @@ class EnjoyConfig(EvalConfig):
     n_enjoy_envs: int = 1
     render_ims: bool = False
 
+
+@dataclass
+class EnjoyMultiAgentConfig(MultiAgentConfig, EnjoyConfig):
+    pass
     
 
 @dataclass
@@ -192,6 +200,7 @@ class SweepConfig(EnjoyConfig, EvalConfig):
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="ma_config", node=MultiAgentConfig)
+cs.store(name="enjoy_ma_pcgrl", node=EnjoyMultiAgentConfig)
 cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)

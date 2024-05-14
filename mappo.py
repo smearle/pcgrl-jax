@@ -67,13 +67,13 @@ def make_train(
         jit_sim_render_episode = make_sim_render_episode(config, actor_network, env)
         num_render_actors = 1 * env.n_agents
         ac_init_hstate_render = ScannedRNN.initialize_carry(num_render_actors, config.hidden_dims[0])
-        render_states = jit_sim_render_episode(runner_state.train_states[0].params, ac_init_hstate_render)
+        render_frames = jit_sim_render_episode(runner_state.train_states[0].params, ac_init_hstate_render)
                 
         # DEFINE CALLBACKS
-        jax.experimental.io_callback(callback=_render_callback, result_shape_dtypes=None, states=render_states, t=0)
+        jax.experimental.io_callback(callback=_render_callback, result_shape_dtypes=None, frames=render_frames, t=0)
         
         # TRAIN LOOP
-        def _update_step_with_render(update_runner_state, unused, render_states):
+        def _update_step_with_render(update_runner_state, unused, render_frames):
             
             # COLLECT TRAJECTORIES
             runner_state, update_steps = update_runner_state
@@ -416,14 +416,14 @@ def make_train(
             runner_state = RunnerState(train_states, env_state, last_obs, last_done, hstates, rng)
             do_render = (config.render_freq != -1) and (update_steps % config.render_freq == 0)
             
-            render_states = jax.lax.cond(
+            frames = jax.lax.cond(
                 do_render,
                 partial(jit_sim_render_episode, runner_state.train_states[0].params, ac_init_hstate_render),
-                lambda: render_states,
+                lambda: render_frames,
             )
             jax.lax.cond(
                 do_render,
-                partial(jax.experimental.io_callback, _render_callback, None, states=render_states, t=update_steps),
+                partial(jax.experimental.io_callback, _render_callback, None, frames=frames, t=update_steps),
                 lambda: None,
             )
             jax.lax.cond(
@@ -435,7 +435,7 @@ def make_train(
             return (runner_state, update_steps), metric
         
         
-        _update_step = functools.partial(_update_step_with_render, render_states=render_states)
+        _update_step = functools.partial(_update_step_with_render, render_frames=render_frames)
         
         runner_state, metric = jax.lax.scan(
             _update_step,   
