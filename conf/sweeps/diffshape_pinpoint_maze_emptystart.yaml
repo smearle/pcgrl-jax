@@ -5,11 +5,12 @@ empty_start:
 - true
 eval_hypers:
   eval_map_width:
-  # - 8
-  # - 16
-  # - 24
+  - 8
+  - 16
+  - 24
   - 32
   eval_randomize_map_shape:
+  - true
   - false
 map_width:
 - 16
@@ -21,9 +22,9 @@ n_envs:
 - 600
 obs_size:
 - 8
-# - 16
-# - 24
-# - -1
+- 16
+- 24
+- -1
 pinpoints:
 - true
 problem:
@@ -33,7 +34,7 @@ randomize_map_shape:
 - false
 seed:
 - 0
-# - 1
-# - 2
+- 1
+- 2
 total_timesteps:
 - 1000000000

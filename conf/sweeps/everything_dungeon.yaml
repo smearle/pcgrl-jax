@@ -17,7 +17,6 @@ max_board_scans:
 - 5
 model:
 - conv2
-# - seqnca
 n_envs:
 - 600
 obs_size_hid_dims:
@@ -27,12 +26,12 @@ obs_size_hid_dims:
 - 31
 pinpoints:
 - true
-# - false
+- false
 problem:
 - dungeon
 randomize_map_shape:
 - true
-# - false
+- false
 seed:
 - 0
 - 1

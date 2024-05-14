@@ -210,7 +210,7 @@ def sweep_main(cfg: SweepConfig):
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
                     job_name=f"{sweep_name}_enjoy",
-                    mem_gb=30,
+                    mem_gb=90,
                     tasks_per_node=1,
                     cpus_per_task=1,
                     gpus_per_node=1,

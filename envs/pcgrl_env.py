@@ -339,13 +339,13 @@ class PCGRLEnv(Environment):
         return obs
 
     @partial(jax.jit, static_argnums=(0, 4))
-    def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
+    def step_env(self, rng, env_state: PCGRLEnvState, action, env_params, agent_id):
         action = action[..., None]
         if self.n_agents == 1:
             action = action[0]
         env_map, map_changed, rep_state = self.rep.step(
             env_map=env_state.env_map, action=action,
-            rep_state=env_state.rep_state, step_idx=env_state.step_idx
+            rep_state=env_state.rep_state, step_idx=env_state.step_idx, agent_id=agent_id
         )
         env_map = jnp.where(env_state.static_map == 1,
                             env_state.env_map, env_map,
