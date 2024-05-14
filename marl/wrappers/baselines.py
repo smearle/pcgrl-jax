@@ -143,12 +143,12 @@ class MultiAgentWrapper(JaxMARLWrapper):
             # TODO: Observe flat/scalar tings!
             # new_obs[agent] = jnp.concat((obs.map_obs[i].flatten(), obs.flat_obs.flatten()), axis=0)
             new_obs[agent] = obs.map_obs[i].flatten()
+        new_obs['world_state'] = jnp.stack([new_obs[agent] for agent in self.agents])
         return new_obs
 
     def reset(self, key):
         obs, state = self._env.reset(key)
         obs = self.process_observation(obs)
-        obs['world_state'] = jnp.stack([obs[agent] for agent in self.agents])
 
         return obs, state
 
@@ -162,16 +162,13 @@ class MultiAgentWrapper(JaxMARLWrapper):
             #   environment.
             agent_action = action[agent][None, None]  # that is to say, wtf this garbage lmao
             obs, state, reward, done, info = self._env.step(key, state, agent_action, agent_id=i)
-            # TODO: Consider flat/scalar tings!
-            agent_obs = obs.map_obs[i].flatten()
-            ma_obs[agent] = agent_obs
             ma_reward[agent] = reward
             ma_done[agent] = done
 
             # Dimensions work differently to be compatible with JaxMARL, can fiddle with this, but meh for now
             # ma_info[agent] = info
 
-        ma_obs['world_state'] = jnp.stack([ma_obs[agent] for agent in self.agents])
+        ma_obs = self.process_observation(obs)
         ma_done['__all__'] = jnp.any(jnp.stack([ma_done[agent] for agent in self.agents]))
 
         return ma_obs, state, ma_reward, ma_done, ma_info
