@@ -26,15 +26,6 @@ from time import perf_counter
 from marl.environments.spaces import Box
 from marl.environments.multi_agent_env import MultiAgentEnv
 from marl.model import ActorMLP, ActorRNN, CriticRNN, ScannedRNN
-from waymax import config as _config
-from waymax import dataloader
-from waymax import datatypes
-from waymax import dynamics
-from waymax import env as _env
-from waymax import agents
-from waymax import visualization
-from waymax.datatypes.action import Action
-from waymax.datatypes.simulator_state import SimulatorState
 
 from conf.config import MultiAgentConfig
 from envs.pcgrl_env import PCGRLEnv, PCGRLEnvState

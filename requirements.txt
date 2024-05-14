@@ -24,3 +24,4 @@ tensorboard
 tensorboardX
 tensorflow-probability[tf]
 tqdm==4.66.2
+wandb

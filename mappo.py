@@ -390,8 +390,8 @@ def make_train(
                             metric["returned_episode"][:, :, 0]
                         ].mean(),
                         "env_step": metric["update_steps"]
-                        * config["NUM_ENVS"]
-                        * config["NUM_STEPS"],
+                        * config.n_envs
+                        * config.num_steps,
                         **metric["loss"],
                         "obs_dist_min": metric["obs_dist_min"],
                         "obs_dist_max": metric["obs_dist_max"],
