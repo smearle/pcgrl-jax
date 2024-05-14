@@ -168,6 +168,8 @@ class MultiTurtleRepresentation(TurtleRepresentation):
             padded_static_map = jnp.pad(static_map, self.rf_off, mode='constant',
                                         constant_values=1)  # Border is static
 
+        # TODO: Currently doing this too much! I.e. getting both agents' observations for *each* agent. Is redundant!!
+
         # Iterating through agents
         # for i, a_pos in enumerate(rep_state.pos):
         for i in range(self.n_agents):
