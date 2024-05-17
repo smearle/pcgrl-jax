@@ -350,6 +350,7 @@ class LegoRearrangeRepresentation(Representation):
         rng, subkey = jax.random.split(rng)
 
         next_block = (rep_state.curr_block + 1)%self.num_blocks
+        next_block = jax.lax.select(action_ind == 5, next_block, rep_state.curr_block)
 
         """
         def cond_fun(carry):
