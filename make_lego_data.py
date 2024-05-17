@@ -12,13 +12,13 @@ from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
                    init_config)
 from config import Config, TrainConfig
 
-moves = np.array([
-            (0,0), #no move, does not go to top
+moves = jnp.array([
+            (0,0), #no move, goes to top
             (0,1),
             (0,-1),
             (1,0),
             (-1,0),
-            #(0,0) # no move, goes to top  
+            (0,0) # no move, does not go to top  
         ])
 
 

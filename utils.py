@@ -68,7 +68,7 @@ def init_config(config: Config, evo=True):
         if 'HOUSE' in config.reward:
             config.n_blocks = 17
         if 'TABLE' in config.reward:
-            config.n_blocks = 17
+            config.n_blocks = 9
 
     config.arf_size = (2 * config.map_width -
                       1 if config.arf_size is None else config.arf_size)
@@ -189,7 +189,7 @@ def get_env_params_from_config(config: Config):
 def get_lego_params_from_config(config: Config):
     map_shape = ((config.map_width, config.map_width) if not config.is_3d
         #else (config.map_width, config.map_width*3-2, config.map_width))
-        else (config.map_width, config.n_blocks*3, config.map_width))
+        else (config.map_width, config.n_blocks*3+1, config.map_width))
 
     max_steps_multiple = config.max_steps_multiple
 

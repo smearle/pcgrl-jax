@@ -91,67 +91,6 @@ class LegoEnvParams:
   
     #change_pct: float = -1.0
 
-"""
-def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
-    static_rng, rng = jax.random.split(rng)
-    static_tiles = jax.random.bernoulli(
-        static_rng, p=static_tile_prob, shape=map_shape).astype(bool)
-    return jnp.zeros(map_shape)
-
-"""
-"""
-
-    # if n_freezies > 0:
-    def gen_freezies(rng):
-        def gen_freezie(rng):
-            # Randomly select row or column 
-            rng, rng_ = jax.random.split(rng)
-
-            height = map_shape[0]
-            width = map_shape[1]
-            
-            rect = jnp.ones(map_shape, dtype=jnp.float16)
-            row = rect[0]
-            col = rect[1]
-
-            locs = jax.random.uniform(rng_, shape=(2,))
-            r_loc, c_loc = locs
-
-            # FIXME: These guys are generally too big
-            r_tri = triangle_wave(jnp.arange(map_shape[1]) / map_shape[1], 
-                                   x_peak=r_loc, period=2)
-            c_tri = triangle_wave(jnp.arange(map_shape[0]) / map_shape[0], 
-                                   x_peak=c_loc, period=2)
-            rc_tris = jnp.stack((r_tri, c_tri))
-            maxval = jnp.max(rc_tris)
-            minval = jnp.min(rc_tris)
-            rc_cutoff = jax.random.uniform(rng_, shape=(2,), minval=minval*1.5, maxval=maxval)
-            r_cut, c_cut = rc_cutoff
-            r_tri = jnp.where(r_tri > r_cut, 1, 0)
-            c_tri = jnp.where(c_tri > c_cut, 1, 0)
-
-            rect = rect * r_tri * c_tri[..., None]
-            rect = rect.astype(bool)
-
-            return rect
-
-        frz_keys = jax.random.split(rng, n_freezies)
-
-        rects = jax.vmap(gen_freezie, in_axes=0)(frz_keys)
-
-        rects = jnp.clip(rects.sum(0), 0, 1).astype(bool)
-        # static_tiles = rects | static_tiles
-        return rects
-
-    static_tiles = jax.lax.cond(
-        n_freezies > 0,
-        lambda rng: static_tiles | gen_freezies(rng),
-        lambda _: static_tiles,
-        rng,
-    ) 
-
-    return static_tiles
-"""
 
 def get_prob_cls(problem: str):
     return PROB_CLASSES[problem]
@@ -252,6 +191,7 @@ class LegoEnv(Environment):
     @partial(jax.jit, static_argnums=(0, 4))
     def step_env(self, rng, env_state: LegoEnvState, action, env_params):
         action = action[..., None]
+        target_reached = self.is_terminal(env_state, env_params)
         
         rng, subkey = jax.random.split(rng)
         if self.n_agents == 1:
@@ -269,8 +209,8 @@ class LegoEnv(Environment):
             env_map=env_map, static_map=env_state.static_map,
             rep_state=rep_state, done=False, reward=reward,
             prob_state=prob_state, step_idx=env_state.step_idx + 1, queued_state = env_state.queued_state)
-         
-        done = self.is_terminal(env_state, env_params)
+        
+        done = self.is_terminal(env_state, env_params) & target_reached
  
         env_state = env_state.replace(done=done)
 
@@ -289,7 +229,6 @@ class LegoEnv(Environment):
              "ctr_dist": prob_state.stats[LegoMetrics.CENTER],
              "last_action": action[0][0][0],
              "stats": prob_state.stats,
-             "rotation": rep_state.rotation,
              "done": done,
              "step": env_state.step_idx
              
@@ -330,7 +269,7 @@ class LegoEnv(Environment):
     def num_actions(self) -> int:
         """Number of actions possible in environment."""
         # TO DO: NOT HARD CODED
-        return 5
+        return 6
 
     def action_space(self, env_params: LegoEnvParams) -> int:
         return self.rep.action_space()

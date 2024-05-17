@@ -122,7 +122,7 @@ class ConvForward(nn.Module):
         )(critic)
 
         return act, jnp.squeeze(critic, axis=-1)
-
+from jax import random
 
 class ConvForward3d(nn.Module):
     action_dim: Sequence[int]
@@ -139,18 +139,23 @@ class ConvForward3d(nn.Module):
             activation = nn.tanh
 
         flat_action_dim = self.action_dim * math.prod(self.act_shape)
+        #map_x=nn.Dense(features=64, kernel_init = nn.initializers.he_normal())(map_x)
 
         # act, critic = crop_arf_vrf(map_x, self.arf_size, self.vrf_size)
 
-        
+        key = random.PRNGKey(0)
         map_x = nn.Conv(
             features=64, kernel_size=(7,7,7), strides=(2, 2, 2), padding=(0, 0, 0)
         )(map_x)
         map_x = activation(map_x)
+
+
         map_x = nn.Conv(
             features=128, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(0, 0, 0)
         )(map_x)
         map_x = activation(map_x)
+
+
         map_x = nn.Conv(
             features=264, kernel_size=(3,3,3), strides=(1, 1, 1), padding=(0, 0, 0)
         )(map_x)
@@ -169,7 +174,14 @@ class ConvForward3d(nn.Module):
             flat_action_dim, kernel_init=orthogonal(0.01),
             bias_init=constant(0.0)
         )(map_x)
+
+        #act = nn.Dense(
+        #    flat_action_dim, kernel_init=nn.initializers.he_normal(),
+        #    bias_init=constant(0.0)
+        #)(map_x)
         
+        
+        #act = nn.softmax(act)
 
         critic = nn.Dense(
             1, kernel_init=orthogonal(0.01),

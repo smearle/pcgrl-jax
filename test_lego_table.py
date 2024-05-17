@@ -43,36 +43,31 @@ class Transition(NamedTuple):
     # rng_act: jnp.ndarray
 
 def get_expert_action(env_state):
-    #env_state = log_env_state.env_state
     moves = jnp.array([
-            (0,0),
+            (0,0), #no move, goes to top
             (0,1),
             (0,-1),
             (1,0),
             (-1,0),
+            (0,0) # no move, does not go to top  
         ])
     
     blocks = env_state.rep_state.blocks
     curr_block_inds = env_state.rep_state.curr_block
     env_map = env_state.env_map
 
-    legs_x = jnp.concatenate(((blocks[:,-1,0])[:,jnp.newaxis], (blocks[:,-1,0]+3)[:,jnp.newaxis]), axis=1)#.astype(jnp.int32)
-    legs_z = jnp.concatenate(((blocks[:,-1,2])[:,jnp.newaxis], (blocks[:,-1,2]+3)[:,jnp.newaxis]), axis=1)#.astype(jnp.int32)
-
     curr_blocks = jnp.array([blocks[i, curr_block_inds[i], :] for i in range(blocks.shape[0])])
     curr_x = curr_blocks[:,0]
     curr_z = curr_blocks[:,2]
     curr_y = curr_blocks[:,1]
     curr_block_type = curr_blocks[:,3] 
-
-    leg_num = env_state.rep_state.curr_block % 4
     
     roof_x = blocks[:,-1,0]
     roof_z = blocks[:,-1,2]
 
     table_mask = jnp.zeros((4, env_map.shape[2], 4)).at[[0, -1], :, [0, -1]].set(1)
     table_mask = table_mask.at[0,:,-1].set(1).at[-1,:,0].set(1)
-    test = jnp.count_nonzero(table_mask, axis=1)
+    #test = jnp.count_nonzero(table_mask, axis=1)
 
     def slice_map(carry, args):
         env_map_i, roof_x_i, roof_z_i = args
@@ -91,46 +86,35 @@ def get_expert_action(env_state):
 
     legs_x_pos = min_leg_hts_stacked[:,0]
     legs_z_pos = min_leg_hts_stacked[:,1]
-
-    #legs_x_pos = jax.lax.select(leg_num < 2, legs_x[:,0], legs_x[:,1])
-    #legs_z_pos = jax.lax.select(leg_num % 2==0, legs_z[:,0], legs_z[:,1])
-    #legs_x_pos = jax.lax.select(curr_block_type == 3, legs_x[:,0], legs_x_pos)
-    #legs_z_pos = jax.lax.select(curr_block_type == 3, legs_z[:,0], legs_z_pos)
         
     x_dir = legs_x_pos-curr_x
     z_dir = legs_z_pos-curr_z
 
-    #when block is large flat, don't move
+    #when block is large flat, don't move except to top
     x_dir = jnp.where(curr_block_type == 3, 0, x_dir)
     z_dir = jnp.where(curr_block_type == 3, 0, z_dir)
 
-    #jax.debug.breakpoint()
-
-
     #when block is already in a leg, don't move
     truth_cond = jnp.logical_and(
-        jnp.logical_or(
-            curr_x == roof_x,
-            curr_x == roof_x + 3
-        ),
         jnp.logical_and(
+            jnp.logical_or(
+                curr_x == roof_x,
+                curr_x == roof_x + 3
+            ),
             jnp.logical_or(
                 curr_z == roof_z,
                 curr_z == roof_z + 3
-            ),
-            curr_y < blocks.shape[1]/4
+            )
+        ),
+        jnp.logical_and(
+            curr_block_type != 3,
+            curr_y < 3*(blocks.shape[1]//4)
         ) 
-        )
-    x_dir = jnp.where(truth_cond, 0, x_dir)
-    z_dir = jnp.where(truth_cond, 0, z_dir)
+        )  
 
     x_moves = jnp.clip(x_dir, a_min = -1, a_max = 1).reshape(x_dir.shape[0], 1)
     z_moves = jnp.clip(z_dir, a_min = -1, a_max = 1).reshape(x_dir.shape[0], 1)
     z_moves = jnp.where(x_moves==0, z_moves, 0)
-    
-    #jax.debug.breakpoint()
-    
-    #get action for each env
     combined_actions = jnp.concatenate((x_moves, z_moves), axis=1)
 
     def find_indices(array1, array2):
@@ -138,17 +122,20 @@ def get_expert_action(env_state):
         comparison = array1[:, None, :] == array2[None, :, :]  # Shape becomes (4, 5, 2)
         # Step 2: Check where all elements along the last axis match
         matches = jnp.all(comparison, axis=2)  # Shape becomes (4, 5)
-        # Step 3: Find the index in the second array for each row of the first array
+        # Step 3: Find the index in the second array for each row of the first arrayl
         indices = jnp.argmax(matches, axis=1)  # Shape becomes (4,)
 
         return indices
 
-    actions = find_indices(combined_actions, moves)
+    tmp_actions = find_indices(combined_actions, moves)
+    
+    actions = jnp.where(truth_cond, 5, tmp_actions)#action 0 where a table leg is already in place
+    
+    #jax.debug.breakpoint()
     actions = actions.reshape(actions.shape[0], 1, 1, 1)
 
+
     return actions
-
-
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     config.NUM_UPDATES = (
@@ -274,24 +261,27 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
                 ep_blocks = blocks[ep_is*env.max_steps:(ep_is+1)*env.max_steps]#[:2]
 
-                ep_end_avg_height = states.prob_state.stats[done_ind-1, ep_is, 0]
-                ep_footprint = states.prob_state.stats[done_ind-1, ep_is, 1]
-                ep_cntr_dist = states.prob_state.stats[done_ind-1, ep_is, 3]
-                #ep_rotations = states.rep_state.rotation[:done_ind+1,ep_is]
+                ep_end_avg_height = states.prob_state.stats[done_ind-1, ep_is, LegoMetrics.AVG_HEIGHT]
+                ep_footprint = states.prob_state.stats[done_ind-1, ep_is, LegoMetrics.FOOTPRINT]
+                ep_cntr_dist = states.prob_state.stats[done_ind-1, ep_is, LegoMetrics.CENTER]
                 ep_curr_blocks = states.rep_state.curr_block[:,ep_is]
                 actions = states.rep_state.last_action[:,ep_is]
+                tableness = states.prob_state.stats[:, ep_is, LegoMetrics.TABLE]
+                max_tableness = jnp.max(tableness)
+                
 
-                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_fp{ep_footprint:.2f}_ctrdist{ep_cntr_dist:.2f}/"
+                
+                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_ctrdist{ep_cntr_dist:.2f}_tableness{max_tableness:.2f}/"
                 if not os.path.exists(savedir):
                     os.makedirs(savedir)
                 
                 for num in range(ep_blocks.shape[0]):
                     curr_blocks = ep_blocks[num,:,:]
-                    #rotation = ep_rotations[num]
+
                     curr_block = ep_curr_blocks[num]
                     action = actions[num]
 
-                    savename = os.path.join(savedir, f"{num}_a{action}.mpd")
+                    savename = os.path.join(savedir, f"{num}_a{action}_table{tableness[num]:.2f}.mpd")
                     
                     f = open(savename, "a")
                     f.write("0/n")
@@ -303,8 +293,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         for z in range(config.map_width):
                             lego_block_name = "3005"
                             block_color = "2 "
-                            if curr_block == num:
-                                block_color = "7 "
                             
                             y_offset = -3#-24
 
@@ -319,22 +307,19 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                             f.write(lego_block_name + ".dat")
                             f.write("\n")
 
-                            max_x = x_lego
-                            max_z = z_lego
-                            min_x = config.map_width-1
-                            min_z = config.map_width-1
                     
                     y_offset = -24 #1 brick height (plate is 8)
-                    #if num == 82:
-                    #    print("starting")
-                    #    print(curr_blocks)
-                    #    tempmap=env._env.rep.get_env_map(curr_blocks)
-                    #    for row in range(tempmap.shape[1]):
-                    #        print(tempmap[:,row,:])
+        
                     for b in range(curr_blocks.shape[0]):
                         blocktype = curr_blocks[b,3]
+                        if blocktype==0:
+                            continue
                         lego_block_name = tileNames[blocktype]
                         block_color = "7 "
+                        if curr_block == b:
+                                block_color = "14 "
+                        if b == (curr_block-1)%curr_blocks.shape[0]:
+                            block_color = "46 "
                         x_lego = curr_blocks[b, 2] * 20 + 10*(tileDims[blocktype][2])
                         y_lego = curr_blocks[b, 1] * (y_offset)/3 + (y_offset/3)*(tileDims[blocktype][1])
                         z_lego = curr_blocks[b, 0] * 20 + 10*(tileDims[blocktype][0])
@@ -393,9 +378,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         jax.debug.callback(render_mpds, blocks, runner_state.update_i, states)
         old_render_results = (frames, states, blocks)
         
-        
-
-       
 
     return lambda rng: train(rng, config)
 

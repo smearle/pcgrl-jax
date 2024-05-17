@@ -19,7 +19,7 @@ from envs.pcgrl_env import PCGRLObs, QueuedState, gen_static_tiles, render_stats
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, get_network, gymnax_pcgrl_make,
                    init_config)
-from envs.probs.lego import LegoProblemState, tileNames, tileDims
+from envs.probs.lego import LegoProblemState, tileNames, tileDims, LegoMetrics
 from envs.lego_env import LegoEnvState
 
 class RunnerState(struct.PyTreeNode):
@@ -168,25 +168,29 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
                 ep_blocks = blocks[ep_is*env.max_steps:(ep_is+1)*env.max_steps]#[:2]
 
-                ep_end_avg_height = states.prob_state.stats[done_ind-1, ep_is, 0]
-                ep_footprint = states.prob_state.stats[done_ind-1, ep_is, 1]
-                ep_cntr_dist = states.prob_state.stats[done_ind-1, ep_is, 3]
-                #ep_rotations = states.rep_state.rotation[:done_ind+1,ep_is]
+                ep_end_avg_height = jnp.max(states.prob_state.stats[:, ep_is, LegoMetrics.AVG_HEIGHT])
+                #ep_footprint = states.prob_state.stats[done_ind-1, ep_is, 1]
+                ep_cntr_dist = jnp.min(states.prob_state.stats[:, ep_is, LegoMetrics.CENTER])
                 ep_curr_blocks = states.rep_state.curr_block[:,ep_is]
                 actions = states.rep_state.last_action[:,ep_is]
+                tableness = states.prob_state.stats[:, ep_is, LegoMetrics.TABLE]
+                max_tableness = jnp.max(tableness)
+                covered_vols = states.prob_state.stats[:, ep_is, LegoMetrics.COVERED_VOL]
+                max_cov_vol = jnp.max(covered_vols)
 
-                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_fp{ep_footprint:.2f}_ctrdist{ep_cntr_dist:.2f}/"
+                
+                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_ctrdist{ep_cntr_dist:.2f}_tableness{max_tableness:.2f}_cov{max_cov_vol:.2f}/"
                 if not os.path.exists(savedir):
                     os.makedirs(savedir)
                 
                 for num in range(ep_blocks.shape[0]):
                     curr_blocks = ep_blocks[num,:,:]
-                    #rotation = ep_rotations[num]
                     curr_block = ep_curr_blocks[num]
                     action = actions[num]
+                    x=curr_blocks[curr_block, 0]
+                    z=curr_blocks[curr_block, 2]
 
-
-                    savename = os.path.join(savedir, f"{num}_a{action}.mpd")
+                    savename = os.path.join(savedir, f"{num}_a{action}_table{tableness[num]:.2f}_cov{covered_vols[num]:.2f}.mpd")
                     
                     f = open(savename, "a")
                     f.write("0/n")
@@ -228,8 +232,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     #        print(tempmap[:,row,:])
                     for b in range(curr_blocks.shape[0]):
                         blocktype = curr_blocks[b,3]
+                        if blocktype==0:
+                            continue
                         lego_block_name = tileNames[blocktype]
                         block_color = "7 "
+                        if curr_block == b:
+                                block_color = "14 "
                         x_lego = curr_blocks[b, 2] * 20 + 10*(tileDims[blocktype][2])
                         y_lego = curr_blocks[b, 1] * (y_offset)/3 + (y_offset/3)*(tileDims[blocktype][1])
                         z_lego = curr_blocks[b, 0] * 20 + 10*(tileDims[blocktype][0])

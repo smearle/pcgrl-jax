@@ -33,8 +33,9 @@ class LegoMetrics(IntEnum):
     FOOTPRINT = 5 #num blocks touching the floor
     AVG_EUCLIDEAN = 2
     CENTER = 3
-    HOUSE = 4
+    HOUSE = 6
     TABLE = 1
+    COVERED_VOL = 4
 
 class LegoProblem(Problem):
     #tile_size = np.int8(16)
@@ -46,6 +47,7 @@ class LegoProblem(Problem):
         # self.map_shape = map_shape
         self.metrics_enum = LegoMetrics
         self.n_blocks = n_blocks
+        self.metric_bounds = self.get_metric_bounds(map_shape)
 
         stat_trgs = np.zeros(len(LegoMetrics))
         stat_trgs[LegoMetrics.AVG_HEIGHT] = sum([i for i in range(self.n_blocks)])/self.n_blocks
@@ -53,7 +55,8 @@ class LegoProblem(Problem):
         stat_trgs[LegoMetrics.AVG_EUCLIDEAN] = 0
         stat_trgs[LegoMetrics.CENTER] = 0
         stat_trgs[LegoMetrics.HOUSE] = 1
-        stat_trgs[LegoMetrics.TABLE] = 1
+        stat_trgs[LegoMetrics.TABLE] = 1.0
+        stat_trgs[LegoMetrics.COVERED_VOL] = 3*(self.n_blocks-1)*(4*4-1)
         self.stat_trgs = jnp.array(stat_trgs)
 
         self.stat_weights = jnp.where(jnp.isin(jnp.arange(self.stat_weights.size), jnp.array(reward)), 1, self.stat_weights)
@@ -72,6 +75,7 @@ class LegoProblem(Problem):
         bounds[LegoMetrics.AVG_EUCLIDEAN] = [1, (map_shape[0]**2+map_shape[2]**2)**(0.5)]
         bounds[LegoMetrics.HOUSE] = [0, 1]
         bounds[LegoMetrics.TABLE] = [0, 1]
+        bounds[LegoMetrics.COVERED_VOL] = [0, 3*(self.n_blocks*-1)*(4*4-1)]
 
         cntr_x, cntr_z = (map_shape[0]-1)//2, (map_shape[2]-1)//2        
 
@@ -109,27 +113,60 @@ class LegoProblem(Problem):
         #table_ness
         roof_x = blocks[-1,0]
         roof_z = blocks[-1,2]
-
-        not_table = 0
-        for block in blocks[:-1,:]:
-            curr_x, curr_y, curr_z, _ = block
-            truth_cond = jnp.logical_and(
-                jnp.logical_or(
-                    curr_x == roof_x,
-                    curr_x == roof_x + 3
-                ),
+        
+        table = 0.0
+        for block in blocks:
+            curr_x, curr_y, curr_z, curr_block_type = block
+            is_in_table_position = jnp.logical_and(
                 jnp.logical_and(
+                    jnp.logical_or(
+                        curr_x == roof_x,
+                        curr_x == roof_x + 3
+                    ),
                     jnp.logical_or(
                         curr_z == roof_z,
                         curr_z == roof_z + 3
+                    )
+                ),
+                jnp.logical_or(    
+                    jnp.logical_and(
+                        curr_block_type != 3,
+                        curr_y < 3*(blocks.shape[0]//4)
                     ),
-                    curr_y < blocks.shape[1]/4
-                ) 
-                )
-            in_position = jnp.where(truth_cond, 0, 1)
-            not_table += in_position
-        not_table += jnp.where(blocks[-1,1] == blocks.shape[1]//4, 0, 1)
-        stats = stats.at[LegoMetrics.TABLE].set(not_table == 0)
+                    jnp.logical_and(
+                        curr_block_type == 3,
+                        curr_y == 3*(blocks.shape[0]//4)
+                    )
+                    
+                    ) 
+                )  
+            #is_in_table_position = True
+            #jax.debug.print("table position: {t}. before: {table}. after: {ta}", table=table, t=is_in_table_position, ta=table + is_in_table_position)
+            table += is_in_table_position
+        
+        stats = stats.at[LegoMetrics.TABLE].set(table/float(blocks.shape[0]))
+
+        #COVERED_VOL
+        zero_mask = env_map == 0
+        def scan_fun(carry, x):
+            nonzero_seen = carry | (x != 0)
+            return nonzero_seen, nonzero_seen
+        # Transpose the array to move the second axis to the front
+        transposed_env_map = jnp.transpose(env_map, (1, 0, 2))
+
+        # Initialize the carry with False
+        init = jnp.zeros_like(transposed_env_map[0, :, :], dtype=bool)
+
+        # Perform the scan in reverse order along the second axis (which is now the leading axis)
+        _, transposed_nonzero_mask = jax.lax.scan(scan_fun, init, jnp.flip(transposed_env_map, axis=0))
+
+        # Transpose the mask back to the original order
+        nonzero_mask = jnp.transpose(jnp.flip(transposed_nonzero_mask, axis=0), (1, 0, 2))
+
+        # Use the masks to count the number of elements that are zero and have a nonzero element at a higher index along the second axis
+        covered_vol = jnp.sum(zero_mask & nonzero_mask)
+        
+        stats = stats.at[LegoMetrics.COVERED_VOL].set(covered_vol)
         
         done = jnp.sum(jnp.where(stats == self.stat_trgs, 0, 1) * self.stat_weights) == 0
         

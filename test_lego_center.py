@@ -45,11 +45,12 @@ class Transition(NamedTuple):
 def get_expert_action(env_state):
     #env_state = log_env_state.env_state
     moves = jnp.array([
-            (0,0),
+            (0,0), #no move, goes to top
             (0,1),
             (0,-1),
             (1,0),
             (-1,0),
+            (0,0) # no move, does not go to top  
         ])
     
     blocks = env_state.rep_state.blocks
@@ -222,10 +223,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
                 ep_blocks = blocks[ep_is*env.max_steps:(ep_is+1)*env.max_steps]#[:2]
 
-                ep_end_avg_height = states.prob_state.stats[done_ind-1, ep_is, 0]
-                ep_footprint = states.prob_state.stats[done_ind-1, ep_is, 1]
-                ep_cntr_dist = states.prob_state.stats[done_ind-1, ep_is, 3]
-                #ep_rotations = states.rep_state.rotation[:done_ind+1,ep_is]
+                ep_end_avg_height = states.prob_state.stats[done_ind-1, ep_is, LegoMetrics.AVG_HEIGHT]
+                ep_footprint = states.prob_state.stats[done_ind-1, ep_is, LegoMetrics.FOOTPRINT]
+                ep_cntr_dist = states.prob_state.stats[done_ind-1, ep_is, LegoMetrics.CENTER]
                 ep_curr_blocks = states.rep_state.curr_block[:,ep_is]
                 actions = states.rep_state.last_action[:,ep_is]
 
@@ -235,7 +235,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 
                 for num in range(ep_blocks.shape[0]):
                     curr_blocks = ep_blocks[num,:,:]
-                    #rotation = ep_rotations[num]
                     curr_block = ep_curr_blocks[num]
                     action = actions[num]
 
@@ -282,8 +281,12 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     #        print(tempmap[:,row,:])
                     for b in range(curr_blocks.shape[0]):
                         blocktype = curr_blocks[b,3]
+                        if blocktype==0:
+                            continue
                         lego_block_name = tileNames[blocktype]
                         block_color = "7 "
+                        if curr_block == b:
+                                block_color = "14 "
                         x_lego = curr_blocks[b, 2] * 20 + 10*(tileDims[blocktype][2])
                         y_lego = curr_blocks[b, 1] * (y_offset)/3 + (y_offset/3)*(tileDims[blocktype][1])
                         z_lego = curr_blocks[b, 0] * 20 + 10*(tileDims[blocktype][0])

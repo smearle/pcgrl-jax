@@ -24,7 +24,6 @@ for i in range(4):
 class LegoRearrangeRepresentationState(RepresentationState):
     curr_block: int
     blocks: chex.Array
-    rotation: int=0
     last_action: int=0
 
 class LegoRearrangeRepresentation(Representation):
@@ -50,15 +49,12 @@ class LegoRearrangeRepresentation(Representation):
         self.max_steps = max_steps_multiple*self.num_blocks
 
         self.moves = jnp.array([
-            (0,0),
+            (0,0), #no move, goes to top
             (0,1),
             (0,-1),
             (1,0),
-            #(1,1),
-            #(1,-1),
             (-1,0),
-            #(-1,1),
-            #(-1,-1)   
+            (0,0) # no move, does not go to top  
         ])
         #print(jnp.count_nonzero(env_map, 1))
         
@@ -84,47 +80,12 @@ class LegoRearrangeRepresentation(Representation):
         #return spaces.Discrete((len(self.tile_enum)-1)
         #                       * math.prod(self.act_shape))
     
-    def flip_0(self, x: int, z: int) -> (int, int):
-        return 0-x, z 
-    
-    def flip_1(self, x: int, z: int) -> (int, int):
-        return x, 0-z
-    
-    def rot90_1(self, x: int, z: int) -> (int, int):
-        return 0-z, x
-    
-    def rot90_2(self, x: int, z: int) -> (int, int):
-        return 0-x, 0-z
-    
-    def rot90_3(self, x: int, z: int) -> (int, int):
-        return z, 0-x
 
-    def identity_perturb(self, x: int, z: int):
-        return x, z
-
-    def unperturb_action(self, x: int, z: int, rotation:int) -> int:
-        new_x, new_z = x, z
-        new_x, new_z = jax.lax.cond(rotation == 1, self.flip_0, self.identity_perturb, x, z)
-        new_x, new_z = jax.lax.cond(rotation == 2, self.flip_1, self.identity_perturb, x, z)
-        new_x, new_z = jax.lax.cond(rotation == 3, self.rot90_1, self.identity_perturb, x, z)
-        new_x, new_z = jax.lax.cond(rotation == 4, self.rot90_2, self.identity_perturb, x, z)
-        new_x, new_z = jax.lax.cond(rotation == 5, self.rot90_3, self.identity_perturb, x, z)
-
-        return new_x, new_z
-
-    def perturb_obs(self, rotation: int, obs: chex.Array) -> chex.Array:
-        perturbed_obs = jax.lax.select(rotation==0, obs, obs)
-        perturbed_obs = jax.lax.select(rotation == 1, jnp.flip(obs, 0), obs) # flip x axis
-        perturbed_obs = jax.lax.select(rotation == 2, jnp.flip(obs, 2), obs) # flip z axis
-        perturbed_obs = jax.lax.select(rotation == 3, jnp.rot90(obs, 1, (0,2)), obs) # rotate 90
-        perturbed_obs = jax.lax.select(rotation == 4, jnp.rot90(obs, 2, (0,2)), obs) # rotate 180
-        perturbed_obs = jax.lax.select(rotation == 5, jnp.rot90(obs, 3, (0,2)), obs) # rotate 270
-        return perturbed_obs
 
     def get_obs(self, rep_state: LegoRearrangeRepresentationState) -> chex.Array:
         blocks = rep_state.blocks
         curr_block = rep_state.curr_block
-        #rotation = rep_state.rotation
+
         
         blockdims = tileDims[blocks[:,3]]
 
@@ -238,9 +199,27 @@ class LegoRearrangeRepresentation(Representation):
 
         blocks, env_map, _, _ = carry
 
-        #if we are making a house, keep things simple for now
+        #if we are making a house or table, keep things simple for now
         blocks = jax.lax.select(self.is_house_or_table_builder, blocks.at[:, 3].set(1), blocks)
+        """
+        #if we are making a house or table, num blocks is variable
+        rng, subkey = jax.random.split(rng)
+        leg_ht = jax.random.randint(subkey, shape=(1,), minval = 1, maxval = 6, dtype=int)
+
+        max_leg_blocks = 5*5 #for maxval=6
+        indices = jnp.arange(max_leg_blocks)
+        leg_blocks = 4*jnp.squeeze(leg_ht)
         
+        slice = jnp.zeros((1, 4), dtype="int32")
+        # Reshape indices < leg_blocks to have the same shape as slice and blocks
+        condition = jnp.reshape(indices >= leg_blocks, (max_leg_blocks, 1))
+
+        # Use jnp.where to select the appropriate elements from slice or blocks
+        table_blocks = jnp.where(condition, slice, blocks)
+
+        # Then use the select function as before
+        blocks = jax.lax.select(self.is_house_or_table_builder, table_blocks, blocks)
+        """
         #add one large flat block 
         blocks = blocks.at[self.num_blocks-1, 3].set(3)#TEST
         mask = block_masks[3]
@@ -290,45 +269,26 @@ class LegoRearrangeRepresentation(Representation):
         for rownum in range(blocks.shape[0]):
             block = block_fall_fn(blocks[rownum])
             blocks = blocks.at[rownum].set(block)
-        
-        rotation = 0#jax.random.randint(subkey,shape=(1,), minval =0, maxval=3, dtype=int)[0]
 
-        return LegoRearrangeRepresentationState(curr_block = 0, blocks = blocks, rotation=rotation, last_action = 0)
+        return LegoRearrangeRepresentationState(curr_block = 0, blocks = blocks, last_action = 0)
 
     def step(self, env_map: chex.Array, action: chex.Array, rep_state: LegoRearrangeRepresentationState, step_idx: int, rng):
-        
-        rotation = rep_state.rotation
-
-        x_step, z_step = self.moves[action[0][0][0]]
-
+        action_ind = action[0][0][0]
+        x_step, z_step = self.moves[action_ind]
 
         #move block
         new_blocks = rep_state.blocks.at[rep_state.curr_block, 0].add(x_step)
         new_blocks = new_blocks.at[rep_state.curr_block, 2].add(z_step)
 
-        #check for out of bounds
-
-        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 2] > self.env_shape[2] + tileDims[new_blocks[rep_state.curr_block, 3], 2] - 2, rep_state.blocks, new_blocks)
-        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 2] < 0, rep_state.blocks, new_blocks)
-        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 0] > self.env_shape[1] + tileDims[new_blocks[rep_state.curr_block, 3], 0] - 2, rep_state.blocks, new_blocks)
-        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 0] < 0, rep_state.blocks, new_blocks)
-
         #set height to max to start with. will fall to top of existing blocks, or cancel move if overlap
         max_height = self.get_max_height - tileDims[new_blocks[rep_state.curr_block, 3], 1]
         new_blocks = new_blocks.at[rep_state.curr_block,1].set(max_height)
 
-        #all blocks fall if empty space below them    
-        #row 1 falls
-        #row 2 falls
-        #row 3 falls
-        #temp_map = self.get_env_map(new_blocks)
-        
+        #all blocks fall if empty space below them           
         ordered_inds = jnp.argsort(new_blocks[:,1])
         ordered_blocks = new_blocks[ordered_inds]
-
-        
+       
         def block_fall_fn(block):
-            
             temp_map = pad_env_map(self.get_env_map(ordered_blocks), block_masks[0].shape)
             def cond_fn(state):
                 block, temp_map = state
@@ -346,9 +306,7 @@ class LegoRearrangeRepresentation(Representation):
   
             def body_fn(state):
                 block, temp_map = state
-                
                 mask = block_masks[block[3]]
-
                 env_slice = jax.lax.dynamic_slice(temp_map, (block[0], block[1], block[2]), mask.shape)
                 updated_slice = jnp.where(mask != 0, 0, env_slice)
                 temp_map = jax.lax.dynamic_update_slice(temp_map, updated_slice, (block[0], block[1], block[2]))
@@ -373,21 +331,40 @@ class LegoRearrangeRepresentation(Representation):
             
         curr_block = new_blocks[rep_state.curr_block].at[1].set(max_height+1)
         curr_block = block_fall_fn(curr_block)
-
-        new_height = new_blocks[rep_state.curr_block,1]
         
 
+        #check for out of bounds
+        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 2] >=self.env_shape[2] - tileDims[new_blocks[rep_state.curr_block, 3], 2] - 1, rep_state.blocks, new_blocks)
+        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 2] < 0, rep_state.blocks, new_blocks)
+        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 0] >= self.env_shape[0] - tileDims[new_blocks[rep_state.curr_block, 3], 0] - 1, rep_state.blocks, new_blocks)
+        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 0] < 0, rep_state.blocks, new_blocks)
+
+        new_height = new_blocks[rep_state.curr_block,1]
+
         return_blocks = jax.lax.select(new_height > max_height, rep_state.blocks, new_blocks)
+        return_blocks = jax.lax.select(action_ind == 5, rep_state.blocks, return_blocks)
+
 
         return_map = self.get_env_map(return_blocks)
         
         rng, subkey = jax.random.split(rng)
-        rotation = 0#ax.random.randint(subkey,shape=(1,), minval =0, maxval=3, dtype=int)[0]
+
+        next_block = (rep_state.curr_block + 1)%self.num_blocks
+
+        """
+        def cond_fun(carry):
+            next_block,_ = carry
+            return return_blocks[next_block,3] != 0
+        def body_fun(carry):
+            next_block,_ = carry
+            return (next_block + 1)%self.num_blocks, 0
+        
+        next_block = jax.lax.while_loop(cond_fun, body_fun, (next_block, 0))
+        """
 
         return_state = LegoRearrangeRepresentationState(
-            curr_block = (rep_state.curr_block + 1)%self.num_blocks, 
+            curr_block = next_block,
             blocks = return_blocks,
-            rotation = rotation,
             last_action=action[0][0][0]
             )
 
