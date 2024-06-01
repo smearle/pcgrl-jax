@@ -112,7 +112,7 @@ class LegoConfig(Config):
     exp_name: str = "0"
     seed: int = 0
 
-    reward: tuple[str] = ("TABLE",) #("COVERED_VOL","AVG_HEIGHT", "FOOTPRINT", "AVG_EUCLIDEAN", "CENTER", "HOUSE", "SQUARE", "TABLE")
+    reward: tuple[str] = ("STAIRS",) #("COVERED_VOL","AVG_HEIGHT", "FOOTPRINT", "AVG_EUCLIDEAN", "CENTER", "HOUSE", "SQUARE", "TABLE", "STAIRS")
     problem: str = "lego"
     representation: str = "lego_rearrange"
     model: str = "conv"

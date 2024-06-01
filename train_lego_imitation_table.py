@@ -563,10 +563,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                                  )
                     losses = loss_info.mean()
 
-                    ep_footprint = metric["stats"][metric["returned_episode"]][:,1].mean()
-                    ep_avg_height = metric["stats"][metric["returned_episode"]][:,0].mean()
-                    ep_ctr_dist = metric["stats"][metric["returned_episode"]][:,3].mean()
-                    ep_length = metric["step"][metric["returned_episode"]].mean()+1
+                    ep_footprint = metric["stats"][metric["returned_episode"]][:,LegoMetrics.FOOTPRINT].mean()
+                    ep_avg_height = metric["stats"][metric["returned_episode"]][:,LegoMetrics.AVG_HEIGHT].mean()
+                    ep_ctr_dist = metric["stats"][metric["returned_episode"]][:,LegoMetrics.CENTER].mean()
+                    ep_length = metric["step"][metric["returned_episode"]].mean()
 
                     n_envs = metric["last_action"].shape[1]
                     mean_num_actions = sum([len(set(metric["last_action"][:,i])) for i in range(n_envs)])/n_envs

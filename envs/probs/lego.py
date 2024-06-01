@@ -30,12 +30,13 @@ class LegoProblemState:
 
 class LegoMetrics(IntEnum):
     AVG_HEIGHT = 0
-    FOOTPRINT = 5 #num blocks touching the floor
+    FOOTPRINT = 7 #num blocks touching the floor
     AVG_EUCLIDEAN = 2
     CENTER = 3
     HOUSE = 6
     TABLE = 1
     COVERED_VOL = 4
+    STAIRS = 5
 
 class LegoProblem(Problem):
     #tile_size = np.int8(16)
@@ -57,6 +58,7 @@ class LegoProblem(Problem):
         stat_trgs[LegoMetrics.HOUSE] = 1
         stat_trgs[LegoMetrics.TABLE] = 1.0
         stat_trgs[LegoMetrics.COVERED_VOL] = 3*(self.n_blocks-1)*(4*4-1)
+        stat_trgs[LegoMetrics.STAIRS] = n_blocks-1
         self.stat_trgs = jnp.array(stat_trgs)
 
         self.stat_weights = jnp.where(jnp.isin(jnp.arange(self.stat_weights.size), jnp.array(reward)), 1, self.stat_weights)
@@ -75,6 +77,7 @@ class LegoProblem(Problem):
         bounds[LegoMetrics.AVG_EUCLIDEAN] = [1, (map_shape[0]**2+map_shape[2]**2)**(0.5)]
         bounds[LegoMetrics.HOUSE] = [0, 1]
         bounds[LegoMetrics.TABLE] = [0, 1]
+        bounds[LegoMetrics.STAIRS] = [0, self.n_blocks-1]
         bounds[LegoMetrics.COVERED_VOL] = [0, 3*(self.n_blocks*-1)*(4*4-1)]
 
         cntr_x, cntr_z = (map_shape[0]-1)//2, (map_shape[2]-1)//2        
@@ -109,7 +112,6 @@ class LegoProblem(Problem):
         stats = stats.at[LegoMetrics.AVG_EUCLIDEAN].set(avg_euclidean)
         stats = stats.at[LegoMetrics.CENTER].set(avg_cntr_dist)
 
-        # TO DO: fix this
         #table_ness
         roof_x = blocks[-1,0]
         roof_z = blocks[-1,2]
@@ -167,6 +169,33 @@ class LegoProblem(Problem):
         covered_vol = jnp.sum(zero_mask & nonzero_mask)
         
         stats = stats.at[LegoMetrics.COVERED_VOL].set(covered_vol)
+
+
+        #STAIRS
+        nonzero_mask = env_map != 0
+        zero_mask_shifted = jnp.pad(env_map==0, ((0, 0), (0, 1), (0, 0)))[:,1:,:] == 0
+        
+        #Step 3: Create a mask of nonzero elements adjacent to the nonzero elements at the same index in axis b
+        # Check for adjacent elements along axis a
+        nonzero_mask_adjacent_a = jnp.pad(nonzero_mask, ((1, 0), (0, 0), (0, 0)))
+        nonzero_mask_adjacent_a = jnp.logical_or(nonzero_mask_adjacent_a[:-1], nonzero_mask_adjacent_a[1:])
+
+        # Check for adjacent elements along axis c
+        nonzero_mask_adjacent_c = jnp.pad(nonzero_mask, ((0, 0), (0, 0), (1, 0)))
+        nonzero_mask_adjacent_c = jnp.logical_or(nonzero_mask_adjacent_c[..., :-1], nonzero_mask_adjacent_c[..., 1:])
+
+        # Combine the masks along axis a and c
+        nonzero_mask_adjacent = jnp.logical_or(nonzero_mask_adjacent_a, nonzero_mask_adjacent_c)
+
+        # Step 4: Combine the masks using logical AND operation
+        combined_mask = jnp.logical_and(nonzero_mask[:-1, :-1, :-1], zero_mask_shifted[:-1, :-1, :-1])
+        combined_mask = jnp.logical_and(combined_mask, nonzero_mask_adjacent[:-1, :-1, :-1])
+
+
+
+        stairs = jnp.sum(combined_mask)
+
+        stats = stats.at[LegoMetrics.STAIRS].set(stairs)        
         
         done = jnp.sum(jnp.where(stats == self.stat_trgs, 0, 1) * self.stat_weights) == 0
         
