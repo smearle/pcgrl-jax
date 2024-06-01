@@ -240,6 +240,7 @@ class LegoEnv(Environment):
         """Check whether state is terminal."""
         max_reps_hit = env_state.step_idx >= (self.rep.max_steps - 1) 
         done = jnp.logical_or(max_reps_hit, env_state.prob_state.done)
+        done = jnp.logical_or(done, env_state.rep_state.noops_in_rep >= env_state.rep_state.blocks.shape[0])
         return done
     """
     def render(self, env_state: LegoEnvState):

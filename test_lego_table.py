@@ -95,6 +95,8 @@ def get_expert_action(env_state):
     z_dir = jnp.where(curr_block_type == 3, 0, z_dir)
 
     #when block is already in a leg, don't move
+    nonzero_map = jnp.count_nonzero(env_map, axis=2)
+    curr_nonzero = nonzero_map[jnp.arange(nonzero_map.shape[0]),curr_x, curr_z]
     truth_cond = jnp.logical_and(
         jnp.logical_and(
             jnp.logical_or(
@@ -108,7 +110,11 @@ def get_expert_action(env_state):
         ),
         jnp.logical_and(
             curr_block_type != 3,
-            curr_y < 3*(blocks.shape[1]//4)
+            jnp.logical_or(
+                curr_nonzero<=3*(blocks.shape[1]//4)+1, 
+                curr_y < 3*(blocks.shape[1]//4)
+            )
+            
         ) 
         )  
 

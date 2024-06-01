@@ -48,7 +48,7 @@ def get_exp_dir(config: Config):
         exp_dir = os.path.join(
             'saves',
             'lego_' + \
-            f'noop-as-nextblock_{config.seed}_{config.exp_name}_{config.model}_reps-{config.max_steps_multiple}_blocks-{config.n_blocks}_reward-{"-".join(config.reward).lower()}_{config.learning_mode}',        
+            f'reset-on-nooploop-nextonnoop_{config.seed}_{config.exp_name}_{config.model}_reps-{config.max_steps_multiple}_blocks-{config.n_blocks}_reward-{"-".join(config.reward).lower()}_{config.learning_mode}',        
         )
     else:
         exp_dir = os.path.join(
