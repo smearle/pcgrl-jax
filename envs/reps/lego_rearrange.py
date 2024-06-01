@@ -25,6 +25,7 @@ class LegoRearrangeRepresentationState(RepresentationState):
     curr_block: int
     blocks: chex.Array
     last_action: int=0
+    noops_in_rep: int=0
 
 class LegoRearrangeRepresentation(Representation):
     #pre_tile_action_dim: int
@@ -334,13 +335,13 @@ class LegoRearrangeRepresentation(Representation):
         
 
         #check for out of bounds
-        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 2] >=self.env_shape[2] - tileDims[new_blocks[rep_state.curr_block, 3], 2] - 1, rep_state.blocks, new_blocks)
+        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 2] >=self.env_shape[2] - tileDims[new_blocks[rep_state.curr_block, 3], 2], rep_state.blocks, new_blocks)
         new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 2] < 0, rep_state.blocks, new_blocks)
-        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 0] >= self.env_shape[0] - tileDims[new_blocks[rep_state.curr_block, 3], 0] - 1, rep_state.blocks, new_blocks)
+        new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 0] >= self.env_shape[0] - tileDims[new_blocks[rep_state.curr_block, 3], 0], rep_state.blocks, new_blocks)
         new_blocks = jax.lax.select(new_blocks[rep_state.curr_block, 0] < 0, rep_state.blocks, new_blocks)
 
         new_height = new_blocks[rep_state.curr_block,1]
-
+    
         return_blocks = jax.lax.select(new_height > max_height, rep_state.blocks, new_blocks)
         return_blocks = jax.lax.select(action_ind == 5, rep_state.blocks, return_blocks)
 
@@ -352,21 +353,15 @@ class LegoRearrangeRepresentation(Representation):
         next_block = (rep_state.curr_block + 1)%self.num_blocks
         next_block = jax.lax.select(action_ind == 5, next_block, rep_state.curr_block)
 
-        """
-        def cond_fun(carry):
-            next_block,_ = carry
-            return return_blocks[next_block,3] != 0
-        def body_fun(carry):
-            next_block,_ = carry
-            return (next_block + 1)%self.num_blocks, 0
+        noops_in_rep = jax.lax.select(action_ind == 5, rep_state.noops_in_rep+1, rep_state.noops_in_rep)
+        noops_in_rep = jax.lax.select(next_block == 0, 0, noops_in_rep)
         
-        next_block = jax.lax.while_loop(cond_fun, body_fun, (next_block, 0))
-        """
 
         return_state = LegoRearrangeRepresentationState(
             curr_block = next_block,
             blocks = return_blocks,
-            last_action=action[0][0][0]
+            last_action=action[0][0][0],
+            noops_in_rep=noops_in_rep
             )
 
         return return_map, rng, return_state
