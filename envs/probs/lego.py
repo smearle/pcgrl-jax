@@ -191,8 +191,9 @@ class LegoProblem(Problem):
         combined_mask = jnp.logical_and(nonzero_mask[:-1, :-1, :-1], zero_mask_shifted[:-1, :-1, :-1])
         combined_mask = jnp.logical_and(combined_mask, nonzero_mask_adjacent[:-1, :-1, :-1])
 
+        #indices = jnp.arange(combined_mask.shape[1]).reshape(1, combined_mask.shape[1], 1)
 
-
+        #stairs = jnp.sum(combined_mask*indices)
         stairs = jnp.sum(combined_mask)
 
         stats = stats.at[LegoMetrics.STAIRS].set(stairs)        

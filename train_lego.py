@@ -177,9 +177,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 max_tableness = jnp.max(tableness)
                 covered_vols = states.prob_state.stats[:, ep_is, LegoMetrics.COVERED_VOL]
                 max_cov_vol = jnp.max(covered_vols)
+                stairscore=states.prob_state.stats[:, ep_is, LegoMetrics.STAIRS]
+                max_stairscore = jnp.max(states.prob_state.stats[:, ep_is, LegoMetrics.STAIRS])
 
                 
-                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_ctrdist{ep_cntr_dist:.2f}_tableness{max_tableness:.2f}_cov{max_cov_vol:.2f}/"
+                savedir = f"{config.exp_dir}/mpds/update-{i}_ep{ep_is}_ht{ep_end_avg_height:.2f}_ctrdist{ep_cntr_dist:.2f}_tableness{max_tableness:.2f}_cov{max_cov_vol:.2f}_stairs{max_stairscore}/"
                 if not os.path.exists(savedir):
                     os.makedirs(savedir)
                 
@@ -190,7 +192,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     x=curr_blocks[curr_block, 0]
                     z=curr_blocks[curr_block, 2]
 
-                    savename = os.path.join(savedir, f"{num}_a{action}_table{tableness[num]:.2f}_cov{covered_vols[num]:.2f}.mpd")
+                    savename = os.path.join(savedir, f"{num}_a{action}_table{tableness[num]:.2f}_cov{covered_vols[num]:.2f}_stairs{stairscore[num]}.mpd")
                     
                     f = open(savename, "a")
                     f.write("0/n")
