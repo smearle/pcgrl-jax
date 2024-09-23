@@ -1,26 +1,5 @@
 # PCGRL-jax
 
-## TODO:
-<input type="checkbox" disabled checked />  add config hyperparam to control hidden nodes, allowing for comparison of *~equivalent-size* models with diff. receptive field sizes
-
-<input type="checkbox" disabled checked /> controllable metric target bounds depend on actual map shape when randomizing map shape per-episode
-
-<input type="checkbox" disabled checked/> eval on larger maps (32x32)
-- <input type="checkbox" disabled/> eval on all possible map shapes within larger square map?
-
-<input type="checkbox" disabled checked/> train on larger maps (32x32 if possible)
-
-<input type="checkbox" disabled /> sparse reward (to compare against action shapes. Also might help with training on larger maps)
-
-<input type="checkbox" disabled /> optimize pathfinding (jax.lax.conv)
-
-<input type="checkbox" disabled /> new domains (treasure... more keys/doors?) and representations (turtle, re-implement O.G. wide model and compare 
- against NCA, FractalNet...)
-
-<input type="checkbox" disabled /> make enemies chase agent (when agent is in "line of sight", move toward the player by 1 tile every 2 timesteps), 
-  add combat mechanics
-
-
 ## Install
 
 ```
@@ -63,3 +42,23 @@ Arguments:
     Whether to submit each job in the sweep to a SLURM cluster (using the [submitit](https://github.com/facebookincubator/submitit) package)
 
 To save a `misc_stats.json` that records the number of timesteps for which a given mmodel has trained, we hackishly run `python sweep.py mode=plot slurm=False` (we're getting this info from the last row of the `progress.csv` used for plotting). Other stats are recorded when running with `mode=eval` or the like.
+
+## TODO:
+<input type="checkbox" disabled checked />  add config hyperparam to control hidden nodes, allowing for comparison of *~equivalent-size* models with diff. receptive field sizes
+
+<input type="checkbox" disabled checked /> controllable metric target bounds depend on actual map shape when randomizing map shape per-episode
+
+<input type="checkbox" disabled checked/> eval on larger maps (32x32)
+- <input type="checkbox" disabled/> eval on all possible map shapes within larger square map?
+
+<input type="checkbox" disabled checked/> train on larger maps (32x32 if possible)
+
+<input type="checkbox" disabled /> sparse reward (to compare against action shapes. Also might help with training on larger maps)
+
+<input type="checkbox" disabled /> optimize pathfinding (jax.lax.conv)
+
+<input type="checkbox" disabled /> new domains (treasure... more keys/doors?) and representations (turtle, re-implement O.G. wide model and compare 
+ against NCA, FractalNet...)
+
+<input type="checkbox" disabled /> make enemies chase agent (when agent is in "line of sight", move toward the player by 1 tile every 2 timesteps), 
+  add combat mechanics
