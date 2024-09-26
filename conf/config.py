@@ -114,6 +114,31 @@ class TrainConfig(Config):
 
 
 @dataclass
+class DebugConfig(Config):
+    overwrite: bool = True
+
+    # Save a checkpoint after (at least) this many timesteps
+    ckpt_freq: int = int(1e7)
+    # Render after this many update steps
+    render_freq: int = 1000
+    n_render_eps: int = 3
+
+    # eval the model on pre-made eval freezie maps to see how it's doing
+    eval_freq: int = 100
+    n_eval_maps: int = 6
+    eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
+    # discount factor for regret value calculation is the same as GAMMA
+
+    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
+    NUM_UPDATES: Optional[int] = None
+    MINIBATCH_SIZE: Optional[int] = None
+    ###########################################################################
+
+    total_timesteps: int = int(1e3)
+    log_freq: int = 500
+
+
+@dataclass
 class TrainAccelConfig(TrainConfig):
     evo_freq: int = 10
     evo_pop_size: int = 10
@@ -171,6 +196,7 @@ cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
+cs.store(name="debug_pcgrl", node=DebugConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
