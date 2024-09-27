@@ -273,24 +273,25 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 (env_state_r, reward_r, done_r, info_r, frames)
 
         def save_checkpoint(runner_state, info, steps_prev_complete):
-            try:
-                timesteps = info["timestep"][info["returned_episode"]
-                                             ] * config.n_envs
-            except jax.errors.NonConcreteBooleanIndexError:
-                return
-            for t in timesteps:
-                if t > 0:
-                    latest_ckpt_step = checkpoint_manager.latest_step()
-                    if (latest_ckpt_step is None or
-                            t - latest_ckpt_step >= config.ckpt_freq):
-                        print(f"Saving checkpoint at step {t}")
-                        ckpt = {'runner_state': runner_state,
-                                'config': config, 'step_i': t}
-                        # ckpt = {'step_i': t}
-                        save_args = orbax_utils.save_args_from_target(ckpt)
-                        checkpoint_manager.save(t, ckpt, save_kwargs={
-                                                'save_args': save_args})
-                    break
+            # try:
+            #     timesteps = info["timestep"][info["returned_episode"]
+            #                                  ] * config.n_envs
+            # except jax.errors.NonConcreteBooleanIndexError:
+            #     return
+            # for t in timesteps:
+            timesteps = info["timestep"]
+            t = timesteps[-1][-1]
+            if t > 0:
+                latest_ckpt_step = checkpoint_manager.latest_step()
+                if (latest_ckpt_step is None or
+                        t - latest_ckpt_step >= config.ckpt_freq):
+                    print(f"Saving checkpoint at step {t}")
+                    ckpt = {'runner_state': runner_state,
+                            'config': config, 'step_i': t}
+                    # ckpt = {'step_i': t}
+                    save_args = orbax_utils.save_args_from_target(ckpt)
+                    checkpoint_manager.save(t, ckpt, save_kwargs={
+                                            'save_args': save_args})
 
         # frames, states = render_episodes(train_state.params)
         # jax.debug.callback(render_frames, frames, runner_state.update_i)
