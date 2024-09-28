@@ -9,10 +9,11 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 import imageio
+from omegaconf import OmegaConf
 import optax
 from flax.training.train_state import TrainState
 from flax.training import orbax_utils
-import orbax
+import orbax.checkpoint as ocp
 from tensorboardX import SummaryWriter
 
 from conf.config import Config, TrainConfig
@@ -287,11 +288,13 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         t - latest_ckpt_step >= config.ckpt_freq):
                     print(f"Saving checkpoint at step {t}")
                     ckpt = {'runner_state': runner_state,
-                            'config': config, 'step_i': t}
+                            # 'config': OmegaConf.to_container(config),
+                            'step_i': t}
                     # ckpt = {'step_i': t}
-                    save_args = orbax_utils.save_args_from_target(ckpt)
-                    checkpoint_manager.save(t, ckpt, save_kwargs={
-                                            'save_args': save_args})
+                    # save_args = orbax_utils.save_args_from_target(ckpt)
+                    # checkpoint_manager.save(t, ckpt, save_kwargs={
+                    #                         'save_args': save_args})
+                    checkpoint_manager.save(t, args=ocp.args.StandardSave(ckpt))
 
         # frames, states = render_episodes(train_state.params)
         # jax.debug.callback(render_frames, frames, runner_state.update_i)
@@ -563,17 +566,24 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     target = {'runner_state': runner_state, 'step_i': 0}
     # Get absolute path
     ckpt_dir = os.path.abspath(ckpt_dir)
-    options = orbax.checkpoint.CheckpointManagerOptions(
-        max_to_keep=2, create=True)
-    checkpoint_manager = orbax.checkpoint.CheckpointManager(
-        ckpt_dir, orbax.checkpoint.PyTreeCheckpointer(), options)
+    # options = orbax.checkpoint.CheckpointManagerOptions(
+    #     max_to_keep=2, create=True)
+    options = ocp.CheckpointManagerOptions()
+    # checkpoint_manager = orbax.checkpoint.CheckpointManager(
+    #     ckpt_dir, orbax.checkpoint.PyTreeCheckpointer(), options)
+    checkpoint_manager = ocp.CheckpointManager(
+        # ocp.test_utils.erase_and_create_empty(ckpt_dir),
+        ckpt_dir,
+        options=options,
+    )
 
     def try_load_ckpt(steps_prev_complete, target):
 
         runner_state = target['runner_state']
         try:
             restored_ckpt = checkpoint_manager.restore(
-                steps_prev_complete, items=target)
+                # steps_prev_complete, items=target)
+                steps_prev_complete, args=ocp.args.StandardRestore(target))
         except KeyError:
             # HACK
             runner_state = runner_state.replace(
