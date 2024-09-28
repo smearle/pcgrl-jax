@@ -566,9 +566,8 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     target = {'runner_state': runner_state, 'step_i': 0}
     # Get absolute path
     ckpt_dir = os.path.abspath(ckpt_dir)
-    # options = orbax.checkpoint.CheckpointManagerOptions(
-    #     max_to_keep=2, create=True)
-    options = ocp.CheckpointManagerOptions()
+    options = ocp.CheckpointManagerOptions(
+        max_to_keep=2, create=True)
     # checkpoint_manager = orbax.checkpoint.CheckpointManager(
     #     ckpt_dir, orbax.checkpoint.PyTreeCheckpointer(), options)
     checkpoint_manager = ocp.CheckpointManager(
