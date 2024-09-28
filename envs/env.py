@@ -26,12 +26,12 @@ class Environment(GymnaxEnvironment):
         )
         obs_re, state_re = self.reset_env(key_reset, params, queued_state=state.queued_state)
         # Auto-reset environment based on termination
-        state = jax.tree_map(
+        state = jax.tree_util.tree_map(
             lambda x, y: jax.lax.select(done, x, y), state_re, state_st
         )
         # obs = jax.lax.select(done, obs_re, obs_st)
         # Generalizing this to flax dataclass observations
-        obs = jax.tree_map(
+        obs = jax.tree_util.tree_map(
             lambda x, y: jax.lax.select(done, x, y), obs_re, obs_st
         )
         return obs, state, reward, done, info

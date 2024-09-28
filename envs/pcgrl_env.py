@@ -194,7 +194,7 @@ class PCGRLEnv(Environment):
 
         prob_cls = PROB_CLASSES[problem]
         self.prob: Problem = prob_cls(map_shape=map_shape, ctrl_metrics=env_params.ctrl_metrics,
-                                      pinpoints=self.pinpoints)
+                                      pinpoints=self.pinpoints, num_agents=n_agents)
 
         self.tile_enum = self.prob.tile_enum
         self.tile_probs = self.prob.tile_probs
@@ -246,6 +246,7 @@ class PCGRLEnv(Environment):
                 self.rep = TurtleRepresentation(env_map=env_map, rf_shape=rf_shape,
                                                 tile_enum=self.tile_enum,
                                                 act_shape=act_shape, map_shape=map_shape,
+                                                max_board_scans=env_params.max_board_scans,
                                                 pinpoints=self.pinpoints,
                                                 tile_nums=self.prob.tile_nums,
                                                 )
@@ -322,13 +323,17 @@ class PCGRLEnv(Environment):
         rng, _ = jax.random.split(rng)
         _, prob_state = self.prob.reset(env_map=env_map, rng=rng, queued_state=queued_state,
                                         actual_map_shape=actual_map_shape)
-
+        
         obs = self.get_obs(
             env_map=env_map, frz_map=frz_map, rep_state=rep_state, prob_state=prob_state)
-
+        
+        # reward change here
+        reward = 0.0
+        if self.n_agents > 1:
+            reward = jnp.zeros(self.n_agents)
         env_state = PCGRLEnvState(env_map=env_map, static_map=frz_map,
                                   rep_state=rep_state, prob_state=prob_state,
-                                  step_idx=0, done=False, queued_state=queued_state)
+                                  step_idx=0, reward=reward, done=False, queued_state=queued_state)
 
         return obs, env_state
 
@@ -336,13 +341,14 @@ class PCGRLEnv(Environment):
         rep_obs = self.rep.get_obs(env_map, frz_map, rep_state)
         prob_obs = self.prob.observe_ctrls(prob_state)
         obs = PCGRLObs(map_obs=rep_obs, flat_obs=prob_obs)
+
         return obs
 
     @partial(jax.jit, static_argnums=(0, 4))
     def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
         action = action[..., None]
         if self.n_agents == 1:
-            action = action[0]
+            action = action[0][0]
         env_map, map_changed, rep_state = self.rep.step(
             env_map=env_state.env_map, action=action,
             rep_state=env_state.rep_state, step_idx=env_state.step_idx
@@ -407,20 +413,34 @@ class PCGRLEnv(Environment):
         return self.rep.observation_space()
 
     def action_shape(self):
-        return (self.n_agents, *self.act_shape, len(self.tile_enum) - 1)
+        return (*self.act_shape, self.rep.tile_action_dim)
+        #return (self.n_agents, *self.act_shape, self.rep.tile_action_dim)
 
     def gen_dummy_obs(self, env_params: PCGRLEnvParams):
         map_x = jnp.zeros((1,) + self.observation_space(env_params).shape)
         ctrl_x = jnp.zeros((1, len(env_params.ctrl_metrics)))
         return PCGRLObs(map_x, ctrl_x)
+    #
+    # def sample_action(self, rng):
+    #     
+    #     def get_single_action(self, rng):
+    #         action_shape = self.action_shape()
+    #         # Sample an action from the action space
+    #         n_dims = len(action_shape)
+    #         act_window_shape = action_shape[:-1]
+    #         n_tile_types = action_shape[-2]
+    #         return jax.random.randint(rng, act_window_shape, 0, n_tile_types)[None, ...]
+    #     
+    #     if self.n_agents == 1:
+    #         return get_single_action(self, rng)
+    #     print("single action: ", get_single_action(self, jax.random.key(0)).shape)
+    #     return 0
+    #     # get_multiple_actions = jax.vmap(get_single_action, in_axes=(None,-1))
+    #     # return get_multiple_actions(self, rng)
 
     def sample_action(self, rng):
-        action_shape = self.action_shape()
-        # Sample an action from the action space
-        n_dims = len(action_shape)
-        act_window_shape = action_shape[:-1]
-        n_tile_types = action_shape[-1]
-        return jax.random.randint(rng, act_window_shape, 0, n_tile_types)[None, ...]
+        # returns a [n_agents, window_size_x, window_size_y, num_actions] tensor
+        return jax.random.randint(rng, self.action_shape()[:-1] + (1,), 0, self.action_shape()[-1])  
 
 
 def gen_dummy_queued_state(env):
