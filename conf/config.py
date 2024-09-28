@@ -118,13 +118,13 @@ class DebugConfig(Config):
     overwrite: bool = True
 
     # Save a checkpoint after (at least) this many timesteps
-    ckpt_freq: int = int(1e7)
+    ckpt_freq: int = int(1)
     # Render after this many update steps
     render_freq: int = 1000
     n_render_eps: int = 3
 
     # eval the model on pre-made eval freezie maps to see how it's doing
-    eval_freq: int = 100
+    eval_freq: int = 1
     n_eval_maps: int = 6
     eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
     # discount factor for regret value calculation is the same as GAMMA
@@ -134,8 +134,8 @@ class DebugConfig(Config):
     MINIBATCH_SIZE: Optional[int] = None
     ###########################################################################
 
-    total_timesteps: int = int(1e3)
-    log_freq: int = 500
+    total_timesteps: int = int(1e6)
+    log_freq: int = 1
 
 
 @dataclass

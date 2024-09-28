@@ -21,6 +21,7 @@ from envs.pcgrl_env import (gen_dummy_queued_state, gen_dummy_queued_state_old,
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, init_network, gymnax_pcgrl_make,
                    init_config)
+import asyncio
 
 
 class RunnerState(struct.PyTreeNode):
@@ -104,6 +105,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         train_start_time = timer()
 
+
         # Create a tensorboard writer
         writer = SummaryWriter(get_exp_dir(config))
 
@@ -183,6 +185,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             # TODO: Overwrite certain config values
 
+
         _log_callback = partial(log_callback, config=config, writer=writer,
                                train_start_time=train_start_time,
                                steps_prev_complete=steps_prev_complete)
@@ -245,8 +248,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             _, (states, rewards, dones, infos, frames) = jax.lax.scan(
                 step_env_render, (rng_r, obsv_r, env_state_r, network_params),
                 None, 1*env.max_steps)
-
             frames = jnp.concatenate(jnp.stack(frames, 1))
+
             return frames, states
 
         def step_env_render(carry, _):
@@ -278,6 +281,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                                              ] * config.n_envs
             except jax.errors.NonConcreteBooleanIndexError:
                 return
+
             for t in timesteps:
                 if t > 0:
                     latest_ckpt_step = checkpoint_manager.latest_step()
@@ -285,12 +289,13 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                             t - latest_ckpt_step >= config.ckpt_freq):
                         print(f"Saving checkpoint at step {t}")
                         ckpt = {'runner_state': runner_state,
-                                'config': config, 'step_i': t}
+                                # 'config': config,
+                                'step_i': t}
                         # ckpt = {'step_i': t}
                         save_args = orbax_utils.save_args_from_target(ckpt)
                         checkpoint_manager.save(t, ckpt, save_kwargs={
                                                 'save_args': save_args})
-                    break
+
 
         # frames, states = render_episodes(train_state.params)
         # jax.debug.callback(render_frames, frames, runner_state.update_i)
@@ -298,9 +303,16 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
+        # runner_state, metric = jax.lax.scan(
+        #     _update_step, runner_state, None, config.NUM_UPDATES
+        # )
+
+
         # TRAIN LOOP
         def _update_step(runner_state, unused):
             # COLLECT TRAJECTORIES
+
+
             def _env_step(runner_state: RunnerState, unused):
                 train_state, env_state, last_obs, rng, update_i = (
                     runner_state.train_state, runner_state.env_state,
@@ -336,6 +348,21 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             runner_state, traj_batch = jax.lax.scan(
                 _env_step, runner_state, None, config.num_steps
             )
+
+
+            # def _check_debug(info):
+            #
+            #     timesteps = info["timestep"][info["returned_episode"]
+            #                                  ] * config.n_envs
+            #
+            #     if len(timesteps) > 0:
+            #         t = timesteps[0]
+            #     else:
+            #         t = 0
+            #     print(t, config.total_timesteps, t >= config.total_timesteps)
+            #
+
+            # jax.debug.callback(_check_debug, traj_batch.info)
 
             # CALCULATE ADVANTAGE
             train_state, env_state, last_obs, rng = runner_state.train_state, runner_state.env_state, \
@@ -467,34 +494,16 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             jax.debug.callback(save_checkpoint, runner_state,
                                metric, steps_prev_complete)
-
-            # FIXME: shouldn't assume size of render map.
-            # frames_shape = (config.n_render_eps * 1 * env.max_steps, 
-            #                 env.tile_size * (env.map_shape[0] + 2),
-            #                 env.tile_size * (env.map_shape[1] + 2), 4)
-
-            # FIXME: Inside vmap, both conditions are likely to get executed. Any way around this?
-            # Currently not vmapping the train loop though, so it's ok.
-            # start_time = timer()
-            # should_render = runner_state.update_i % config.render_freq == 0
-            # frames, states = jax.lax.cond(
-            #     should_render,
-            #     lambda: render_episodes(train_state.params),
-            #     lambda: old_render_results,)
-            # jax.lax.cond(
-            #     should_render,
-            #     partial(jax.debug.callback, render_frames),
-            #     lambda _, __, ___: None,
-            #     frames, runner_state.update_i, metric
-            # )
-            # jax.debug.callback(render_frames, frames, runner_state.update_i, metric)
-            # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
-
             jax.debug.callback(_log_callback, metric)
 
             runner_state = RunnerState(
                 train_state, env_state, last_obs, rng,
                 update_i=runner_state.update_i+1)
+            #
+            # def _check_debug(i):
+            #     print('update', config.NUM_UPDATES, i)
+            #
+            # jax.debug.callback(_check_debug, runner_state.update_i)
 
             return runner_state, metric
 
@@ -504,21 +513,17 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         # One final logging/checkpointing call to ensure things finish off
         # neatly.
+
         jax.debug.callback(_log_callback, metric)
         jax.debug.callback(save_checkpoint, runner_state, metric,
                            steps_prev_complete)
+
+
 
         return {"runner_state": runner_state, "metrics": metric}
 
     return lambda rng: train(rng, config)
 
-
-# def plot_ep_returns(ep_returns, config):
-#     plt.plot(ep_returns)
-#     plt.xlabel("Timesteps")
-#     plt.ylabel("Episodic Return")
-#     plt.title(f"Episodic Return vs. Timesteps ({config.ENV_NAME})")
-#     plt.savefig(os.path.join(get_exp_dir(config), "ep_returns.png"))
 
 
 def init_checkpointer(config: Config) -> Tuple[Any, dict]:
@@ -563,7 +568,10 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     # Get absolute path
     ckpt_dir = os.path.abspath(ckpt_dir)
     options = orbax.checkpoint.CheckpointManagerOptions(
-        max_to_keep=2, create=True)
+        enable_async_checkpointing=False,
+        max_to_keep=2,
+        create=True
+    )
     checkpoint_manager = orbax.checkpoint.CheckpointManager(
         ckpt_dir, orbax.checkpoint.PyTreeCheckpointer(), options)
 
@@ -660,6 +668,9 @@ def main_chunk(config, rng, exp_dir):
 
     train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
     out = train_jit(rng)
+
+    jax.block_until_ready(out)
+
     return out
 
     
@@ -683,10 +694,17 @@ def main(config: TrainConfig):
             out = main_chunk(config, rng, exp_dir)
 
     else:
-        out = main_chunk(config, rng, exp_dir)        
+        out = main_chunk(config, rng, exp_dir)
+
+
 
 #   ep_returns = out["runner_state"].ep_returns
 
 
 if __name__ == "__main__":
+
+    print('Start')
     main()
+    # wait for a while until PCGRL
+
+    print('Done')

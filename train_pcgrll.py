@@ -286,7 +286,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                             t - latest_ckpt_step >= config.ckpt_freq):
                         print(f"Saving checkpoint at step {t}")
                         ckpt = {'runner_state': runner_state,
-                                'config': config, 'step_i': t}
+                                # 'config': config
+                                'step_i': t}
                         # ckpt = {'step_i': t}
                         save_args = orbax_utils.save_args_from_target(ckpt)
                         checkpoint_manager.save(t, ckpt, save_kwargs={
@@ -662,6 +663,9 @@ def main_chunk(config, rng, exp_dir):
 
     train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
     out = train_jit(rng)
+
+    jax.block_until_ready(out)
+
     return out
 
 
@@ -671,8 +675,8 @@ def main(config: TrainConfig):
     rng = jax.random.PRNGKey(config.seed)
 
     exp_dir = config.exp_dir
-    print(f'running experiment at {exp_dir}\n')
 
+    print(f'running experiment at {exp_dir}\n')
     # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
     if config.overwrite and os.path.exists(exp_dir):
         shutil.rmtree(exp_dir)
@@ -691,4 +695,6 @@ def main(config: TrainConfig):
 
 
 if __name__ == "__main__":
+    print(22)
     main()
+    print(11)
