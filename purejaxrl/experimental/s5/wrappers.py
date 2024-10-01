@@ -113,6 +113,44 @@ class LogWrapper(GymnaxWrapper):
         return obs, state, reward, done, info
 
 
+
+
+class LLMRewardWrapper(GymnaxWrapper):
+    def __init__(self, env: environment.Environment):
+        super().__init__(env)
+
+        self.reward_fn = None
+
+    @partial(jax.jit, static_argnums=(0, 4))
+    def step(
+        self,
+        key: chex.PRNGKey,
+        state: environment.EnvState,
+        action: Union[int, float],
+        params: Optional[environment.EnvParams] = None,
+    ) -> Tuple[chex.Array, environment.EnvState, float, bool, dict]:
+
+        obs, env_state, reward, done, info = self._env.step(key, state, action, params)
+
+        reward_fn = self.get_reward_fn()
+
+
+        llm_reward_prev = reward_fn(state.env_map)
+        llm_reward_curr = reward_fn(state.env_map)
+
+        print(llm_reward_prev, llm_reward_curr)
+
+        return obs, env_state, reward, done, info
+
+    def set_reward_fn(self, reward_fn):
+        self.reward_fn = reward_fn
+
+    def get_reward_fn(self):
+        return self.reward_fn
+
+
+
+
 @struct.dataclass
 class LossLogEnvState:
     log_env_state: LogEnvState
@@ -162,7 +200,6 @@ class LossLogWrapper(LogWrapper):
             min_episode_losses = new_best_loss,
         )
         return obs, state, reward, done, info
-
 
 # class BraxGymnaxWrapper:
 #     def __init__(self, env_name, backend="positional"):
