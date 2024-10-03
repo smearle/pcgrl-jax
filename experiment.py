@@ -586,7 +586,6 @@ class Experiment:
                 elif self._stage == 'analysis':
                     self.log_and_print(create_message_box(f"Analyzing results for iteration {self._iteration}"))
                     # Analyze results
-                    # TODO 여기서 Feedback 생성해야하지 않을까? 다음 Iteration이 있으면? (JH)
                     self.analyze_output(self._iteration_run_id)
 
                     self._stage = 'iteration_finished'
