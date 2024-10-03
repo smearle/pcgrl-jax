@@ -11,6 +11,7 @@ import jax
 import jax.numpy as jnp
 from matplotlib import pyplot as plt
 import numpy as np
+from tensorflow_probability.python.internal.backend.jax.numpy_logging import warning
 
 from conf.config import EvalConfig, TrainConfig
 from envs.pcgrl_env import gen_dummy_queued_state
@@ -32,8 +33,9 @@ class EvalData:
     n_parameters: Optional[int] = None
 
 @hydra.main(version_base=None, config_path='./conf', config_name='eval_pcgrl')
-def main_eval(eval_config: EvalConfig):
-    eval_config = init_config(eval_config)
+def main_eval(eval_config: EvalConfig = None):
+    # if not hasattr(eval_config, 'INIT_CONFIG'):
+    #    eval_config = init_config(eval_config)
 
     exp_dir = eval_config.exp_dir
     if not eval_config.random_agent:
@@ -41,8 +43,15 @@ def main_eval(eval_config: EvalConfig):
         checkpoint_manager, restored_ckpt = init_checkpointer(eval_config)
         network_params = restored_ckpt['runner_state'].train_state.params
     elif not os.path.exists(exp_dir):
+        warning(f'No checkpoint found at {exp_dir}. Initializing network from scratch.')
         network_params = network.init(rng, init_x)
         os.makedirs(exp_dir)
+    else:
+        pass
+        # network_params = network.init(rng, init_x)
+        # print(network_params)
+
+    # print(network_params)
 
     # Preserve the config as it was during training (minus `eval_` hyperparams), for future reference
     train_config = copy.deepcopy(eval_config)
@@ -98,7 +107,7 @@ def main_eval(eval_config: EvalConfig):
     json_path = os.path.join(exp_dir, stats_name)
 
     # For each bin, evaluate the change pct. at the center of the bin
-    
+
     if eval_config.reevaluate or not os.path.exists(json_path):
         states, rewards, dones = _eval(env_params)
 
@@ -114,6 +123,8 @@ def main_eval(eval_config: EvalConfig):
         with open(json_path, 'r') as f:
             stats = json.load(f)
             stats = EvalData(**stats)
+
+    jax.block_until_ready(stats)
 
 def get_eval_stats(states, dones):
     # Everything has size (n_bins, n_steps, n_envs)
@@ -141,7 +152,7 @@ def get_eval_stats(states, dones):
     )
     return stats
 
-            
+
 def init_config_for_eval(config):
     if config.eval_map_width is not None:
         config.map_width = config.eval_map_width
@@ -154,7 +165,7 @@ def init_config_for_eval(config):
 
 def get_eval_name(eval_config: EvalConfig, train_config: TrainConfig):
     """Get a name for the eval stats file, based on the eval hyperparams.
-    
+
     If eval_config has been initialized for eval (with standard hyperparameters being replaced by their `eval_`
     counterparts), then we will check against train_config, in case we have saved stats using the same hyperparameters,
     but without having explicitly specified them as eval hyperparameters. Otherwise eval_config and train_config can be
@@ -162,7 +173,7 @@ def get_eval_name(eval_config: EvalConfig, train_config: TrainConfig):
     """
     eval_name = \
         (f"_randMap-{eval_config.eval_randomize_map_shape}" if
-         eval_config.eval_randomize_map_shape is not None and 
+         eval_config.eval_randomize_map_shape is not None and
          # This is for backward compatibility, in terms of being able to re-use prior eval stats jsons.
          eval_config.eval_randomize_map_shape != train_config.randomize_map_shape
          else "") + \
@@ -171,6 +182,6 @@ def get_eval_name(eval_config: EvalConfig, train_config: TrainConfig):
         (f"_seed-{eval_config.eval_seed}" if eval_config.eval_seed is not None else "")
     return eval_name
 
-    
+
 if __name__ == '__main__':
     main_eval()

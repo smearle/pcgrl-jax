@@ -1,0 +1,19 @@
+{
+  "llama3-70b-instruct": {
+    "full-model-name": "tgi",
+    "api_host": "",
+    "api_key": "abc",
+    "extra_body": {"stop_token_ids": [128009]}
+  },
+  "gpt-4-turbo": {
+    "full-model-name": "gpt-4-turbo-2024-04-09",
+    "api_host": "https://api.openai.com/v1",
+    "api_key": ""
+  },
+
+  "gpt-4o": {
+    "full-model-name": "gpt-4o-2024-08-06",
+    "api_host": "https://api.openai.com/v1",
+    "api_key": ""
+  }
+}

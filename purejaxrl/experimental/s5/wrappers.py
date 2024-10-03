@@ -84,7 +84,7 @@ class LogWrapper(GymnaxWrapper):
         self, key: chex.PRNGKey, params: Optional[environment.EnvParams] = None, queued_state = None,
     ) -> Tuple[chex.Array, environment.EnvState]:
         obs, env_state = self._env.reset(key, params, queued_state)
-        state = LogEnvState(env_state, 0, 0, 0, 0, 0)
+        state = LogEnvState(env_state, 0.0, 0, 0.0, 0, 0)
         return obs, state
 
     @partial(jax.jit, static_argnums=(0, 4))
@@ -134,11 +134,10 @@ class LLMRewardWrapper(GymnaxWrapper):
 
         reward_fn = self.get_reward_fn()
 
-
         llm_reward_prev = reward_fn(state.env_map)
         llm_reward_curr = reward_fn(state.env_map)
 
-        print(llm_reward_prev, llm_reward_curr)
+        reward += llm_reward_curr - llm_reward_prev
 
         return obs, env_state, reward, done, info
 

@@ -1,6 +1,7 @@
 from functools import partial
 import os
 import shutil
+from os.path import basename
 from timeit import default_timer as timer
 from typing import Any, NamedTuple, Tuple
 
@@ -9,19 +10,20 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 import imageio
+import orbax
 import optax
 from flax.training.train_state import TrainState
 from flax.training import orbax_utils
-import orbax
+import orbax.checkpoint as ocp
+from jax.experimental.array_serialization.serialization import logger
 from tensorboardX import SummaryWriter
 
 from conf.config import Config, TrainConfig
 from envs.pcgrl_env import (gen_dummy_queued_state, gen_dummy_queued_state_old,
                             OldQueuedState)
-from purejaxrl.experimental.s5.wrappers import LogWrapper
+from purejaxrl.experimental.s5.wrappers import LogWrapper, LLMRewardWrapper
 from utils import (get_ckpt_dir, get_exp_dir, init_network, gymnax_pcgrl_make,
                    init_config)
-import asyncio
 
 
 class RunnerState(struct.PyTreeNode):
@@ -90,7 +92,19 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     )
     env_r, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     # env = FlattenObservationWrapper(env)
-    env = LogWrapper(env_r)
+
+
+    env = LLMRewardWrapper(env_r)
+    env = LogWrapper(env)
+
+    # TODO example of how to change reward function
+    def compute_reward(state):
+        print(state)
+        return jnp.count_nonzero(state)
+
+    env.set_reward_fn(compute_reward)
+
+
     env_r.init_graphics()
 
     def linear_schedule(count):
@@ -105,9 +119,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         train_start_time = timer()
 
-
         # Create a tensorboard writer
-        writer = SummaryWriter(get_exp_dir(config))
+        writer = SummaryWriter(config.exp_dir)
 
         # INIT NETWORK
         network = init_network(env, env_params, config)
@@ -175,6 +188,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             train_state, env_state, obsv, rng,
             update_i=0)
 
+
         # exp_dir = get_exp_dir(config)
         if restored_ckpt is not None:
             steps_prev_complete = restored_ckpt['steps_prev_complete']
@@ -184,7 +198,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 steps_remaining // config.num_steps // config.n_envs)
 
             # TODO: Overwrite certain config values
-
 
         _log_callback = partial(log_callback, config=config, writer=writer,
                                train_start_time=train_start_time,
@@ -248,8 +261,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             _, (states, rewards, dones, infos, frames) = jax.lax.scan(
                 step_env_render, (rng_r, obsv_r, env_state_r, network_params),
                 None, 1*env.max_steps)
-            frames = jnp.concatenate(jnp.stack(frames, 1))
 
+            frames = jnp.concatenate(jnp.stack(frames, 1))
             return frames, states
 
         def step_env_render(carry, _):
@@ -275,6 +288,13 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             return (rng_r, obs_r, env_state_r, network_params),\
                 (env_state_r, reward_r, done_r, info_r, frames)
 
+        def init_checkpoint(runner_state):
+            ckpt = {'runner_state': runner_state,
+                    'step_i': 0}
+            save_args = orbax_utils.save_args_from_target(ckpt)
+            checkpoint_manager.save(0, ckpt, save_kwargs={
+                'save_args': save_args})
+
         def save_checkpoint(runner_state, info, steps_prev_complete):
             try:
                 timesteps = info["timestep"][info["returned_episode"]
@@ -295,7 +315,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                         save_args = orbax_utils.save_args_from_target(ckpt)
                         checkpoint_manager.save(t, ckpt, save_kwargs={
                                                 'save_args': save_args})
-
+                    break
 
         # frames, states = render_episodes(train_state.params)
         # jax.debug.callback(render_frames, frames, runner_state.update_i)
@@ -303,16 +323,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
-        # runner_state, metric = jax.lax.scan(
-        #     _update_step, runner_state, None, config.NUM_UPDATES
-        # )
-
-
         # TRAIN LOOP
         def _update_step(runner_state, unused):
             # COLLECT TRAJECTORIES
-
-
             def _env_step(runner_state: RunnerState, unused):
                 train_state, env_state, last_obs, rng, update_i = (
                     runner_state.train_state, runner_state.env_state,
@@ -348,21 +361,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             runner_state, traj_batch = jax.lax.scan(
                 _env_step, runner_state, None, config.num_steps
             )
-
-
-            # def _check_debug(info):
-            #
-            #     timesteps = info["timestep"][info["returned_episode"]
-            #                                  ] * config.n_envs
-            #
-            #     if len(timesteps) > 0:
-            #         t = timesteps[0]
-            #     else:
-            #         t = 0
-            #     print(t, config.total_timesteps, t >= config.total_timesteps)
-            #
-
-            # jax.debug.callback(_check_debug, traj_batch.info)
 
             # CALCULATE ADVANTAGE
             train_state, env_state, last_obs, rng = runner_state.train_state, runner_state.env_state, \
@@ -484,6 +482,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                                 advantages, targets, rng)
                 return update_state, total_loss
 
+            # Save initial weight
+
+
+
             update_state = (train_state, traj_batch, advantages, targets, rng)
             update_state, loss_info = jax.lax.scan(
                 _update_epoch, update_state, None, config.update_epochs
@@ -492,20 +494,42 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             metric = traj_batch.info
             rng = update_state[-1]
 
+            # Save weight to checkpoint
             jax.debug.callback(save_checkpoint, runner_state,
                                metric, steps_prev_complete)
+
+            # FIXME: shouldn't assume size of render map.
+            # frames_shape = (config.n_render_eps * 1 * env.max_steps, 
+            #                 env.tile_size * (env.map_shape[0] + 2),
+            #                 env.tile_size * (env.map_shape[1] + 2), 4)
+
+            # FIXME: Inside vmap, both conditions are likely to get executed. Any way around this?
+            # Currently not vmapping the train loop though, so it's ok.
+            # start_time = timer()
+            # should_render = runner_state.update_i % config.render_freq == 0
+            # frames, states = jax.lax.cond(
+            #     should_render,
+            #     lambda: render_episodes(train_state.params),
+            #     lambda: old_render_results,)
+            # jax.lax.cond(
+            #     should_render,
+            #     partial(jax.debug.callback, render_frames),
+            #     lambda _, __, ___: None,
+            #     frames, runner_state.update_i, metric
+            # )
+            # jax.debug.callback(render_frames, frames, runner_state.update_i, metric)
+            # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
+
             jax.debug.callback(_log_callback, metric)
 
             runner_state = RunnerState(
                 train_state, env_state, last_obs, rng,
                 update_i=runner_state.update_i+1)
-            #
-            # def _check_debug(i):
-            #     print('update', config.NUM_UPDATES, i)
-            #
-            # jax.debug.callback(_check_debug, runner_state.update_i)
 
             return runner_state, metric
+
+
+        jax.debug.callback(init_checkpoint, runner_state)
 
         runner_state, metric = jax.lax.scan(
             _update_step, runner_state, None, config.NUM_UPDATES
@@ -513,17 +537,21 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         # One final logging/checkpointing call to ensure things finish off
         # neatly.
-
-        jax.debug.callback(_log_callback, metric)
-        jax.debug.callback(save_checkpoint, runner_state, metric,
-                           steps_prev_complete)
-
-
+        # jax.debug.callback(_log_callback, metric)
+        # jax.debug.callback(save_checkpoint, runner_state, metric,
+        #                    steps_prev_complete)
 
         return {"runner_state": runner_state, "metrics": metric}
 
     return lambda rng: train(rng, config)
 
+
+# def plot_ep_returns(ep_returns, config):
+#     plt.plot(ep_returns)
+#     plt.xlabel("Timesteps")
+#     plt.ylabel("Episodic Return")
+#     plt.title(f"Episodic Return vs. Timesteps ({config.ENV_NAME})")
+#     plt.savefig(os.path.join(get_exp_dir(config), "ep_returns.png"))
 
 
 def init_checkpointer(config: Config) -> Tuple[Any, dict]:
@@ -535,7 +563,9 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     # Create a dummy checkpoint so we can restore it to the correct dataclasses
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     # env = FlattenObservationWrapper(env)
+    env = LLMRewardWrapper(env)
     env = LogWrapper(env)
+
     rng, _rng = jax.random.split(rng)
     network = init_network(env, env_params, config)
     init_x = env.gen_dummy_obs(env_params)
@@ -568,10 +598,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     # Get absolute path
     ckpt_dir = os.path.abspath(ckpt_dir)
     options = orbax.checkpoint.CheckpointManagerOptions(
-        enable_async_checkpointing=False,
-        max_to_keep=2,
-        create=True
-    )
+        max_to_keep=2, create=True)
     checkpoint_manager = orbax.checkpoint.CheckpointManager(
         ckpt_dir, orbax.checkpoint.PyTreeCheckpointer(), options)
 
@@ -696,15 +723,33 @@ def main(config: TrainConfig):
     else:
         out = main_chunk(config, rng, exp_dir)
 
+@hydra.main(version_base=None, config_path='./conf', config_name='train_pcgrl')
+def main_noinit(config: TrainConfig):
+    rng = jax.random.PRNGKey(config.seed)
+
+    exp_dir = config.exp_dir
+
+    import logging
+    logger = logging.getLogger(basename(__file__))
+    logger.info(f'running experiment at {exp_dir}\n')
+
+    # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
+    if config.overwrite and os.path.exists(exp_dir):
+        shutil.rmtree(exp_dir)
+
+    if config.timestep_chunk_size != -1:
+        n_chunks = config.total_timesteps // config.timestep_chunk_size
+        for i in range(n_chunks):
+            config.total_timesteps = config.timestep_chunk_size + (i * config.timestep_chunk_size)
+            print(f"Running chunk {i + 1}/{n_chunks}")
+            out = main_chunk(config, rng, exp_dir)
+
+    else:
+        out = main_chunk(config, rng, exp_dir)
 
 
-#   ep_returns = out["runner_state"].ep_returns
+        #   ep_returns = out["runner_state"].ep_returns
 
 
 if __name__ == "__main__":
-
-    print('Start')
     main()
-    # wait for a while until PCGRL
-
-    print('Done')
