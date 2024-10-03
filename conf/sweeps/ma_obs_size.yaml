@@ -35,3 +35,7 @@ representation:
 - turtle
 total_timesteps:
 - 1000000000
+seed:
+- 0
+- 1
+- 2
