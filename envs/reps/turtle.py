@@ -34,7 +34,7 @@ class TurtleRepresentation(Representation):
         self.directions = np.array([[0, 0] for _ in range(
             self.num_tiles - 1)] + [[-1, 0], [0, 1], [1, 0], [0, -1]])
         self.builds = jnp.array(
-            [self.editable_tile_enum] + [-1] * 4
+            self.editable_tile_enum + [-1] * 4
         )
         center = jnp.int32((env_map.shape[0] - 1) / 2)
         self.center_position = jnp.array([center, center])
@@ -96,32 +96,35 @@ class MultiTurtleRepresentationState(RepresentationState):
 class MultiTurtleRepresentation(TurtleRepresentation):
     def __init__(self, env_map: chex.Array, rf_shape: Tuple[int, int],
                  tile_enum: Tiles, act_shape: Tuple[int, int], map_shape: Tuple[int, int],
-                 n_agents: int):
+                 n_agents: int, max_board_scans: float, pinpoints: bool, tile_nums: Tuple[int],):
         super().__init__(tile_enum=tile_enum, rf_shape=rf_shape,
-                         act_shape=act_shape, env_map=env_map, map_shape=map_shape)
+                         act_shape=act_shape, env_map=env_map, map_shape=map_shape,
+                         max_board_scans=max_board_scans, pinpoints=pinpoints, tile_nums=tile_nums)
         self.map_shape = map_shape
         self.max_steps = int(math.ceil(self.max_steps / n_agents))
-        self.n_agents = n_agents
+        self.n_agents = int(n_agents)
         self.act_coords = np.argwhere(np.ones(map_shape))
 
     def observation_shape(self):
         # Always observe static tile channel, agent location channel
-        return (*self.rf_shape, self.n_agents * (len(self.tile_enum) + 1 + self.n_agents))
+        # return (*self.rf_shape, self.n_agents * (len(self.tile_enum) + 1 + self.n_agents))
+        return (*self.rf_shape, len(self.tile_enum) + 1 + self.n_agents)
 
     def step(self, env_map: chex.Array, action: int, step_idx: int,
-             rep_state: MultiTurtleRepresentationState):
+             rep_state: MultiTurtleRepresentationState, agent_id: int):
 
         map_changed = False
         new_env_map = env_map
         new_positions = rep_state.pos
 
-        for i, a_pos in enumerate(rep_state.pos):
+        # for i, a_pos in enumerate(rep_state.pos):
+        a_pos = rep_state.pos[agent_id]
 
-            new_env_map, a_map_changed, new_a_pos = self.step_turtle(
-                new_env_map, action[i], a_pos)
-            map_changed = jnp.logical_or(map_changed, a_map_changed)
+        new_env_map, a_map_changed, new_a_pos = self.step_turtle(
+            new_env_map, action, a_pos)
+        map_changed = jnp.logical_or(map_changed, a_map_changed)
 
-            new_positions = new_positions.at[i].set(new_a_pos)
+        new_positions = new_positions.at[agent_id].set(new_a_pos)
 
         rep_state = rep_state.replace(pos=new_positions)
 
@@ -130,7 +133,8 @@ class MultiTurtleRepresentation(TurtleRepresentation):
     def reset(self, frz_map, rng):
         # Get all indices of board positions
         # shuffle
-        shuffled_indices = jax.random.shuffle(rng, self.act_coords)
+        # shuffled_indices = jax.random.shuffle(rng, self.act_coords)
+        shuffled_indices = jax.random.permutation(rng, self.act_coords, independent=True)
         return TurtleRepresentationState(pos=shuffled_indices[:self.n_agents])
         # return TurtleRepresentationState(pos=jnp.repeat(self.center_position[None], self.n_agents,
                                                         # axis=0))
@@ -165,7 +169,12 @@ class MultiTurtleRepresentation(TurtleRepresentation):
             padded_static_map = jnp.pad(static_map, self.rf_off, mode='constant',
                                         constant_values=1)  # Border is static
 
-        for i, a_pos in enumerate(rep_state.pos):
+        # TODO: Currently doing this too much! I.e. getting both agents' observations for *each* agent. Is redundant!!
+
+        # Iterating through agents
+        # for i, a_pos in enumerate(rep_state.pos):
+        for i in range(self.n_agents):
+            a_pos = rep_state.pos[i]
             rf_map_obs = jax.lax.dynamic_slice(
                 padded_env_map,
                 a_pos,
@@ -196,5 +205,5 @@ class MultiTurtleRepresentation(TurtleRepresentation):
             rf_obs = rf_obs.at[i].set(a_rf_obs)
 
         # Collapse agent dimension (0) into channel dimension (-1)
-        rf_obs = jnp.concatenate(rf_obs, axis=-1)
+        # rf_obs = jnp.concatenate(rf_obs, axis=-1)
         return rf_obs

@@ -1,0 +1,41 @@
+NAME: ma_obs_size
+ckpt_freq:
+- 100
+empty_start:
+- false
+eval_hypers:
+  eval_map_width:
+  - 8
+  - 16
+  - 24
+  - 32
+  eval_randomize_map_shape:
+  - true
+  - false
+map_width:
+- 16
+model:
+- rnn
+multiagent: true
+n_agents:
+- 2
+n_envs:
+- 400
+obs_size_hid_dims:
+- 3
+- 5
+- 8
+- 16
+- -1
+problem:
+- binary
+render_freq:
+- 100
+representation:
+- turtle
+total_timesteps:
+- 1000000000
+seed:
+- 0
+- 1
+- 2

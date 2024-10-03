@@ -206,21 +206,21 @@
 # ]
 
 
-hypers = [
-    {
-        'NAME': 'obss_hiddims_dungeon_conv2_ctrl_path',
-        'problem': ['dungeon'],
-        'ctrl_metrics': [['path_length']],
-        # 'obs_size': [16, -1],
-        'obs_size_hid_dims': [3, 5, 8, 16, -1],
-        'model': ['conv2'],
-        'change_pct': [-1.0],
-        'seed': list(range(3,6)),
-        'n_envs': [100],
-        'max_board_scans': [5],
-        'total_timesteps': [1_000_000_000],
-    },
-]
+# hypers = [
+#     {
+#         'NAME': 'obss_hiddims_dungeon_conv2_ctrl_path',
+#         'problem': ['dungeon'],
+#         'ctrl_metrics': [['path_length']],
+#         # 'obs_size': [16, -1],
+#         'obs_size_hid_dims': [3, 5, 8, 16, -1],
+#         'model': ['conv2'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(3,6)),
+#         'n_envs': [100],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
 
 
 # hypers = [
@@ -448,22 +448,49 @@ hypers = [
 #     },
 # ]
  
+# hypers = [
+#     {
+#         'NAME': 'everything_dungeon',
+#         'model': ['conv2'],
+#         'problem': ['dungeon'],
+# #         'seed': [3, 4, 5],
+#         'seed': [0, 1, 2],
+#         'n_envs': [600],
+#         'randomize_map_shape': [True, False],
+#         'ctrl_metrics': [['path_length', 'nearest_enemy']],
+#         'empty_start': [True],
+#         'pinpoints': [True, False],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#         'timestep_chunk_size': [10_000_000],
+#         'obs_size_hid_dims': [8, 16, 24, 31],
+#     },
+# ]
+
+
 hypers = [
     {
-        'NAME': 'everything_dungeon',
-        'model': ['conv2'],
-        'problem': ['dungeon'],
-#         'seed': [3, 4, 5],
-        'seed': [0, 1, 2],
-        'n_envs': [600],
-        'randomize_map_shape': [True, False],
-        'ctrl_metrics': [['path_length', 'nearest_enemy']],
-        'empty_start': [True],
-        'pinpoints': [True, False],
-        'max_board_scans': [5],
+        'NAME': 'ma_obs_size',
+        'multiagent': True,
+
+        'problem': ['binary'],
+        'map_width': [16],
+        'n_agents': [2],
+        'representation': ['turtle'],
+        'model': ['rnn'],
+        'obs_size_hid_dims': [3, 5, 8, 16, -1],
+        # 'randomize_map_shape': [True, False],
+        # 'randomize_map_shape': [True],
+        # 'change_pct': [-1.0],
+        # 'seed': [3, 4, 5],
+        # 'seed': [0, 1, 2],
+        'n_envs': [400],
+        'empty_start': [False],
+        # 'pinpoints': [True, False],
         'total_timesteps': [1_000_000_000],
-        'timestep_chunk_size': [10_000_000],
-        'obs_size_hid_dims': [8, 16, 24, 31],
+        'ckpt_freq': [100],
+        'render_freq': [100],
+        'seed': [0, 1, 2],
     },
 ]
 

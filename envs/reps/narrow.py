@@ -65,7 +65,7 @@ class NarrowRepresentation(Representation):
         self.act_shape = act_shape
 
     def step(self, env_map: chex.Array, action: int,
-             rep_state: NarrowRepresentationState, step_idx: int):
+             rep_state: NarrowRepresentationState, step_idx: int, agent_id: int = 0):
         action = action[..., 0]
         b = self.builds[action]
         pos_idx = step_idx % rep_state.n_valid_agent_coords

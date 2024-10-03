@@ -47,6 +47,7 @@ class PlayPCGRLEnvParams:
     rf_shape: Tuple[int, int] = (31, 31)
     n_agents: int = 1
     max_board_scans: float = 2.0
+    multiagent: bool = False
 
     
 def gen_init_maze(rng, map_shape, tile_enum: Tiles):
@@ -68,6 +69,7 @@ class PlayPCGRLEnv(Environment):
 
         self.map_shape = map_shape
         self.n_agents = n_agents
+        self.multiagent = env_params.multiagent or self.n_agents > 1
 
         self.prob: Problem
         self.prob = MazePlayProblem(map_shape=map_shape, ctrl_metrics=[])
@@ -120,7 +122,8 @@ class PlayPCGRLEnv(Environment):
     @partial(jax.jit, static_argnums=(0, 4))
     def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
         action = action[..., None]
-        if self.n_agents == 1:
+        # if self.n_agents == 1:
+        if not self.multiagent:
             action = action[0]
         env_map, map_changed, rep_state = self.rep.step(
             env_map=env_state.env_map, action=action,

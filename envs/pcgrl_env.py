@@ -95,6 +95,7 @@ class PCGRLObs:
 
 @struct.dataclass
 class PCGRLEnvParams:
+    multiagent: bool = False
     problem: int = ProbEnum.BINARY
     representation: int = RepEnum.NARROW
     map_shape: Tuple[int, int] = (16, 16)
@@ -181,6 +182,7 @@ class PCGRLEnv(Environment):
             env_params.map_shape, env_params.act_shape, env_params.rf_shape, env_params.problem,
             env_params.representation, env_params.static_tile_prob, env_params.n_freezies, env_params.n_agents)
 
+        self.multiagent = env_params.multiagent
         self.map_shape = env_params.map_shape
         self.act_shape = env_params.act_shape
         self.static_tile_prob = np.float32(static_tile_prob)
@@ -230,7 +232,8 @@ class PCGRLEnv(Environment):
                                           tile_nums=self.prob.tile_nums,
             )
         elif representation == RepEnum.TURTLE:
-            if n_agents > 1:
+            # if n_agents > 1:
+            if env_params.multiagent:
                 self.rep = MultiTurtleRepresentation(
                     env_map=env_map, rf_shape=rf_shape,
                     tile_enum=self.tile_enum,
@@ -248,6 +251,7 @@ class PCGRLEnv(Environment):
                                                 act_shape=act_shape, map_shape=map_shape,
                                                 pinpoints=self.pinpoints,
                                                 tile_nums=self.prob.tile_nums,
+                                                max_board_scans=env_params.max_board_scans,
                                                 )
         elif representation == RepEnum.PLAYER:
             self.rep = PlayerRepresentation(env_map=env_map, rf_shape=rf_shape,
@@ -339,13 +343,14 @@ class PCGRLEnv(Environment):
         return obs
 
     @partial(jax.jit, static_argnums=(0, 4))
-    def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
+    def step_env(self, rng, env_state: PCGRLEnvState, action, env_params, agent_id):
         action = action[..., None]
-        if self.n_agents == 1:
+        # if self.n_agents == 1:
+        if not self.multiagent:
             action = action[0]
         env_map, map_changed, rep_state = self.rep.step(
             env_map=env_state.env_map, action=action,
-            rep_state=env_state.rep_state, step_idx=env_state.step_idx
+            rep_state=env_state.rep_state, step_idx=env_state.step_idx, agent_id=agent_id
         )
         env_map = jnp.where(env_state.static_map == 1,
                             env_state.env_map, env_map,

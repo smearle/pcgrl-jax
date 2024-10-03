@@ -12,6 +12,8 @@ from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, Rep
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
 from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
+from marl.model import ActorRNN, ActorCategorical
+from marl.wrappers.baselines import MultiAgentWrapper
 from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, ConvForward2, Dense, NCA, SeqNCA
 
 
@@ -148,6 +150,16 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
             action_dim, activation=config.activation,
             arf_size=config.arf_size, vrf_size=config.vrf_size,
         )
+    elif config.model == "rnn":
+        # FIXME: Hack: RNN and multi-agent are weirdly bound lol
+        # TODO: Standardize everything to take and return (by default None/unused) hidden states. Enable multi-agent 
+        #   script to use non-RNN networks.
+        env = MultiAgentWrapper(env, env_params)
+        network = ActorCategorical(env.action_space(env.agents[0]).n,
+                             subnet=ActorRNN(env.action_space(env.agents[0]).n, config=config,
+                            #  subnet=ActorMLP(env.action_space(env.agents[0]).shape[0], config=config,
+                                             ))
+        return network
     elif config.model == "conv":
         network = ConvForward(
             action_dim=action_dim, activation=config.activation,
@@ -224,6 +236,7 @@ def get_env_params_from_config(config: Config):
         randomize_map_shape=config.randomize_map_shape,
         empty_start=config.empty_start,
         pinpoints=config.pinpoints,
+        multiagent=config.multiagent or config.n_agents > 1,
     )
     return env_params
 

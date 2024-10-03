@@ -13,6 +13,7 @@ from dataclasses import dataclass
 class Config:
     lr: float = 1.0e-4
     n_envs: int = 4
+    # How many steps do I take in all of my batched environments before doing a gradient update
     num_steps: int = 128
     total_timesteps: int = int(5e7)
     timestep_chunk_size: int = -1
@@ -54,6 +55,7 @@ class Config:
     static_tile_prob: Optional[float] = 0.0
     n_freezies: int = 0
     n_agents: int = 1  # multi-agent is fake and broken
+    multiagent: bool = False
     max_board_scans: float = 3.0
 
     # How many milliseconds to wait between frames of the rendered gifs
@@ -114,6 +116,7 @@ class TrainConfig(Config):
 
 
 @dataclass
+
 class DebugConfig(Config):
     overwrite: bool = True
 
@@ -137,6 +140,44 @@ class DebugConfig(Config):
     total_timesteps: int = int(1e6)
     log_freq: int = 1
 
+class MultiAgentConfig(TrainConfig):
+    multiagent: bool = True
+    # lr: float = 3e-4
+    # update_epochs: int = 4
+    # num_steps: int = 521
+    # gamma: float = 0.99
+    # gae_lambda: float = 0.95
+    # clip_eps: float = 0.2
+    # scale_clip_eps: bool = False
+    # ent_coef: float = 0.0
+    # vf_coef: float = 0.5
+    # max_grad_norm: float = 0.25
+
+    model: str = 'rnn'
+    representation: str = "turtle"
+    n_agents: int = 2
+    n_envs: int = 300
+    scale_clip_eps: bool = False
+    hidden_dims: Tuple[int] = (512, -1)
+    empty_start: bool = True
+
+    # Save a checkpoint after (at least) this many ***update*** steps
+    ckpt_freq: int = 40
+    render_freq: int = 20
+
+    # WandB Params
+    WANDB_MODE: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
+    ENTITY: str = ''
+    PROJECT: str = 'smearle_pcgrl_mappo'
+
+    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
+    _num_actors: int = -1
+    _minibatch_size: int = -1
+    _num_updates: int = -1
+    _exp_dir: Optional[str] = None
+    _ckpt_dir: Optional[str] = None
+    _vid_dir: Optional[str] = None
+    ###########################################################################
 
 @dataclass
 class TrainAccelConfig(TrainConfig):
@@ -177,6 +218,10 @@ class EnjoyConfig(EvalConfig):
     n_enjoy_envs: int = 1
     render_ims: bool = False
 
+
+@dataclass
+class EnjoyMultiAgentConfig(MultiAgentConfig, EnjoyConfig):
+    pass
     
 
 @dataclass
@@ -233,6 +278,8 @@ class TrainLLMConfig(Config):
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
+cs.store(name="ma_config", node=MultiAgentConfig)
+cs.store(name="enjoy_ma_pcgrl", node=EnjoyMultiAgentConfig)
 cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="debug_pcgrl", node=DebugConfig)
