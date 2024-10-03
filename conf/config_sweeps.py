@@ -490,6 +490,7 @@ hypers = [
         'total_timesteps': [1_000_000_000],
         'ckpt_freq': [100],
         'render_freq': [100],
+        'seed': [0, 1, 2],
     },
 ]
 

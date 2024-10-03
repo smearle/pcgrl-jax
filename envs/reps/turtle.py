@@ -133,7 +133,8 @@ class MultiTurtleRepresentation(TurtleRepresentation):
     def reset(self, frz_map, rng):
         # Get all indices of board positions
         # shuffle
-        shuffled_indices = jax.random.shuffle(rng, self.act_coords)
+        # shuffled_indices = jax.random.shuffle(rng, self.act_coords)
+        shuffled_indices = jax.random.permutation(rng, self.act_coords, independent=True)
         return TurtleRepresentationState(pos=shuffled_indices[:self.n_agents])
         # return TurtleRepresentationState(pos=jnp.repeat(self.center_position[None], self.n_agents,
                                                         # axis=0))

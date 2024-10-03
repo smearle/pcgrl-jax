@@ -228,6 +228,7 @@ def sweep_main(cfg: SweepConfig):
                     cpus_per_task=1,
                     gpus_per_node=1,
                     timeout_min=60,
+                    slurm_account='pr_174_general',
                 )
             return executor.submit(seq_main, main_fn, sweep_configs)
 
@@ -242,6 +243,7 @@ def sweep_main(cfg: SweepConfig):
                     timeout_min=60,
                     # gpus_per_node=1,
                     slurm_gres='gpu:rtx8000:1',
+                    slurm_account='pr_174_general',
                 )
             pprint.pprint(sweep_configs)
             return executor.map_array(main_fn, sweep_configs)
@@ -258,6 +260,7 @@ def sweep_main(cfg: SweepConfig):
                     # gpus_per_node=1,
                     slurm_gres='gpu:rtx8000:1',
                     # partition='rtx8000',
+                    slurm_account='pr_174_general',
                 )
             # Pretty print all configs to be executed
             pprint.pprint(sweep_configs)
