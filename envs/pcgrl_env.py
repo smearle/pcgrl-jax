@@ -459,12 +459,12 @@ def flatten_obs(obs: PCGRLObs) -> chex.Array:
 @partial(jax.jit, static_argnums=(0,))
 def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
                path_coords_tpl: chex.Array):
-    tile_size = env.prob.tile_size
+    tile_size = int(env.prob.tile_size)
     env_map = env_state.env_map
     border_size = np.array((1, 1))
     env_map = jnp.pad(env_map, border_size, constant_values=Tiles.BORDER)
-    full_height = len(env_map)
-    full_width = len(env_map[0])
+    full_height = int(len(env_map))
+    full_width = int(len(env_map[0]))
     lvl_img = jnp.zeros(
         (full_height*tile_size, full_width*tile_size, 4), dtype=jnp.uint8)
     lvl_img = lvl_img.at[:].set((0, 0, 0, 255))
@@ -613,7 +613,7 @@ def render_stats_jax(env: PCGRLEnv, env_state: PCGRLEnvState, lvl_img: chex.Arra
     lvl_img = jnp.pad(lvl_img, ((0, 0), (0, max(0, max_row_width - lvl_img.shape[1])), (0, 0)))
 
     lvl_img = jnp.concatenate((lvl_img, lvl_img_text), axis=0)
-        
+
 
     return lvl_img
 

@@ -22,6 +22,7 @@ from envs.pcgrl_env import (gen_dummy_queued_state, gen_dummy_queued_state_old,
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, init_network, gymnax_pcgrl_make,
                    init_config)
+import asyncio
 
 
 class RunnerState(struct.PyTreeNode):
@@ -274,27 +275,24 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 (env_state_r, reward_r, done_r, info_r, frames)
 
         def save_checkpoint(runner_state, info, steps_prev_complete):
-            # try:
-            #     timesteps = info["timestep"][info["returned_episode"]
-            #                                  ] * config.n_envs
-            # except jax.errors.NonConcreteBooleanIndexError:
-            #     return
-            # for t in timesteps:
-            timesteps = info["timestep"]
-            t = timesteps[-1][-1]
-            if t > 0:
-                latest_ckpt_step = checkpoint_manager.latest_step()
-                if (latest_ckpt_step is None or
-                        t - latest_ckpt_step >= config.ckpt_freq):
-                    print(f"Saving checkpoint at step {t}")
-                    ckpt = {'runner_state': runner_state,
-                            # 'config': OmegaConf.to_container(config),
-                            'step_i': t}
-                    # ckpt = {'step_i': t}
-                    # save_args = orbax_utils.save_args_from_target(ckpt)
-                    # checkpoint_manager.save(t, ckpt, save_kwargs={
-                    #                         'save_args': save_args})
-                    checkpoint_manager.save(t, args=ocp.args.StandardSave(ckpt))
+            try:
+                timesteps = info["timestep"][info["returned_episode"]
+                                             ] * config.n_envs
+            except jax.errors.NonConcreteBooleanIndexError:
+                return
+            for t in timesteps:
+                if t > 0:
+                    latest_ckpt_step = checkpoint_manager.latest_step()
+                    if (latest_ckpt_step is None or
+                            t - latest_ckpt_step >= config.ckpt_freq):
+                        print(f"Saving checkpoint at step {t}")
+                        ckpt = {'runner_state': runner_state,
+                                'config': config, 'step_i': t}
+                        # ckpt = {'step_i': t}
+                        save_args = orbax_utils.save_args_from_target(ckpt)
+                        checkpoint_manager.save(t, ckpt, save_kwargs={
+                                                'save_args': save_args})
+                    break
 
         # frames, states = render_episodes(train_state.params)
         # jax.debug.callback(render_frames, frames, runner_state.update_i)
@@ -566,23 +564,17 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     target = {'runner_state': runner_state, 'step_i': 0}
     # Get absolute path
     ckpt_dir = os.path.abspath(ckpt_dir)
-    options = ocp.CheckpointManagerOptions(
+    options = orbax.checkpoint.CheckpointManagerOptions(
         max_to_keep=2, create=True)
-    # checkpoint_manager = orbax.checkpoint.CheckpointManager(
-    #     ckpt_dir, orbax.checkpoint.PyTreeCheckpointer(), options)
-    checkpoint_manager = ocp.CheckpointManager(
-        # ocp.test_utils.erase_and_create_empty(ckpt_dir),
-        ckpt_dir,
-        options=options,
-    )
+    checkpoint_manager = orbax.checkpoint.CheckpointManager(
+        ckpt_dir, orbax.checkpoint.PyTreeCheckpointer(), options)
 
     def try_load_ckpt(steps_prev_complete, target):
 
         runner_state = target['runner_state']
         try:
             restored_ckpt = checkpoint_manager.restore(
-                # steps_prev_complete, items=target)
-                steps_prev_complete, args=ocp.args.StandardRestore(target))
+                steps_prev_complete, items=target)
         except KeyError:
             # HACK
             runner_state = runner_state.replace(
