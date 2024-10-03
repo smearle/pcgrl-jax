@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 from flax import struct
 import imageio
-from omegaconf import OmegaConf
+import orbax
 import optax
 from flax.training.train_state import TrainState
 from flax.training import orbax_utils
@@ -22,7 +22,6 @@ from envs.pcgrl_env import (gen_dummy_queued_state, gen_dummy_queued_state_old,
 from purejaxrl.experimental.s5.wrappers import LogWrapper
 from utils import (get_ckpt_dir, get_exp_dir, init_network, gymnax_pcgrl_make,
                    init_config)
-import asyncio
 
 
 class RunnerState(struct.PyTreeNode):
