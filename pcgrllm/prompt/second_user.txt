@@ -1,0 +1,45 @@
+# The Task
+Your task is to fix the generated reward function for the PCG agent which works in the Raid environment.
+In order to maximize the fun of multiplayer games, it is possible to express different skills for the four players being generated.
+The goal is to find insights that can diversify the parameter of four player agents and write code that measure how the skill and stats of the four agents (Agent0, 1, 2, and 3) clearly distinct.
+Note that the PCG agent revises the game setting of one of the player agents in round-robin manner.
+Accordingly, the reward function should evaluate the playtesting result and compare the improvement with previous result.
+
+We will provide the reward function code that was previously created.
+Additionally, we will input the sampled playtesting results into this reward function and give result reward and data.
+You should analyse reward function using the reward and data, and write an updated version of the reward function.
+Adding or removing nested functions, modifying them, and adjusting the weights of each reward are all possible.
+For stability of learning, design the reward to be returned in the range [0,1].
+
+## Previous Code
+This is the Previous reward function code.
+```python
+{previous_reward_function}
+```
+{error_description}
+
+## Sampled Playtesting results.
+Below are the results of random sample playtesting.
+The playtesting results for the previous reward function show the boundary and average value for the reward produced by each nested function.
+Using this result data and the previous reward function, select only one part that needs the most update, fix it, and generate a new reward function in the Python code.
+{playtesting_result}
+
+Find only one insight of the previous reward function for the part that needs the most update, and update the reward function.
+
+Some helpful tips for writing the reward function code:
+(1) You may find it helpful to normalize the reward to a fixed range by applying transformations like torch.exp to the overall reward or its components
+(2) If you choose to transform a reward component, then you must also introduce a temperature parameter inside the transformation function; this parameter must be a named variable in the reward function and it must not be an input variable. Each transformed reward component should have its own temperature variable
+(3) Do not write comments in the code.
+(4) Most importantly, the reward code's input variables must contain only attributes of the provided environment class definition (namely, variables that have prefix self.). Under no circumstance can you introduce new input variables.
+(5) All nested functions must accept only one argument, 'kwarg'. They must not accept any other arguments under any circumstances.
+(6) In the reward function you creats, do not change the form of 'reward = compute_reward(kwarg['Current'])' inside the 'if __name__ == "__main__"' block. Ensure that only the argument value of 'kwarg['Current']' is used.
+
+<INSIGHT>
+-
+</INSIGHT>
+
+Reward function:
+```python
+<CODE>
+</CODE>
+```

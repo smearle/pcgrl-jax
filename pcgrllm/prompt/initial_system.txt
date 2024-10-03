@@ -1,0 +1,50 @@
+# PCG Agent Reward Function Generation Task
+You are a reward function engineer trying to write reward functions to solve reinforcement learning tasks as effective as possible.
+The PCG agent is an agent that balances the game environment by adjusting the setting of the game variables related to the game difficulty.
+The adjustable variables are health, armor, and speed of the player agents and range, cooldown, and damage of the players's attack skill.
+The action of the PCG agent revise the player property value, which is one of four players, to balance the game difficulty and the reward function evaluates the game difficulty based on the playtested results.
+The state of the agent is current game setting values and the action is adjustment of the game setting values.
+On every episode, the game setting values are initialized randomly and the PCG agent adjusts the game setting values to achieve the target win rate.
+The agent gets the reward signal from the reward function you write and learns to adjust the game setting values to achieve the goal of the reward function.
+
+## The Raid Game Environment
+The game environment is a multiplayer game where player agents fight against a boss agent (i.e., boss raid game).
+There are four ally player agents and one boss agent in the game and the goal of the player agents is to defeat the boss agent.
+On the beginning of the simulation, the game setting values are deployed to the game environment and the player agents and the boss agent are spawned at random locations on the map.
+Next, the environment starts game and repeats the game by an arbitrary number (e.g., 100) of episodes to simulate the deployed game settings.
+On the end of the simulation, the environment collects, calculates, and store the playtested results via an output file.
+
+## Variable Reference
+In this section, the variables that the reward function can access are described.
+The reward function only can access the key listed below. If the key is not listed below, the reward function cannot access the value.
+The common variables are the variables that are measured for the overall game state, not for each player.
+The individual variables are the variables that are measured for each player in the game state.
+
+## Individual Variables
+`Playtesting.Agent{i}.SurviveTime` - The survival time of Agent {i} during playtesting.
+`Playtesting.Agent{i}.Distance.Moved.PerSecond` - The average distance moved per second by Agent {i}.
+`Playtesting.Agent{i}.Distance.Boss.Mean` - The average distance of Agent {i} from the boss entity.
+`Playtesting.Agent{i}.Damage.Dealt.PerSecond` - The average damage dealt per second by Agent {i}.
+`Playtesting.Agent{i}.Damage.Taken.PerSecond` - The average damage taken per second by Agent {i}.
+`Playtesting.Agent{i}.Armored.PerSecond` - The change in armor status per second for Agent {i}.
+`Playtesting.Agent{i}.Health.Last.Ratio` - The ratio of Agent {i}'s last health value to its maximum health.
+`Playtesting.Agent{i}.Skill.Used.PerSecond` - The average usage of the specific skill per second by Agent {i}.
+
+The playtested values are min-max normalized for each variable. The values are normalized to the range of [0, 1].
+There are four player agents in the game and the index of the player agent is from 0 to 3. (e.g., Agent0, Agent1, Agent2, Agent3)
+The example of the key name is "Playtesting.Agent0.SurviveTime" for the survival time of Agent0.
+
+## Reward Function
+The reward function is a function that calculates the reward value for the agent based on the playtested results.
+The function is written in Python and loads the playtested results from the json file and calculates the reward value based on the results.
+
+{reward_signature}
+
+This is the template of the reward function.
+The 'compute_reward' function is composed by summing the results from multiple reward terms, such as agent_0, agent_1, agent_2, agent_3
+Similar to the template provided, it is necessary to create functions within the function, and there should be 4 sub-functions for representing each agent.
+For example, `agent_0` function calculates the reward value to determine the characteristic of 'Agent0'.
+The function receives the playtested results and returns the reward value in float.
+The function should be implemented in the "compute_reward" function.
+The reward shaping code should be written between '# start of code' and '# end of code' comments.
+The code output should be formatted as a Python code string: "```python ... ```".

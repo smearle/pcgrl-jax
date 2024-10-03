@@ -39,8 +39,8 @@ log_level = os.getenv('LOG_LEVEL', 'INFO').upper()  # Add the environment variab
 logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
 
 
-logging.getLogger('hydra').setLevel(logging.WARNING)
-logging.getLogger('absl').setLevel(logging.WARNING)
+logging.getLogger('hydra').setLevel(logging.INFO)
+logging.getLogger('absl').setLevel(logging.INFO)
 
 
 class Experiment:
@@ -71,14 +71,10 @@ class Experiment:
         """Logs a message with a formatted prefix."""
         info_dict = {
             'outer_loop': getattr(self, '_iteration', -1),
-            'inner_loop': getattr(self, 'current_inner', -1),
-            'n_inner': getattr(self, 'n_inner', -1),
-            'trial': getattr(self, '_current_trial', -1),
-            'trial_count': getattr(self, 'trial_count', -1),
         }
 
         # Define the prefix format
-        prefix = '[ol: {outer_loop}, il: {inner_loop} / {n_inner}, trial: {trial} / {trial_count}]'.format(**info_dict)
+        prefix = '[#iter: {outer_loop}]'.format(**info_dict)
 
         # Split the message by line breaks and log each line with the prefix
         message = str(message)
@@ -543,13 +539,12 @@ class Experiment:
 
     def logging(self, message, level=logging.DEBUG):
         info_dict = {
-            'outer_loop': self.iteration_num if hasattr(self, 'iteration_num') else -1,
-            'trial': self._current_trial if hasattr(self, '_current_trial') else -1,  # Assuming self._current_trial is a class attribute
-            'trial_count': self.trial_count if hasattr(self, 'trial_count') else -1,
+            'outer_loop': self._iteration if hasattr(self, '_iteration') else -1,
+            'total_iterations': self.config.total_iterations,
         }
 
         # Define the prefix format
-        prefix = '[ol: {outer_loop}, trial: {trial} / {trial_count}]'.format(**info_dict)
+        prefix = '[iter: {outer_loop}/{total_iterations}]'.format(**info_dict)
 
         # Split the message by line breaks and log each line with the prefix
         message = str(message)
