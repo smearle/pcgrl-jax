@@ -225,8 +225,8 @@ class TrainLLMConfig(Config):
     eval_randomize_map_shape: Optional[bool] = False
     eval_seed: int = 0
     n_eval_envs: int = 1
-    reevaluate: bool = False
-    n_eps: int = 1
+    reevaluate: bool = True
+    n_eps: int = 2
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     INIT_CONFIG: Optional[bool] = None

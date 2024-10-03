@@ -124,6 +124,8 @@ def main_eval(eval_config: EvalConfig = None):
             stats = json.load(f)
             stats = EvalData(**stats)
 
+    jax.block_until_ready(stats)
+
 def get_eval_stats(states, dones):
     # Everything has size (n_bins, n_steps, n_envs)
     # Mask out so we only have the final step of each episode

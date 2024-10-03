@@ -40,7 +40,7 @@ logging.basicConfig(level=getattr(logging, log_level, logging.INFO))
 
 
 logging.getLogger('hydra').setLevel(logging.INFO)
-logging.getLogger('absl').setLevel(logging.INFO)
+logging.getLogger('absl').setLevel(logging.WARNING)
 
 
 class Experiment:
@@ -136,9 +136,6 @@ class Experiment:
     def feedback_dir(self):
         return path.join(self._experiment_path, 'Feedback')
 
-    @property
-    def tensorboard_log_dir(self):
-        return path.join(self._experiment_path, 'experiment_logs')
 
     def _create_reward_functions_dir(self):
         try:
@@ -158,7 +155,16 @@ class Experiment:
     def generate_reward_function(self, bypass_reward_function: str = None):
         """Generates a reward function using the reward generator script."""
 
-        tgt_path = os.path.join(self._experiment_path, 'GeneratedSkill.csv')
+        generated_reward_str = \
+        '''
+            def compute_reward(state):
+            return jnp.count_nonzero(state)
+        '''
+        print(generated_reward_str.strip())
+
+        return generated_reward_str
+
+        # tgt_path = os.path.join(self._experiment_path, 'GeneratedSkill.csv')
 
         # feedback_type = self._get_env_args(self._config_dict, 'feedbackType')
         # if feedback_type == "t-SNE" and gpt_model != "gpt-4o":
@@ -334,97 +340,14 @@ class Experiment:
 
         train(config)
 
-        logging.debug(111)
-
         return True
 
-        # Save the modified YAML configuration to a temporary file
-        # with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.yaml') as temp_config_file:
-        #     if 'reward_generation_settings' in config:
-        #         del config['reward_generation_settings']
-        #
-        #     self._set_env_args(config, 'runId', f"{self._run_id}_{self._iteration_run_id}")
-        #     self._set_env_args(config, 'logPath', path.join(self._experiment_path, self._iteration_run_id))
-        #
-        #     if self._current_reward_function_filename is not None:
-        #         self._set_env_args(config, 'pcgGptFirstRewardFunction',
-        #                            path.join(self.reward_functions_dir, self._current_reward_function_filename[:-3], self._current_reward_function_filename))
-        #
-        #     config['checkpoint_settings']['run_id'] = self._iteration_run_id
-        #     config['checkpoint_settings']['results_dir'] = self._experiment_path
-        #
-        #     config = self.replace_workspace_paths(config, '/workspace/results', path.abspath(self._current_workspace))
-        #     yaml.dump(config, temp_config_file)
-        #
-        #     temp_config_path = temp_config_file.name
-        #
-        # additional = list()
-        # if path.exists(path.join(self._experiment_path, self._iteration_run_id)):
-        #     additional.append('--resume')
-        #
-        # if os.name != 'nt':  # not Windows
-        #
-        #     # Start mlagents-learn process
-        #     mlagents_process = subprocess.Popen(
-        #         ['mlagents-learn', temp_config_path, '--env', self._env, '--num-envs', str(self._num_envs),
-        #          '--no-graphics', *additional],
-        #         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding=None)
-        #
-        # else:
-        #     site_packages_path = site.getsitepackages()[0]
-        #
-        #     mlagents_process = subprocess.Popen(
-        #         ['python', '-m', 'mlagents.trainers.learn',
-        #          temp_config_path, '--env', self._env, '--num-envs', str(self._num_envs), '--no-graphics',
-        #          *additional],
-        #         cwd=site_packages_path,
-        #         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8')
-        #
-        # directory_watcher_path = os.path.join(path.dirname(__file__), 'directory_watcher.py')
-        #
-        # self.logging(self._experiment_path, self._iteration_run_id)
-        #
-        # # Start directory_watcher.py process
-        # watcher_process = subprocess.Popen(
-        #     ['python3', directory_watcher_path, '--directory',
-        #      f'{path.join(self._experiment_path, self._iteration_run_id)}', '--yaml_path', temp_config_path,
-        #      '--start_sleep_time', '20'],
-        #     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        #
-        # def read_output(process, name):
-        #     while True:
-        #         output = process.stdout.readline()
-        #         if output == '' and process.poll() is not None:
-        #             break
-        #         if output:
-        #             output = output.rstrip()
-        #             self.logging(f"[{name}] {output}")
-        #
-        # # Create threads to read the outputs
-        # mlagents_thread = threading.Thread(target=read_output, args=(mlagents_process, 'mlagents'))
-        # watcher_thread = threading.Thread(target=read_output, args=(watcher_process, 'watcher'))
-        #
-        # mlagents_thread.start()
-        # watcher_thread.start()
-        #
-        # mlagents_thread.join()
-        #
-        # self.logging(f"ML-Agents process for iteration {self._iteration} has finished.")
-        #
-        # # Clean up temporary file
-        # os.remove(temp_config_path)
-        #
-        # del mlagents_thread
-        # del watcher_thread
-        #
-        # mlagents_process.kill()
-        # watcher_process.kill()
 
     def rollout_pcgrl(self, iteration_run_id):
         from eval import main_eval as run_eval
 
         config = copy.deepcopy(self.config)
-        config.exp_dir = path.join(config.exp_dir, 'iteration_' + str(self._iteration))
+        config.exp_dir = path.join(config.exp_dir, 'iteration_' + str(iteration_run_id))
         config.random_agent = False
         # config.INIT_CONFIG = False
         # get parametrer for eval
@@ -468,6 +391,8 @@ class Experiment:
                 self._stage = Stage.RewardGeneration
 
             elif self._stage == Stage.RewardGeneration:
+
+                self.generate_reward_function()
                 self.logging(
                     f"Generating reward function for iteration {self._iteration}", level=logging.INFO)
                 # reward_function_path, message = self.generate_reward_function() # TODO (self._reward_generation_settings.get('first_iter_reward', None))
@@ -515,26 +440,6 @@ class Experiment:
         """Sets up the logger for the experiment."""
         self.logger = logging.getLogger(basename(__file__))
         self.logger.setLevel(logging.DEBUG)
-
-        #
-        # # Create file handler which logs even debug messages
-        # log_file_path = path.join(self._experiment_path, 'experiment.log')
-        # fh = logging.FileHandler(log_file_path, encoding='utf-8')
-        # fh.setLevel(logging.DEBUG)
-        #
-        # # Create console handler with a higher log level
-        # ch = logging.StreamHandler()
-        # ch.setLevel(logging.ERROR)
-        #
-        # # Create formatter and add it to the handlers
-        # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        # fh.setFormatter(formatter)
-        # ch.setFormatter(formatter)
-        #
-        # # Add the handlers to the logger
-        # self.logger.addHandler(fh)
-        # self.logger.addHandler(ch)
-
 
 
     def logging(self, message, level=logging.DEBUG):

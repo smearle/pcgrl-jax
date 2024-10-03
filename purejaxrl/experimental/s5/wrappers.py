@@ -134,11 +134,10 @@ class LLMRewardWrapper(GymnaxWrapper):
 
         reward_fn = self.get_reward_fn()
 
-
         llm_reward_prev = reward_fn(state.env_map)
         llm_reward_curr = reward_fn(state.env_map)
 
-        print(llm_reward_prev, llm_reward_curr)
+        reward += llm_reward_curr - llm_reward_prev
 
         return obs, env_state, reward, done, info
 

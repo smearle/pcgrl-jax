@@ -21,7 +21,7 @@ from tensorboardX import SummaryWriter
 from conf.config import Config, TrainConfig
 from envs.pcgrl_env import (gen_dummy_queued_state, gen_dummy_queued_state_old,
                             OldQueuedState)
-from purejaxrl.experimental.s5.wrappers import LogWrapper
+from purejaxrl.experimental.s5.wrappers import LogWrapper, LLMRewardWrapper
 from utils import (get_ckpt_dir, get_exp_dir, init_network, gymnax_pcgrl_make,
                    init_config)
 
@@ -92,7 +92,19 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     )
     env_r, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     # env = FlattenObservationWrapper(env)
-    env = LogWrapper(env_r)
+
+
+    env = LLMRewardWrapper(env_r)
+    env = LogWrapper(env)
+
+    # TODO example of how to change reward function
+    def compute_reward(state):
+        print(state)
+        return jnp.count_nonzero(state)
+
+    env.set_reward_fn(compute_reward)
+
+
     env_r.init_graphics()
 
     def linear_schedule(count):
@@ -119,7 +131,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         network_params = network.init(_rng, init_x)
 
         # Print network architecture and number of learnable parameters
-        # print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
+        print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
         # print(network.subnet.tabulate(_rng, init_x, jnp.zeros((init_x.shape[0], 0))))
 
         if config.ANNEAL_LR:
@@ -525,9 +537,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         # One final logging/checkpointing call to ensure things finish off
         # neatly.
-        jax.debug.callback(_log_callback, metric)
-        jax.debug.callback(save_checkpoint, runner_state, metric,
-                           steps_prev_complete)
+        # jax.debug.callback(_log_callback, metric)
+        # jax.debug.callback(save_checkpoint, runner_state, metric,
+        #                    steps_prev_complete)
 
         return {"runner_state": runner_state, "metrics": metric}
 
@@ -551,7 +563,9 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     # Create a dummy checkpoint so we can restore it to the correct dataclasses
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     # env = FlattenObservationWrapper(env)
+    env = LLMRewardWrapper(env)
     env = LogWrapper(env)
+
     rng, _rng = jax.random.split(rng)
     network = init_network(env, env_params, config)
     init_x = env.gen_dummy_obs(env_params)
