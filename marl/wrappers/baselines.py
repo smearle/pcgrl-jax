@@ -157,7 +157,7 @@ class MultiAgentWrapper(JaxMARLWrapper):
         ma_reward = {}
         ma_done = {}
         ma_info = {}
-        reward = 0
+        net_reward = 0
         for i, agent in enumerate(self.agents):
             # TODO: Now that we deal with multi-agent properly, here, take out the bullshit multi-agent stuff in the base
             #   environment.
@@ -166,14 +166,14 @@ class MultiAgentWrapper(JaxMARLWrapper):
 
             # ??? Which is better ??? tehe
             # ma_reward[agent] = reward
-            reward += reward
+            net_reward += reward
 
             ma_done[agent] = done
 
             # Dimensions work differently to be compatible with JaxMARL, can fiddle with this, but meh for now
             # ma_info[agent] = info
 
-        ma_reward = {agent: reward for agent in self.agents}
+        ma_reward = {agent: net_reward for agent in self.agents}
         ma_obs = self.process_observation(obs)
         ma_done['__all__'] = jnp.any(jnp.stack([ma_done[agent] for agent in self.agents]))
 

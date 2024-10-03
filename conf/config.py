@@ -13,6 +13,7 @@ from dataclasses import dataclass
 class Config:
     lr: float = 1.0e-4
     n_envs: int = 4
+    # How many steps do I take in all of my batched environments before doing a gradient update
     num_steps: int = 128
     total_timesteps: int = int(5e7)
     timestep_chunk_size: int = -1
