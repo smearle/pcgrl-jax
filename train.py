@@ -702,9 +702,5 @@ def main(config: TrainConfig):
 
 
 if __name__ == "__main__":
-
-    print('Start')
     main()
-    # wait for a while until PCGRL
 
-    print('Done')
