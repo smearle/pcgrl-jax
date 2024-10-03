@@ -192,6 +192,45 @@ class SweepConfig(EnjoyConfig, EvalConfig):
     slurm: bool = True
 
 
+@dataclass
+class TrainLLMConfig(Config):
+    overwrite: bool = False
+
+    # Save a checkpoint after (at least) this many timesteps
+    ckpt_freq: int = int(1e7)
+    # Render after this many update steps
+    render_freq: int = 1000
+    n_render_eps: int = 3
+
+    # eval the model on pre-made eval freezie maps to see how it's doing
+    eval_freq: int = 100
+    n_eval_maps: int = 6
+    eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
+    # discount factor for regret value calculation is the same as GAMMA
+
+    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
+    NUM_UPDATES: Optional[int] = None
+    MINIBATCH_SIZE: Optional[int] = None
+    ###########################################################################
+
+
+
+    # LLM experiment setting
+    total_iterations: int = int(2)
+
+    # Eval rollout setting
+    random_agent: bool = False
+    eval_map_width: Optional[int] = 16
+    eval_max_board_scans: Optional[int] = 3
+    eval_randomize_map_shape: Optional[bool] = False
+    eval_seed: int = 0
+    n_eval_envs: int = 1
+    reevaluate: bool = False
+    n_eps: int = 1
+
+    # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
+    INIT_CONFIG: Optional[bool] = None
+
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
@@ -202,3 +241,6 @@ cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
 cs.store(name="batch_pcgrl", node=SweepConfig)
+
+# PCGRLLM Configs
+cs.store(name="train_pcgrllm", node=TrainLLMConfig)

@@ -1,6 +1,7 @@
 from functools import partial
 import os
 import shutil
+from os.path import basename
 from timeit import default_timer as timer
 from typing import Any, NamedTuple, Tuple
 
@@ -14,6 +15,7 @@ import optax
 from flax.training.train_state import TrainState
 from flax.training import orbax_utils
 import orbax.checkpoint as ocp
+from jax.experimental.array_serialization.serialization import logger
 from tensorboardX import SummaryWriter
 
 from conf.config import Config, TrainConfig
@@ -106,7 +108,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         train_start_time = timer()
 
         # Create a tensorboard writer
-        writer = SummaryWriter(get_exp_dir(config))
+        writer = SummaryWriter(config.exp_dir)
 
         # INIT NETWORK
         network = init_network(env, env_params, config)
@@ -117,7 +119,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         network_params = network.init(_rng, init_x)
 
         # Print network architecture and number of learnable parameters
-        print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
+        # print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
         # print(network.subnet.tabulate(_rng, init_x, jnp.zeros((init_x.shape[0], 0))))
 
         if config.ANNEAL_LR:
@@ -173,6 +175,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         runner_state = RunnerState(
             train_state, env_state, obsv, rng,
             update_i=0)
+
 
         # exp_dir = get_exp_dir(config)
         if restored_ckpt is not None:
@@ -273,12 +276,20 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             return (rng_r, obs_r, env_state_r, network_params),\
                 (env_state_r, reward_r, done_r, info_r, frames)
 
+        def init_checkpoint(runner_state):
+            ckpt = {'runner_state': runner_state,
+                    'step_i': 0}
+            save_args = orbax_utils.save_args_from_target(ckpt)
+            checkpoint_manager.save(0, ckpt, save_kwargs={
+                'save_args': save_args})
+
         def save_checkpoint(runner_state, info, steps_prev_complete):
             try:
                 timesteps = info["timestep"][info["returned_episode"]
                                              ] * config.n_envs
             except jax.errors.NonConcreteBooleanIndexError:
                 return
+
             for t in timesteps:
                 if t > 0:
                     latest_ckpt_step = checkpoint_manager.latest_step()
@@ -286,7 +297,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                             t - latest_ckpt_step >= config.ckpt_freq):
                         print(f"Saving checkpoint at step {t}")
                         ckpt = {'runner_state': runner_state,
-                                'config': config, 'step_i': t}
+                                # 'config': config,
+                                'step_i': t}
                         # ckpt = {'step_i': t}
                         save_args = orbax_utils.save_args_from_target(ckpt)
                         checkpoint_manager.save(t, ckpt, save_kwargs={
@@ -458,6 +470,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                                 advantages, targets, rng)
                 return update_state, total_loss
 
+            # Save initial weight
+
+
+
             update_state = (train_state, traj_batch, advantages, targets, rng)
             update_state, loss_info = jax.lax.scan(
                 _update_epoch, update_state, None, config.update_epochs
@@ -466,6 +482,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             metric = traj_batch.info
             rng = update_state[-1]
 
+            # Save weight to checkpoint
             jax.debug.callback(save_checkpoint, runner_state,
                                metric, steps_prev_complete)
 
@@ -498,6 +515,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 update_i=runner_state.update_i+1)
 
             return runner_state, metric
+
+
+        jax.debug.callback(init_checkpoint, runner_state)
 
         runner_state, metric = jax.lax.scan(
             _update_step, runner_state, None, config.NUM_UPDATES
@@ -661,6 +681,9 @@ def main_chunk(config, rng, exp_dir):
 
     train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
     out = train_jit(rng)
+
+    jax.block_until_ready(out)
+
     return out
 
     
@@ -684,9 +707,34 @@ def main(config: TrainConfig):
             out = main_chunk(config, rng, exp_dir)
 
     else:
-        out = main_chunk(config, rng, exp_dir)        
+        out = main_chunk(config, rng, exp_dir)
 
-#   ep_returns = out["runner_state"].ep_returns
+@hydra.main(version_base=None, config_path='./conf', config_name='train_pcgrl')
+def main_noinit(config: TrainConfig):
+    rng = jax.random.PRNGKey(config.seed)
+
+    exp_dir = config.exp_dir
+
+    import logging
+    logger = logging.getLogger(basename(__file__))
+    logger.info(f'running experiment at {exp_dir}\n')
+
+    # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
+    if config.overwrite and os.path.exists(exp_dir):
+        shutil.rmtree(exp_dir)
+
+    if config.timestep_chunk_size != -1:
+        n_chunks = config.total_timesteps // config.timestep_chunk_size
+        for i in range(n_chunks):
+            config.total_timesteps = config.timestep_chunk_size + (i * config.timestep_chunk_size)
+            print(f"Running chunk {i + 1}/{n_chunks}")
+            out = main_chunk(config, rng, exp_dir)
+
+    else:
+        out = main_chunk(config, rng, exp_dir)
+
+
+        #   ep_returns = out["runner_state"].ep_returns
 
 
 if __name__ == "__main__":

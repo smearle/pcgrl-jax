@@ -11,6 +11,7 @@ import jax
 import jax.numpy as jnp
 from matplotlib import pyplot as plt
 import numpy as np
+from tensorflow_probability.python.internal.backend.jax.numpy_logging import warning
 
 from conf.config import EvalConfig, TrainConfig
 from envs.pcgrl_env import gen_dummy_queued_state
@@ -31,10 +32,10 @@ class EvalData:
     n_eval_eps: int
     n_parameters: Optional[int] = None
 
-
 @hydra.main(version_base=None, config_path='./conf', config_name='eval_pcgrl')
-def main_eval(eval_config: EvalConfig):
-    eval_config = init_config(eval_config)
+def main_eval(eval_config: EvalConfig = None):
+    # if not hasattr(eval_config, 'INIT_CONFIG'):
+    #    eval_config = init_config(eval_config)
 
     exp_dir = eval_config.exp_dir
     if not eval_config.random_agent:
@@ -42,8 +43,15 @@ def main_eval(eval_config: EvalConfig):
         checkpoint_manager, restored_ckpt = init_checkpointer(eval_config)
         network_params = restored_ckpt['runner_state'].train_state.params
     elif not os.path.exists(exp_dir):
+        warning(f'No checkpoint found at {exp_dir}. Initializing network from scratch.')
         network_params = network.init(rng, init_x)
         os.makedirs(exp_dir)
+    else:
+        pass
+        # network_params = network.init(rng, init_x)
+        # print(network_params)
+
+    # print(network_params)
 
     # Preserve the config as it was during training (minus `eval_` hyperparams), for future reference
     train_config = copy.deepcopy(eval_config)
@@ -83,7 +91,7 @@ def main_eval(eval_config: EvalConfig):
         print('Scanning episode steps:')
         _, (states, rewards, dones, infos) = jax.lax.scan(
             step_env, (rng, obs, env_state), None,
-            length=eval_config.n_eps * env.max_steps)
+            length=eval_config.n_eps*env.max_steps)
 
         return _, (states, rewards, dones, infos)
 
@@ -115,7 +123,6 @@ def main_eval(eval_config: EvalConfig):
         with open(json_path, 'r') as f:
             stats = json.load(f)
             stats = EvalData(**stats)
-
 
 def get_eval_stats(states, dones):
     # Everything has size (n_bins, n_steps, n_envs)

@@ -12,21 +12,22 @@ from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, Rep
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
 from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
-from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, ConvForward2, Dense, NCA, SeqNCA
+from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, ConvForward2, Dense, \
+    NCA, SeqNCA
 
 
 def get_exp_dir_evo_map(config: EvoMapConfig):
     exp_dir = os.path.join(
         'saves_evo_map',
         config.problem,
-        f'pop-{config.evo_pop_size}_' + 
+        f'pop-{config.evo_pop_size}_' +
         f'parents-{config.n_parents}_' +
         f'mut-{config.mut_rate}_' +
         f'{config.seed}_{config.exp_name}',
     )
     return exp_dir
 
-    
+
 def is_default_hiddims(config: Config):
     # Hack, because we're not consistent about when we truncate the hidden dims argument relative to getting the exp_dir
     # path.
@@ -35,7 +36,7 @@ def is_default_hiddims(config: Config):
 
 def get_exp_dir(config: Config):
     if config.env_name == 'PCGRL':
-        ctrl_str = '_ctrl_' + '_'.join(config.ctrl_metrics) if len(config.ctrl_metrics) > 0 else '' 
+        ctrl_str = '_ctrl_' + '_'.join(config.ctrl_metrics) if len(config.ctrl_metrics) > 0 else ''
         exp_dir = os.path.join(
             'saves',
             f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
@@ -79,7 +80,6 @@ def get_exp_dir(config: Config):
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
 
-
     if config.env_name == 'Candy':
         config.exp_dir = get_exp_dir(config)
         return config
@@ -90,35 +90,34 @@ def init_config(config: Config):
 
     if config.representation == 'nca':
         config.act_shape = (config.map_width, config.map_width)
-    
+
     else:
         config.arf_size = (2 * config.map_width -
-                        1 if config.arf_size==-1 else config.arf_size)
-        
+                           1 if config.arf_size == -1 else config.arf_size)
+
         config.vrf_size = (2 * config.map_width -
-                        1 if config.vrf_size==-1 else config.vrf_size)
+                           1 if config.vrf_size == -1 else config.vrf_size)
 
     if hasattr(config, 'evo_pop_size') and hasattr(config, 'n_envs'):
         assert config.n_envs % (config.evo_pop_size * 2) == 0, "n_envs must be divisible by evo_pop_size * 2"
     if config.model == 'conv2':
         config.arf_size = config.vrf_size = min([config.arf_size, config.vrf_size])
 
-    config.exp_dir = get_exp_dir(config)    
+    config.exp_dir = get_exp_dir(config)
 
     if config.model == 'seqnca':
         config.hidden_dims = config.hidden_dims[:1]
 
     return config
 
-    
-def init_config_evo_map(config: EvoMapConfig):
 
+def init_config_evo_map(config: EvoMapConfig):
     # FIXME: This is meaningless, should remove it eventually.
     config.arf_size = (2 * config.map_width -
-                    1 if config.arf_size==-1 else config.arf_size)
-    
+                       1 if config.arf_size == -1 else config.arf_size)
+
     config.vrf_size = (2 * config.map_width -
-                    1 if config.vrf_size==-1 else config.vrf_size)
+                       1 if config.vrf_size == -1 else config.vrf_size)
 
     config.n_gpus = jax.local_device_count()
     config.exp_dir = get_exp_dir_evo_map(config)
@@ -126,7 +125,7 @@ def init_config_evo_map(config: EvoMapConfig):
 
 
 def get_ckpt_dir(config: Config):
-    return os.path.join(config.exp_dir, 'ckpts')
+    return os.path.join(get_exp_dir(config), 'ckpts')
 
 
 def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
@@ -139,7 +138,7 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
         # First consider number of possible tiles
         # action_dim = env.action_space(env_params).n
         # action_dim = env.rep.per_tile_action_dim
-    
+
     else:
         action_dim = env.num_actions
 
@@ -186,14 +185,14 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     # if config.env_name == 'PCGRL':
     if 'PCGRL' in config.env_name:
         network = ActorCriticPCGRL(network, act_shape=config.act_shape,
-                            n_agents=config.n_agents, n_ctrl_metrics=len(config.ctrl_metrics))
+                                   n_agents=config.n_agents, n_ctrl_metrics=len(config.ctrl_metrics))
     # elif config.env_name == 'PlayPCGRL':
     #     network = ActorCriticPlayPCGRL(network)
     else:
         network = ActorCritic(network)
     return network
 
-        
+
 def get_env_params_from_config(config: Config):
     map_shape = ((config.map_width, config.map_width) if not config.is_3d
                  else (config.map_width, config.map_width, config.map_width))
@@ -237,6 +236,7 @@ def get_play_env_params_from_config(config: Config):
         map_shape=map_shape,
         rf_shape=rf_shape,
     )
+
 
 def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
     if env_name in gymnax.registered_envs:
