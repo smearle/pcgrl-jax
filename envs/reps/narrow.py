@@ -72,14 +72,14 @@ class NarrowRepresentation(Representation):
         new_pos = rep_state.agent_coords[pos_idx]
         new_env_map = jax.lax.dynamic_update_slice(env_map, b, new_pos)
 
-        map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
+        # map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
         rep_state = NarrowRepresentationState(
             pos=new_pos,
             agent_coords=rep_state.agent_coords,
             n_valid_agent_coords=rep_state.n_valid_agent_coords,
         )
 
-        return new_env_map, map_changed, rep_state
+        return new_env_map, rep_state
 
     def reset(self, frz_map: chex.Array = None, rng: chex.PRNGKey = None):
         agent_coords, n_valid_agent_coords = gen_agent_coords(

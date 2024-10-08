@@ -73,9 +73,9 @@ class TurtleRepresentation(Representation):
                                 new_env_map, env_map)
 
         # Update state dict and evaluate termination conditions
-        map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
+        # map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
 
-        return new_env_map, map_changed, new_pos
+        return new_env_map, new_pos
 
     def reset(self, static_tiles: chex.Array, rng: chex.PRNGKey):
         return TurtleRepresentationState(pos=self.center_position)
@@ -101,7 +101,7 @@ class MultiTurtleRepresentation(TurtleRepresentation):
                          act_shape=act_shape, env_map=env_map, map_shape=map_shape,
                          max_board_scans=max_board_scans, pinpoints=pinpoints, tile_nums=tile_nums)
         self.map_shape = map_shape
-        self.max_steps = int(math.ceil(self.max_steps / n_agents))
+        # self.max_steps = int(math.ceil(self.max_steps / n_agents))
         self.n_agents = int(n_agents)
         self.act_coords = np.argwhere(np.ones(map_shape))
 
@@ -113,22 +113,22 @@ class MultiTurtleRepresentation(TurtleRepresentation):
     def step(self, env_map: chex.Array, action: int, step_idx: int,
              rep_state: MultiTurtleRepresentationState, agent_id: int):
 
-        map_changed = False
+        # map_changed = False
         new_env_map = env_map
         new_positions = rep_state.pos
 
         # for i, a_pos in enumerate(rep_state.pos):
         a_pos = rep_state.pos[agent_id]
 
-        new_env_map, a_map_changed, new_a_pos = self.step_turtle(
+        new_env_map, new_a_pos = self.step_turtle(
             new_env_map, action, a_pos)
-        map_changed = jnp.logical_or(map_changed, a_map_changed)
+        # map_changed = jnp.logical_or(map_changed, a_map_changed)
 
         new_positions = new_positions.at[agent_id].set(new_a_pos)
 
         rep_state = rep_state.replace(pos=new_positions)
 
-        return new_env_map, map_changed, rep_state
+        return new_env_map, rep_state
 
     def reset(self, frz_map, rng):
         # Get all indices of board positions

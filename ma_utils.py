@@ -167,7 +167,7 @@ def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
 
 def restore_run(config: MultiAgentConfig, runner_state: RunnerState, ckpt_manager, latest_update_step: int):
     if latest_update_step is not None:
-        runner_state = ckpt_manager.restore(latest_update_step, items=runner_state)
+        runner_state = ckpt_manager.restore(latest_update_step, args=ocp.args.StandardRestore(runner_state))
         with open(os.path.join(config._exp_dir, "wandb_run_id.txt"), "r") as f:
             wandb_run_id = f.read()
     else:
@@ -270,5 +270,5 @@ def ma_init_config(config: MultiAgentConfig):
     
 def save_checkpoint(config: MultiAgentConfig, ckpt_manager, runner_state, t):
     save_args = orbax_utils.save_args_from_target(runner_state)
-    ckpt_manager.save(t.item(), runner_state, save_kwargs={'save_args': save_args})
+    ckpt_manager.save(t.item(), args=ocp.args.StandardSave(runner_state))
     ckpt_manager.wait_until_finished() 

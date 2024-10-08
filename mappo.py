@@ -412,7 +412,6 @@ def make_train(
             
             metric["update_steps"] = update_steps
             jax.experimental.io_callback(callback, None, metric)
-            update_steps = update_steps + 1
             runner_state = RunnerState(train_states, env_state, last_obs, last_done, hstates, rng)
             do_render = (config.render_freq != -1) and (update_steps % config.render_freq == 0)
             
@@ -432,6 +431,7 @@ def make_train(
                 lambda: None,
             )
                         
+            update_steps = update_steps + 1
             return (runner_state, update_steps), metric
         
         
@@ -456,7 +456,9 @@ def main(config: MultiAgentConfig):
     options = ocp.CheckpointManagerOptions(
         max_to_keep=2, create=True)
     checkpoint_manager = ocp.CheckpointManager(
-        config._ckpt_dir, ocp.PyTreeCheckpointer(), options)
+        config._ckpt_dir, 
+        # ocp.PyTreeCheckpointer(), 
+        options=options)
 
     rng = jax.random.PRNGKey(config.seed)
     latest_update_step = checkpoint_manager.latest_step()

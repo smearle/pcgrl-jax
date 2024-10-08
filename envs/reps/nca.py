@@ -39,9 +39,9 @@ class NCARepresentation(Representation):
              ):
         new_env_map = action[..., 0] + 1  # Exclude border tiles
 
-        map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
+        # map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
 
-        return new_env_map, map_changed, rep_state
+        return new_env_map, rep_state
 
     def reset(self, static_map, rng):
         return NCARepresentationState()

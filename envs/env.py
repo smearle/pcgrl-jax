@@ -14,7 +14,6 @@ class Environment(GymnaxEnvironment):
         key: chex.PRNGKey,
         state: EnvState,
         action: Union[int, float],
-        agent_id: int,
         params: Optional[EnvParams] = None,
     ) -> Tuple[chex.Array, EnvState, float, bool, dict]:
         """Performs step transitions in the environment."""
@@ -37,6 +36,34 @@ class Environment(GymnaxEnvironment):
         )
         return obs, state, reward, done, info
 
+    @partial(jax.jit, static_argnums=(0,))
+    def step_ma(
+        self,
+        key: chex.PRNGKey,
+        state: EnvState,
+        action: Union[int, float],
+        params: Optional[EnvParams] = None,
+    ) -> Tuple[chex.Array, EnvState, float, bool, dict]:
+        """Performs step transitions in the environment."""
+        # Use default env parameters if no others specified
+        if params is None:
+            params = self.default_params
+        key, key_reset = jax.random.split(key)
+        obs_st, state_st, reward, done, info = self.step_env_ma(
+            key, state, action, params,
+        )
+        done_ep = done['__all__']
+        obs_re, state_re = self.reset_env(key_reset, params, queued_state=state.queued_state)
+        # Auto-reset environment based on termination
+        state = jax.tree.map(
+            lambda x, y: jax.lax.select(done_ep, x, y), state_re, state_st
+        )
+        # obs = jax.lax.select(done, obs_re, obs_st)
+        # Generalizing this to flax dataclass observations
+        obs = jax.tree.map(
+            lambda x, y: jax.lax.select(done_ep, x, y), obs_re, obs_st
+        )
+        return obs, state, reward, done, info
 
     @partial(jax.jit, static_argnums=(0,))
     def reset(

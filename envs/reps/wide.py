@@ -49,11 +49,11 @@ class WideRepresentation(Representation):
         x, y, b = action
         b = self.builds[b]
         new_env_map = env_map.at[x, y].set(b)
-        map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
+        # map_changed = jnp.logical_not(jnp.array_equal(new_env_map, env_map))
         pos = jnp.concatenate((x, y))
         rep_state = WideRepresentationState(pos=pos)
 
-        return new_env_map, map_changed, rep_state
+        return new_env_map, rep_state
 
     def reset(self, static_tiles: chex.Array = None, rng: chex.PRNGKey = None):
         return WideRepresentationState(pos=jnp.array((0, 0)))

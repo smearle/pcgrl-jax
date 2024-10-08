@@ -343,19 +343,20 @@ class PCGRLEnv(Environment):
         return obs
 
     @partial(jax.jit, static_argnums=(0, 4))
-    def step_env(self, rng, env_state: PCGRLEnvState, action, env_params, agent_id):
+    def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
         action = action[..., None]
         # if self.n_agents == 1:
         if not self.multiagent:
             action = action[0]
-        env_map, map_changed, rep_state = self.rep.step(
+        env_map, rep_state = self.rep.step(
             env_map=env_state.env_map, action=action,
-            rep_state=env_state.rep_state, step_idx=env_state.step_idx, agent_id=agent_id
+            rep_state=env_state.rep_state, step_idx=env_state.step_idx, agent_id=0
         )
         env_map = jnp.where(env_state.static_map == 1,
                             env_state.env_map, env_map,
         )
         n_tiles_changed = jnp.sum(jnp.where(env_map != env_state.env_map, 1, 0))
+        map_changed = n_tiles_changed > 0
         pct_changed = n_tiles_changed / math.prod(self.map_shape)
         pct_changed = env_state.pct_changed + pct_changed
         reward, prob_state = jax.lax.cond(
@@ -380,6 +381,55 @@ class PCGRLEnv(Environment):
             reward,
             done,
             {"discount": self.discount(env_state, env_params)},
+        )
+
+    @partial(jax.jit, static_argnums=(0, 4))
+    def step_env_ma(self, rng, env_state: PCGRLEnvState, action, env_params):
+        env_map = env_state.env_map
+        rep_state = env_state.rep_state
+        map_changed = False
+
+        for i, agent in enumerate(self.agents):
+            agent_action = action[agent][None, None, ..., None]
+
+            new_env_map, rep_state = self.rep.step(
+                env_map=env_map, action=agent_action,
+                rep_state=rep_state, step_idx=env_state.step_idx, agent_id=i
+            )
+            # TODO: static map might be affected by one of these agent actions
+            new_env_map = jnp.where(env_state.static_map == 1,
+                                env_map, new_env_map,
+            )
+            env_map = new_env_map
+
+        n_tiles_changed = jnp.sum(jnp.where(env_map != env_state.env_map, 1, 0))
+        map_changed = n_tiles_changed > 0
+        pct_changed = n_tiles_changed / math.prod(self.map_shape)
+        pct_changed = env_state.pct_changed + pct_changed
+        reward, prob_state = jax.lax.cond(
+            map_changed,
+            lambda new_env_map: self.prob.step(new_env_map, env_state.prob_state),
+            lambda _: (0., env_state.prob_state),
+            env_map,
+        )
+        obs = self.get_obs(
+            env_map=env_map, frz_map=env_state.static_map,
+            rep_state=rep_state, prob_state=prob_state)
+        step_idx = env_state.step_idx + 1
+        env_state = env_state.replace(env_map=env_map, rep_state=rep_state, reward=reward, prob_state=prob_state, step_idx=step_idx, pct_changed=pct_changed)
+        done = self.is_terminal(env_state, env_params)
+        env_state = env_state.replace(done=done)
+
+        ma_reward = {agent: reward for agent in self.agents}
+        ma_done = {agent: done for agent in self.agents}
+        ma_done['__all__'] = done
+
+        return (
+            jax.lax.stop_gradient(obs),
+            jax.lax.stop_gradient(env_state),
+            ma_reward,
+            ma_done,
+            {},
         )
     
     def is_terminal(self, state: PCGRLEnvState, params: PCGRLEnvParams) \
