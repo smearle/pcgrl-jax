@@ -183,11 +183,11 @@ def sweep_main(cfg: SweepConfig):
     if cfg.mode == 'train':
         # if cfg.n_agents > 1:
         if cfg.multiagent:
-            default_config = MultiAgentConfig()
+            default_config = MultiAgentConfig(overwrite=cfg.overwrite)
             # default_config = OmegaConf.create(default_config)
             main_fn = main_ma_train
         else:
-            default_config = TrainConfig()
+            default_config = TrainConfig(overwrite=cfg.overwrite)
             main_fn = main_train
     elif cfg.mode == 'plot':
         default_config = TrainConfig()

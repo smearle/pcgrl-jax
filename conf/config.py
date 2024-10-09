@@ -212,6 +212,7 @@ class SweepConfig(EnjoyConfig, EvalConfig):
     name: Optional[str] = None
     mode: str = 'train'
     slurm: bool = True
+    overwrite: bool = False
 
 
 cs = ConfigStore.instance()

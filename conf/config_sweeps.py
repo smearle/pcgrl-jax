@@ -468,17 +468,45 @@
 # ]
 
 
+# hypers = [
+#     {
+#         'NAME': 'ma_obs_size',
+#         'multiagent': True,
+
+#         'problem': ['binary'],
+#         'map_width': [16],
+#         'n_agents': [2],
+#         'representation': ['turtle'],
+#         'model': ['rnn'],
+#         'obs_size_hid_dims': [3, 5, 8, 16, -1],
+#         # 'randomize_map_shape': [True, False],
+#         # 'randomize_map_shape': [True],
+#         # 'change_pct': [-1.0],
+#         # 'seed': [3, 4, 5],
+#         # 'seed': [0, 1, 2],
+#         'n_envs': [400],
+#         'empty_start': [False],
+#         # 'pinpoints': [True, False],
+#         'total_timesteps': [1_000_000_000],
+#         'ckpt_freq': [100],
+#         'render_freq': [100],
+#         'seed': [0, 1, 2],
+#     },
+# ]
+
+
 hypers = [
     {
-        'NAME': 'ma_obs_size',
+        'NAME': 'ma_board_scans',
         'multiagent': True,
 
         'problem': ['binary'],
         'map_width': [16],
-        'n_agents': [2],
+        'n_agents': [1, 2, 3],
         'representation': ['turtle'],
         'model': ['rnn'],
-        'obs_size_hid_dims': [3, 5, 8, 16, -1],
+        'obs_size_hid_dims': [3, 16, 31],
+        'max_board_scans': [0.75, 1.0, 1.5],
         # 'randomize_map_shape': [True, False],
         # 'randomize_map_shape': [True],
         # 'change_pct': [-1.0],
@@ -493,6 +521,7 @@ hypers = [
         'seed': [0, 1, 2],
     },
 ]
+
 
 eval_hypers = {
     'eval_randomize_map_shape': [True, False],
