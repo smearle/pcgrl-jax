@@ -678,10 +678,13 @@ def main_chunk(config, rng, exp_dir):
 @hydra.main(version_base=None, config_path='./conf', config_name='train_pcgrl')
 def main(config: TrainConfig):
     config = init_config(config)
+    if config.model == 'rnn':
+        raise NotImplementedError("Single agent training script does not support `rnn` model.")
     rng = jax.random.PRNGKey(config.seed)
 
     exp_dir = config.exp_dir
     print(f'running experiment at {exp_dir}\n')
+
 
     # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
     if config.overwrite and os.path.exists(exp_dir):

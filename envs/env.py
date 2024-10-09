@@ -22,7 +22,7 @@ class Environment(GymnaxEnvironment):
             params = self.default_params
         key, key_reset = jax.random.split(key)
         obs_st, state_st, reward, done, info = self.step_env(
-            key, state, action, params, agent_id=agent_id
+            key, state, action, params
         )
         obs_re, state_re = self.reset_env(key_reset, params, queued_state=state.queued_state)
         # Auto-reset environment based on termination
