@@ -265,6 +265,7 @@ def ma_init_config(config: MultiAgentConfig):
     config._exp_dir = get_exp_dir(config)
     config._ckpt_dir = get_ckpt_dir(config)
     config._vid_dir = os.path.join(config._exp_dir, "vids")
+    config._num_eval_actors = config.n_eval_envs * config.n_agents
     init_config(config)
 
     

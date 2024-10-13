@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import orbax.checkpoint as ocp
 
-from conf.config import EvalConfig, TrainConfig
+from conf.config import TrainConfig, MultiAgentEvalConfig
 from envs.pcgrl_env import PCGRLEnv, gen_dummy_queued_state
 from envs.probs.problem import ProblemState, get_loss
 from ma_utils import batchify, ma_init_config, init_run, restore_run, unbatchify
@@ -36,7 +36,7 @@ class EvalData:
     n_parameters: Optional[int] = None
 
 @hydra.main(version_base=None, config_path='./conf', config_name='eval_pcgrl')
-def main_eval_ma(eval_config: EvalConfig):
+def main_eval_ma(eval_config: MultiAgentEvalConfig):
     ma_init_config(eval_config)
     rng = jax.random.PRNGKey(eval_config.eval_seed)
 
@@ -79,12 +79,7 @@ def main_eval_ma(eval_config: EvalConfig):
     # network = init_network(env, env_params, eval_config)
     rng, _rng_actor = jax.random.split(rng, 2)
 
-    ac_init_x = (
-        jnp.zeros((1, eval_config.n_eval_envs, env.observation_space(env.agents[0]).shape[0])),
-        jnp.zeros((1, eval_config.n_eval_envs)),
-        jnp.zeros((1, eval_config.n_eval_envs, env.action_space(env.agents[0]).n)),
-    )
-    ac_init_hstate = ScannedRNN.initialize_carry(eval_config.n_eval_envs, eval_config.hidden_dims[0])
+    ac_init_hstate = ScannedRNN.initialize_carry(eval_config._num_eval_actors, eval_config.hidden_dims[0])
 
     hstate = ac_init_hstate
     actor_network_params = runner_state.train_states[0].params
@@ -97,7 +92,7 @@ def main_eval_ma(eval_config: EvalConfig):
         obs, env_state = jax.vmap(env.reset, in_axes=(0))(
             reset_rng)
         # done = {agent: jnp.zeros((eval_config.n_eval_envs), dtype=bool) for agent in env.agents + ['__all__']}
-        done = jnp.zeros((eval_config.n_eval_envs), dtype=bool)
+        done = jnp.zeros((eval_config._num_eval_actors), dtype=bool)
 
         def step_env(carry, _):
             rng, obs, last_done, env_state, hstate = carry
@@ -106,9 +101,9 @@ def main_eval_ma(eval_config: EvalConfig):
             rng, _rng = jax.random.split(rng)
             avail_actions = jax.vmap(env.get_avail_actions)(env_state.log_env_state.env_state)
             avail_actions = jax.lax.stop_gradient(
-                batchify(avail_actions, env.agents, eval_config.n_eval_envs)
+                batchify(avail_actions, env.agents, eval_config._num_eval_actors)
             )
-            obs_batch = batchify(obs, env.agents, eval_config.n_eval_envs)
+            obs_batch = batchify(obs, env.agents, eval_config._num_eval_actors)
             ac_in = (
                 obs_batch[np.newaxis, :],
                 last_done[np.newaxis, :],
@@ -121,7 +116,7 @@ def main_eval_ma(eval_config: EvalConfig):
                 hstate, pi = actor_network.apply(actor_network_params, hstate, ac_in)
                 action = pi.sample(seed=_rng)
                 env_act = unbatchify(
-                    action, env.agents, eval_config.n_eval_envs, env.n_agents
+                    action, env.agents, eval_config.n_eval_envs, eval_config.n_agents
                 )
                 env_act = {k: v.squeeze() for k, v in env_act.items()}
 
@@ -129,7 +124,8 @@ def main_eval_ma(eval_config: EvalConfig):
             obs, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
                 rng_step, env_state, env_act, env_params
             )
-            return (rng, obs, done['__all__'], env_state, hstate), (env_state, reward, done['__all__'], info)
+            done_batch = batchify(done, env.agents, eval_config._num_eval_actors).squeeze()
+            return (rng, obs, done_batch, env_state, hstate), (env_state, reward, done['__all__'], info)
 
         print('Scanning episode steps:')
         _, (states, rewards, dones, infos) = jax.lax.scan(
@@ -204,7 +200,7 @@ def init_config_for_eval(config):
     return config
 
 
-def get_eval_name(eval_config: EvalConfig, train_config: TrainConfig):
+def get_eval_name(eval_config: MultiAgentEvalConfig, train_config: TrainConfig):
     """Get a name for the eval stats file, based on the eval hyperparams.
     
     If eval_config has been initialized for eval (with standard hyperparameters being replaced by their `eval_`

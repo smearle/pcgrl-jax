@@ -422,16 +422,6 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
 
         row_vals.append(vals)
         
-        
-        # Load the `progress.csv`
-        train_metrics = pd.read_csv(f'{exp_dir}/progress.csv')
-        train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
-
-
-        # Load the `progress.csv`
-        train_metrics = pd.read_csv(f'{exp_dir}/progress.csv')
-        train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
-
         ep_returns = train_metrics['ep_return']
         row_vals_curves.append(ep_returns)
         sc_timesteps = train_metrics['timestep']

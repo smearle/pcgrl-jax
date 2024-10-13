@@ -148,6 +148,7 @@ class MultiAgentConfig(TrainConfig):
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     _num_actors: int = -1
+    _num_eval_actors: int = -1
     _minibatch_size: int = -1
     _num_updates: int = -1
     _exp_dir: Optional[str] = None
