@@ -11,11 +11,11 @@ from functools import partial
 # from gymnax.environments import environment, spaces
 from gymnax.environments.spaces import Box as BoxGymnax, Discrete as DiscreteGymnax
 from typing import Dict, Optional, List, Tuple, Union
-from envs.pcgrl_env import PCGRLEnvState
+from envs.pcgrl_env import PCGRLEnvState, PCGRLEnvParams
+from envs.probs.problem import get_loss
 from marl.environments.spaces import Box, Discrete, MultiDiscrete
-from marl.environments.multi_agent_env import MultiAgentEnv, State
+from marl.environments.multi_agent_env import EnvParams, MultiAgentEnv, State
 from marl.model import ScannedRNN
-from purejaxrl.wrappers import LogEnvState
 
 from safetensors.flax import save_file, load_file
 from flax.traverse_util import flatten_dict, unflatten_dict
@@ -29,9 +29,9 @@ def load_params(filename:Union[str, os.PathLike]) -> Dict:
     return unflatten_dict(flattened_dict, sep=",")
 
 
-@struct.dataclass
-class MultiAgentLogState(LogEnvState):
-    pass
+# @struct.dataclass
+# class MultiAgentLogState(LogEnvState):
+#     pass
 
 
 class JaxMARLWrapper(object):
@@ -51,7 +51,16 @@ class JaxMARLWrapper(object):
         return jnp.stack([x[a] for a in self._env.agents])
 
 
-class LogWrapper(JaxMARLWrapper):
+@struct.dataclass
+class LogEnvState:
+    env_state: State
+    episode_returns: float
+    episode_lengths: int
+    returned_episode_returns: float
+    returned_episode_lengths: int
+
+
+class MALogWrapper(JaxMARLWrapper):
     """Log the episode returns and lengths.
     NOTE for now for envs where agents terminate at the same time.
     """
@@ -80,9 +89,10 @@ class LogWrapper(JaxMARLWrapper):
         key: chex.PRNGKey,
         state: LogEnvState,
         action: Union[int, float],
+        params: Optional[PCGRLEnvParams] = None,
     ) -> Tuple[chex.Array, LogEnvState, float, bool, dict]:
         obs, env_state, reward, done, info = self._env.step(
-            key=key, state=state.env_state, action=action
+            key=key, state=state.env_state, action=action, params=params,
         )
         ep_done = done["__all__"]
         new_episode_return = state.episode_returns + self._batchify_floats(reward)
@@ -103,6 +113,57 @@ class LogWrapper(JaxMARLWrapper):
         info["returned_episode_lengths"] = state.returned_episode_lengths
         info["returned_episode"] = jnp.full((self._env.n_agents,), ep_done)
         return obs, state, reward, done, info
+
+
+@struct.dataclass
+class MALossLogEnvState:
+    log_env_state: LogEnvState
+    losses: float
+    min_episode_losses: float
+
+class MALossLogWrapper(MALogWrapper):
+    """Log the episode returns and lengths."""
+
+    def __init__(self, env: MultiAgentEnv):
+        super().__init__(env)
+
+    @partial(jax.jit, static_argnums=(0,))
+    def reset(
+        self, key: chex.PRNGKey) -> Tuple[chex.Array, MultiAgentEnv]:
+        obs, log_env_state = super().reset(key)
+        state = MALossLogEnvState(log_env_state, jnp.inf, jnp.inf)
+        return obs, state
+
+    @partial(jax.jit, static_argnums=(0, 4))
+    def step(
+        self,
+        key: chex.PRNGKey,
+        state: State,
+        action: Union[int, float],
+        params: Optional[PCGRLEnvParams] = None,
+    ) -> Tuple[chex.Array, State, float, bool, dict]:
+        obs, log_env_state, reward, done, info = super().step(
+            key, state.log_env_state, action, params=params)
+        loss = get_loss(log_env_state.env_state.prob_state.stats, 
+                        self._env.prob.stat_weights, 
+                        self._env.prob.stat_trgs,
+                        self._env.prob.ctrl_threshes, 
+                        self._env.prob.metric_bounds)
+        # Normalize the loss to be in [0, 1]
+        loss = loss / self._env.prob.max_loss
+
+        new_best_loss = jnp.minimum(loss, state.losses)
+        state = MALossLogEnvState(
+            log_env_state = log_env_state,
+            losses = jax.lax.select(
+                done['__all__'],
+                jnp.inf,
+                new_best_loss,
+            ),
+            min_episode_losses = new_best_loss,
+        )
+        return obs, state, reward, done, info
+
 
     
 class MultiAgentWrapper(JaxMARLWrapper):
@@ -153,8 +214,8 @@ class MultiAgentWrapper(JaxMARLWrapper):
 
         return obs, state
 
-    def step(self, key, state, action):
-        obs, state, reward, done, info = self._env.step_ma(key, state, action)
+    def step(self, key, state, action, params):
+        obs, state, reward, done, info = self._env.step_ma(key, state, action, params)
         obs = self.process_observation(obs)
         return obs, state, reward, done, info
 
@@ -162,10 +223,6 @@ class MultiAgentWrapper(JaxMARLWrapper):
         return {
             agent: jnp.ones((self.action_space(agent).n,)) for agent in self.agents
         }
-
-
-class MALogWrapper(LogWrapper):
-    pass
 
 
 class JaxMARLWrapper(object):
@@ -183,15 +240,6 @@ class JaxMARLWrapper(object):
 
     def _batchify_floats(self, x: dict):
         return jnp.stack([x[a] for a in self._env.agents])
-
-
-@struct.dataclass
-class LogEnvState:
-    env_state: State
-    episode_returns: float
-    episode_lengths: int
-    returned_episode_returns: float
-    returned_episode_lengths: int
 
 
 class LogWrapper(JaxMARLWrapper):

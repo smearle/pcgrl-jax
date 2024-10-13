@@ -172,7 +172,7 @@ class EvalConfig(TrainConfig):
     n_eval_envs: int = 10
     n_eps: int = 5
     eval_map_width: Optional[int] = None
-    eval_max_board_scans: Optional[int] = None
+    eval_max_board_scans: Optional[float] = None
     eval_randomize_map_shape: Optional[bool] = None
     eval_seed: int = 0
 
@@ -183,6 +183,11 @@ class EvalConfig(TrainConfig):
     #     'mean_ep_reward',
     # ]
     metrics_to_keep: Tuple[str] = ('mean_ep_reward',)
+
+
+@dataclass
+class MultiAgentEvalConfig(EvalConfig, MultiAgentConfig):
+    pass
 
 
 @dataclass
@@ -224,5 +229,6 @@ cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
+cs.store(name="eval_ma_pcgrl", node=MultiAgentEvalConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
 cs.store(name="batch_pcgrl", node=SweepConfig)

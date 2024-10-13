@@ -6,11 +6,20 @@ Based on the Gymnax and PettingZoo APIs
 
 import jax
 import jax.numpy as jnp
-from typing import Dict
+from typing import Dict, TypeVar
 import chex
 from functools import partial
 from flax import struct
 from typing import Tuple, Optional
+
+
+TEnvState = TypeVar("TEnvState", bound="State")
+TEnvParams = TypeVar("TEnvParams", bound="EnvParams")
+
+
+@struct.dataclass
+class EnvParams:
+    max_steps_in_episode: int = 1
 
 
 @struct.dataclass
@@ -34,7 +43,7 @@ class MultiAgentEnv(object):
         self.action_spaces = dict()
 
     @partial(jax.jit, static_argnums=(0,))
-    def reset(self, key: chex.PRNGKey) -> Tuple[Dict[str, chex.Array], State]:
+    def reset(self, key: chex.PRNGKey, params: Optional[TEnvParams]) -> Tuple[Dict[str, chex.Array], State]:
         """Performs resetting of the environment."""
         raise NotImplementedError
 

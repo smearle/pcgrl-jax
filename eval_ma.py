@@ -11,13 +11,17 @@ import jax
 import jax.numpy as jnp
 from matplotlib import pyplot as plt
 import numpy as np
+import orbax.checkpoint as ocp
 
 from conf.config import EvalConfig, TrainConfig
-from envs.pcgrl_env import gen_dummy_queued_state
+from envs.pcgrl_env import PCGRLEnv, gen_dummy_queued_state
 from envs.probs.problem import ProblemState, get_loss
+from ma_utils import batchify, ma_init_config, init_run, restore_run, unbatchify
+from marl.model import ScannedRNN
+from marl.wrappers.baselines import MALossLogWrapper, MultiAgentWrapper
 from purejaxrl.experimental.s5.wrappers import LogWrapper, LossLogWrapper
 from train import init_checkpointer
-from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
+from utils import get_env_params_from_config
 
 
 @struct.dataclass
@@ -32,56 +36,104 @@ class EvalData:
     n_parameters: Optional[int] = None
 
 @hydra.main(version_base=None, config_path='./conf', config_name='eval_pcgrl')
-def main_eval(eval_config: EvalConfig):
-    eval_config = init_config(eval_config)
+def main_eval_ma(eval_config: EvalConfig):
+    ma_init_config(eval_config)
+    rng = jax.random.PRNGKey(eval_config.eval_seed)
 
     exp_dir = eval_config.exp_dir
-    if not eval_config.random_agent:
-        print(f'Attempting to load checkpoint from {exp_dir}')
-        checkpoint_manager, restored_ckpt = init_checkpointer(eval_config)
-        network_params = restored_ckpt['runner_state'].train_state.params
-    elif not os.path.exists(exp_dir):
-        network_params = network.init(rng, init_x)
-        os.makedirs(exp_dir)
+
+    options = ocp.CheckpointManagerOptions(
+        max_to_keep=2, create=True)
+    ckpt_manager = ocp.CheckpointManager(
+        eval_config._ckpt_dir, 
+        # ocp.PyTreeCheckpointer(), 
+        options=options)
+    latest_update_step = ckpt_manager.latest_step()
+
+    # if not eval_config.random_agent:
+    print(f'Attempting to load checkpoint from {exp_dir}')
+    runner_state, actor_network, env, latest_update_step = init_run(
+        eval_config, ckpt_manager, latest_update_step, rng)
+    runner_state, wandb_run_id = restore_run(
+        eval_config, runner_state, ckpt_manager, latest_update_step
+    )
+    # elif not os.path.exists(exp_dir):
+    #     network_params = network.init(rng, init_x)
+    #     os.makedirs(exp_dir)
 
     # Preserve the config as it was during training (minus `eval_` hyperparams), for future reference
     train_config = copy.deepcopy(eval_config)
     eval_config = init_config_for_eval(eval_config)
-    env, env_params = gymnax_pcgrl_make(eval_config.env_name, config=eval_config)
-    env = LossLogWrapper(env)
-    env.prob.init_graphics()
-    network = init_network(env, env_params, eval_config)
-    rng = jax.random.PRNGKey(eval_config.eval_seed)
+    # env, env_params = gymnax_pcgrl_make(eval_config.env_name, config=eval_config)
 
-    init_x = env.gen_dummy_obs(env_params)
-    # init_x = env.observation_space(env_params).sample(_rng)[None]
-    # model_summary = network.subnet.tabulate(rng, init_x.map_obs, init_x.flat_obs)
-    n_parameters = sum(np.prod(p.shape) for p in jax.tree.leaves(network_params) if isinstance(p, jnp.ndarray))
+    env_params = get_env_params_from_config(eval_config)
+    env = PCGRLEnv(env_params)
+
+    # Wrap environment with JAXMARL wrapper
+    env = MultiAgentWrapper(env, env_params)
+
+    # Wrap environment with LogWrapper
+    env = MALossLogWrapper(env)
+
+    # env.prob.init_graphics()
+    # network = init_network(env, env_params, eval_config)
+    rng, _rng_actor = jax.random.split(rng, 2)
+
+    ac_init_x = (
+        jnp.zeros((1, eval_config.n_eval_envs, env.observation_space(env.agents[0]).shape[0])),
+        jnp.zeros((1, eval_config.n_eval_envs)),
+        jnp.zeros((1, eval_config.n_eval_envs, env.action_space(env.agents[0]).n)),
+    )
+    ac_init_hstate = ScannedRNN.initialize_carry(eval_config.n_eval_envs, eval_config.hidden_dims[0])
+
+    hstate = ac_init_hstate
+    actor_network_params = runner_state.train_states[0].params
+    n_parameters = sum(np.prod(p.shape) for p in jax.tree_leaves(actor_network_params) if isinstance(p, jnp.ndarray))
 
     reset_rng = jax.random.split(rng, eval_config.n_eval_envs)
 
     def eval(env_params):
         queued_state = gen_dummy_queued_state(env)
-        obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(
-            reset_rng, env_params, queued_state)
+        obs, env_state = jax.vmap(env.reset, in_axes=(0))(
+            reset_rng)
+        # done = {agent: jnp.zeros((eval_config.n_eval_envs), dtype=bool) for agent in env.agents + ['__all__']}
+        done = jnp.zeros((eval_config.n_eval_envs), dtype=bool)
 
         def step_env(carry, _):
-            rng, obs, env_state = carry
+            rng, obs, last_done, env_state, hstate = carry
             rng, rng_act = jax.random.split(rng)
+
+            rng, _rng = jax.random.split(rng)
+            avail_actions = jax.vmap(env.get_avail_actions)(env_state.log_env_state.env_state)
+            avail_actions = jax.lax.stop_gradient(
+                batchify(avail_actions, env.agents, eval_config.n_eval_envs)
+            )
+            obs_batch = batchify(obs, env.agents, eval_config.n_eval_envs)
+            ac_in = (
+                obs_batch[np.newaxis, :],
+                last_done[np.newaxis, :],
+                avail_actions,
+            )
+
             if eval_config.random_agent:
                 action = env.action_space(env_params).sample(rng_act)
             else:
-                action = network.apply(network_params, obs)[0].sample(seed=rng_act)
+                hstate, pi = actor_network.apply(actor_network_params, hstate, ac_in)
+                action = pi.sample(seed=_rng)
+                env_act = unbatchify(
+                    action, env.agents, eval_config.n_eval_envs, env.n_agents
+                )
+                env_act = {k: v.squeeze() for k, v in env_act.items()}
 
             rng_step = jax.random.split(rng, eval_config.n_eval_envs)
             obs, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
-                rng_step, env_state, action, env_params
+                rng_step, env_state, env_act, env_params
             )
-            return (rng, obs, env_state), (env_state, reward, done, info)
+            return (rng, obs, done['__all__'], env_state, hstate), (env_state, reward, done['__all__'], info)
 
         print('Scanning episode steps:')
         _, (states, rewards, dones, infos) = jax.lax.scan(
-            step_env, (rng, obs, env_state), None,
+            step_env, (rng, obs, done, env_state, hstate), None,
             length=eval_config.n_eps*env.max_steps)
 
         return _, (states, rewards, dones, infos)
@@ -118,7 +170,7 @@ def main_eval(eval_config: EvalConfig):
 def get_eval_stats(states, dones):
     # Everything has size (n_bins, n_steps, n_envs)
     # Mask out so we only have the final step of each episode
-    ep_rews = states.log_env_state.returned_episode_returns * dones
+    ep_rews = states.log_env_state.returned_episode_returns * dones[..., None]
     # Get mean episode reward
     ep_rews = jnp.sum(ep_rews)
     n_eval_eps = jnp.sum(dones)
@@ -173,4 +225,4 @@ def get_eval_name(eval_config: EvalConfig, train_config: TrainConfig):
 
     
 if __name__ == '__main__':
-    main_eval()
+    main_eval_ma()

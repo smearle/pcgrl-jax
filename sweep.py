@@ -8,15 +8,16 @@ from omegaconf import OmegaConf
 import submitit
 from tqdm import tqdm
 
-from conf.config import EnjoyConfig, EvalConfig, MultiAgentConfig, SweepConfig, TrainConfig
+from conf.config import EnjoyConfig, EvalConfig, MultiAgentConfig, MultiAgentEvalConfig, SweepConfig, TrainConfig
 from conf.config_sweeps import eval_hypers
 from utils import get_sweep_conf_path, load_sweep_hypers, write_sweep_confs
 from enjoy import main_enjoy
 from eval import main_eval
+from eval_ma import main_eval_ma
 from eval_change_pct import main_eval_cp
 from plot import main as main_plot
 from train import main as main_train
-from mappo import main as main_ma_train
+from train_ma import main as main_ma_train
 from gen_hid_params_per_obs_size import get_hiddims_dict_path 
 
 
@@ -49,8 +50,8 @@ def get_grid_cfgs(base_config, hypers, mode, eval_hypers={}):
 
     # If models were trained with different max_board_scans, evaluate them on the highest such value, for fairness.
     if 'eval' in mode or 'enjoy' in mode:
-        if 'max_board_scans' in hypers.keys() and 'max_board_scans' not in eval_hypers:
-            base_config.eval_max_board_scans = max(hypers['max_board_scans'])
+        # if 'max_board_scans' in hypers.keys() and 'max_board_scans' not in eval_hypers:
+        #     base_config.eval_max_board_scans = max(hypers['max_board_scans'])
 
         # Add eval hypers
         hypers = {**hypers, **eval_hypers}
@@ -202,10 +203,14 @@ def sweep_main(cfg: SweepConfig):
     #     default_config = EvalConfig()
     #     main_fn = main_eval_diff_size
     elif cfg.mode == 'eval':
-        default_config = EvalConfig()
-        main_fn = main_eval
+        if cfg.multiagent:
+            main_fn = main_eval_ma
+            default_config = MultiAgentEvalConfig()
+        else:
+            default_config = EvalConfig()
+            main_fn = main_eval
     else:
-        raise Exception('Invalid mode: f{cfg.mode}')
+        raise Exception(f'Invalid mode: {cfg.mode}')
 
     # ... but we work around this kind of.
     for k, v in dict(cfg).items():
