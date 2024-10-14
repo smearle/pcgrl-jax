@@ -502,7 +502,7 @@ hypers = [
 
         'problem': ['binary'],
         'map_width': [16],
-        'n_agents': [1, 2, 3],
+        'n_agents': [1,2,3],
         'representation': ['turtle'],
         'model': ['rnn'],
         'obs_size_hid_dims': [3, 16, 31],

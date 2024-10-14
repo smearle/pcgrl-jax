@@ -350,7 +350,7 @@ class PCGRLEnv(Environment):
             action = action[0]
         env_map, rep_state = self.rep.step(
             env_map=env_state.env_map, action=action,
-            rep_state=env_state.rep_state, step_idx=env_state.step_idx, agent_id=0
+            rep_state=env_state.rep_state, step_idx=env_state.step_idx
         )
         env_map = jnp.where(env_state.static_map == 1,
                             env_state.env_map, env_map,

@@ -133,6 +133,7 @@ class MultiAgentConfig(TrainConfig):
     representation: str = "turtle"
     n_agents: int = 2
     n_envs: int = 300
+    n_eval_envs: int = 10
     scale_clip_eps: bool = False
     hidden_dims: Tuple[int] = (512, -1)
     empty_start: bool = True
@@ -170,7 +171,6 @@ class EvalConfig(TrainConfig):
     random_agent: bool = False
     # In how many bins to divide up each metric being evaluated
     n_bins: int = 10
-    n_eval_envs: int = 10
     n_eps: int = 5
     eval_map_width: Optional[int] = None
     eval_max_board_scans: Optional[float] = None
@@ -188,6 +188,7 @@ class EvalConfig(TrainConfig):
 
 @dataclass
 class MultiAgentEvalConfig(EvalConfig, MultiAgentConfig):
+    multiagent = True
     pass
 
 

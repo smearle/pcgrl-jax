@@ -9,9 +9,10 @@ import hydra
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import wandb
 import yaml
 
-from conf.config import EvalConfig, SweepConfig, TrainConfig
+from conf.config import EvalConfig, MultiAgentEvalConfig, SweepConfig, TrainConfig
 from eval import get_eval_name
 from eval_change_pct import EvalData, get_change_pcts
 from sweep import get_grid_cfgs, eval_hypers
@@ -75,10 +76,10 @@ def sweep_grid(cfg, grid_hypers, _eval_hypers):
         cross_eval_diff_size(name=name, sweep_configs=sweep_configs,
                         eval_config=eval_config, hypers=grid_hypers)
     else:
-        cross_eval_misc(name=name, sweep_configs=sweep_configs,
-                        eval_config=eval_config, hypers=grid_hypers)
         cross_eval_basic(name=name, sweep_configs=sweep_configs,
                         eval_config=eval_config, hypers=grid_hypers, eval_hypers=_eval_hypers)
+        cross_eval_misc(name=name, sweep_configs=sweep_configs,
+                        eval_config=eval_config, hypers=grid_hypers)
         
         if name.startswith('cp_'):
             cross_eval_cp(sweep_name=name, sweep_configs=sweep_configs,
@@ -172,6 +173,10 @@ def clean_df_strings(df):
             else:
                 new_names.append(replace_underscores(name))
         df.columns.names = new_names
+    
+    for i, tpl in enumerate(df.index.values):
+        tpl = (str(t) for t in tpl)
+        df.index.values[i] = tuple(tpl)
 
     # Replace underscores in index labels for each level of the MultiIndex
     # for level in range(df.index.nlevels):
@@ -395,21 +400,38 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     row_vals_curves = []
     all_timesteps = []
 
+    wandb_api = wandb.Api()
+
     for sc in sweep_configs:
         exp_dir = sc.exp_dir
         
         # Load the `progress.csv`
         csv_path = os.path.join(exp_dir, 'progress.csv')
         if not os.path.isfile(csv_path):
-            continue
-        train_metrics = pd.read_csv(csv_path)
-        train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
+            with open(os.path.join(exp_dir, 'wandb_run_id.txt'), 'r') as f:
+                wandb_run_id = f.read()
+            sc_run = wandb_api.run(f'/{MultiAgentEvalConfig.PROJECT}/{wandb_run_id}')
+            train_metrics = sc_run.history()
+            train_metrics = train_metrics.sort_values(by='env_step', ascending=True)
+            max_timestep = train_metrics['env_step'].max()
+            ep_returns = train_metrics['returns']
+            sc_timesteps = train_metrics['env_step']
+        else:
+            train_metrics = pd.read_csv(csv_path)
+            train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
 
-        # misc_stats_path = os.path.join(exp_dir, 'misc_stats.json')
-        # if os.path.exists(misc_stats_path):
-        #     sc_stats = json.load(open(f'{exp_dir}/misc_stats.json'))
-        # else:
-        max_timestep = train_metrics['timestep'].max()
+            # misc_stats_path = os.path.join(exp_dir, 'misc_stats.json')
+            # if os.path.exists(misc_stats_path):
+            #     sc_stats = json.load(open(f'{exp_dir}/misc_stats.json'))
+            # else:
+            max_timestep = train_metrics['timestep'].max()
+
+            ep_returns = train_metrics['ep_return']
+            sc_timesteps = train_metrics['timestep']
+
+        row_vals_curves.append(ep_returns)
+        all_timesteps.append(sc_timesteps)
+
         sc_stats = {'n_timesteps_trained': max_timestep}
 
         row_tpl = tuple(getattr(sc, k) for k in row_headers)
@@ -420,12 +442,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
         for k, v in sc_stats.items():
             vals[k] = v
 
-        row_vals.append(vals)
-        
-        ep_returns = train_metrics['ep_return']
-        row_vals_curves.append(ep_returns)
-        sc_timesteps = train_metrics['timestep']
-        all_timesteps.append(sc_timesteps)
+        row_vals.append(vals)        
 
     row_index = pd.MultiIndex.from_tuples(row_indices, names=row_headers)
     misc_stats_df = pd.DataFrame(row_vals, index=row_index)
@@ -519,11 +536,20 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
         exp_dir = sc.exp_dir
         csv_path = os.path.join(exp_dir, 'progress.csv')
         if not os.path.isfile(csv_path):
-            continue
-        train_metrics = pd.read_csv(csv_path)
-        train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
-        ep_returns = train_metrics['ep_return']
-        sc_timesteps = train_metrics['timestep']
+            with open(os.path.join(exp_dir, 'wandb_run_id.txt'), 'r') as f:
+                wandb_run_id = f.read()
+            sc_run = wandb_api.run(f'/{MultiAgentEvalConfig.PROJECT}/{wandb_run_id}')
+            train_metrics = sc_run.history()
+            train_metrics = train_metrics.sort_values(by='env_step', ascending=True)
+            ep_returns = train_metrics['returns']
+            sc_timesteps = train_metrics['env_step']
+
+        else:
+            train_metrics = pd.read_csv(csv_path)
+            train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
+            
+            ep_returns = train_metrics['ep_return']
+            sc_timesteps = train_metrics['timestep']
         interpolated_returns = interpolate_returns(ep_returns, sc_timesteps, all_timesteps)
         row_vals_curves.append(interpolated_returns)
 

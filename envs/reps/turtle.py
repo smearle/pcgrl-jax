@@ -45,9 +45,9 @@ class TurtleRepresentation(Representation):
 
     def step(self, env_map: chex.Array, action: chex.Array,
              rep_state: TurtleRepresentationState, step_idx: int):
-        new_env_map, map_changed, new_pos = self.step_turtle(env_map, action, rep_state.pos)
+        new_env_map, new_pos = self.step_turtle(env_map, action, rep_state.pos)
         rep_state = rep_state.replace(pos=new_pos)
-        return new_env_map, map_changed, rep_state
+        return new_env_map, rep_state
 
     def step_turtle(self, env_map, action, a_pos):
         action = action[..., 0]
