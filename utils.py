@@ -6,7 +6,7 @@ import jax
 import numpy as np
 import yaml
 
-from conf.config import Config, EvoMapConfig, SweepConfig, TrainConfig
+from conf.config import Config, EvoMapConfig, MultiAgentConfig, SweepConfig, TrainConfig
 from envs.candy import Candy, CandyParams
 from envs.pcgrl_env import PROB_CLASSES, PCGRLEnvParams, PCGRLEnv, ProbEnum, RepEnum, get_prob_cls
 from envs.play_pcgrl_env import PlayPCGRLEnv, PlayPCGRLEnvParams
@@ -52,7 +52,10 @@ def get_exp_dir(config: Config):
             f'fz-{config.n_freezies}_' + \
             f'act-{"x".join([str(e) for e in config.act_shape])}_' + \
             f'nag-{config.n_agents}_' + \
+            ('afreezer_' if config.multiagent and config.a_freezer else '') + \
+            (f'rewfrq-{config.reward_freq}_' if config.reward_freq > 1 else '') + \
             ('empty-start_' if config.empty_start else '') + \
+            ('full-start_' if config.full_start else '') + \
             ('pinpoints_' if config.pinpoints else '') + \
             (f'{config.n_envs}-envs_' if config.profile_fps else '') + \
             f'{config.seed}_{config.exp_name}')
@@ -80,7 +83,6 @@ def get_exp_dir(config: Config):
 
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
-
 
     if config.env_name == 'Candy':
         config.exp_dir = get_exp_dir(config)
@@ -235,6 +237,9 @@ def get_env_params_from_config(config: Config):
         change_pct=config.change_pct,
         randomize_map_shape=config.randomize_map_shape,
         empty_start=config.empty_start,
+        full_start=config.full_start,
+        a_freezer=config.multiagent and config.a_freezer,
+        reward_freq=config.reward_freq,
         pinpoints=config.pinpoints,
         multiagent=config.multiagent or config.n_agents > 1,
     )

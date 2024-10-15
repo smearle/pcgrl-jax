@@ -74,13 +74,16 @@ class MapData:
 
 
 @partial(jax.jit, static_argnames=("tile_enum", "map_shape", "tile_probs", "randomize_map_shape", "empty_start", 
-                                   "tile_nums", "pinpoints"))
-def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=False, empty_start=False, tile_nums=None,
-                 pinpoints=False):
+                                   "full_start", "tile_nums", "pinpoints"))
+def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=False, empty_start=False, full_start=False,
+                 tile_nums=None, pinpoints=False):
     tile_probs = np.array(tile_probs, dtype=np.float32)
 
+    assert not (empty_start and full_start), "Cannot have both empty_start and full_start"
     if empty_start:
         init_map = jnp.full(map_shape, dtype=jnp.int32, fill_value=tile_enum.EMPTY)
+    elif full_start:
+        init_map = jnp.full(map_shape, dtype=jnp.int32, fill_value=tile_enum.WALL)
     else:
         # Randomly place tiles according to their probabilities tile_probs
         init_map = jax.random.choice(rng, len(tile_enum), shape=map_shape, p=tile_probs)
@@ -165,11 +168,11 @@ class Problem:
             tile_probs = tile_probs / np.sum(tile_probs)
         self.tile_probs = tuple(tile_probs)
 
-    @partial(jax.jit, static_argnames=("self", "randomize_map_shape", "empty_start", "pinpoints"))
-    def gen_init_map(self, rng, randomize_map_shape=False, empty_start=False, pinpoints=False):
+    @partial(jax.jit, static_argnames=("self", "randomize_map_shape", "empty_start", "full_start", "pinpoints"))
+    def gen_init_map(self, rng, randomize_map_shape=False, empty_start=False, full_start=False, pinpoints=False):
         return gen_init_map(rng, self.tile_enum, self.map_shape, self.tile_probs,
-                            randomize_map_shape=randomize_map_shape, empty_start=empty_start, tile_nums=self.tile_nums,
-                            pinpoints=pinpoints)
+                            randomize_map_shape=randomize_map_shape, empty_start=empty_start, full_start=full_start,
+                            tile_nums=self.tile_nums, pinpoints=pinpoints)
 
     def get_metric_bounds(self, map_shape):
         raise NotImplementedError

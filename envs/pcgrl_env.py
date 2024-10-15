@@ -109,6 +109,9 @@ class PCGRLEnvParams:
     change_pct: float = -1.0
     randomize_map_shape: bool = False
     empty_start: bool = False
+    full_start: bool = False
+    a_freezer: bool = False
+    reward_freq: int = 1
     pinpoints: bool = False
 
 
@@ -183,6 +186,7 @@ class PCGRLEnv(Environment):
             env_params.representation, env_params.static_tile_prob, env_params.n_freezies, env_params.n_agents)
 
         self.multiagent = env_params.multiagent
+        self.a_freezer = env_params.a_freezer
         self.map_shape = env_params.map_shape
         self.act_shape = env_params.act_shape
         self.static_tile_prob = np.float32(static_tile_prob)
@@ -192,6 +196,7 @@ class PCGRLEnv(Environment):
         self.n_agents = n_agents
         self.randomize_map_shape = env_params.randomize_map_shape
         self.empty_start = env_params.empty_start
+        self.full_start = env_params.full_start
         self.pinpoints = env_params.pinpoints
 
         prob_cls = PROB_CLASSES[problem]
@@ -202,7 +207,8 @@ class PCGRLEnv(Environment):
         self.tile_probs = self.prob.tile_probs
         rng = jax.random.PRNGKey(0)  # Dummy random key
         map_data = self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, 
-                                         empty_start=self.empty_start, pinpoints=self.pinpoints)
+                                         empty_start=self.empty_start, full_start=self.full_start,
+                                         pinpoints=self.pinpoints)
         env_map, actual_map_shape = map_data.env_map, map_data.actual_map_shape
 
         self.rep: Representation
@@ -288,7 +294,7 @@ class PCGRLEnv(Environment):
             queued_state.has_queued_map,
             lambda: queued_map_data,
             lambda: self.prob.gen_init_map(rng, randomize_map_shape=self.randomize_map_shape, 
-                                   empty_start=self.empty_start, pinpoints=self.pinpoints),
+                                   empty_start=self.empty_start, full_start=self.full_start, pinpoints=self.pinpoints),
         )
         env_map, actual_map_shape = map_data.env_map, map_data.actual_map_shape
         # frz_map = jax.lax.cond(
@@ -343,7 +349,7 @@ class PCGRLEnv(Environment):
         return obs
 
     @partial(jax.jit, static_argnums=(0, 4))
-    def step_env(self, rng, env_state: PCGRLEnvState, action, env_params):
+    def step_env(self, rng, env_state: PCGRLEnvState, action, env_params: PCGRLEnvParams):
         action = action[..., None]
         # if self.n_agents == 1:
         if not self.multiagent:
@@ -360,7 +366,7 @@ class PCGRLEnv(Environment):
         pct_changed = n_tiles_changed / math.prod(self.map_shape)
         pct_changed = env_state.pct_changed + pct_changed
         reward, prob_state = jax.lax.cond(
-            map_changed,
+            jnp.logical_and(map_changed, (env_state.step_idx % env_params.reward_freq == 0)),
             lambda env_map: self.prob.step(env_map, env_state.prob_state),
             lambda _: (0., env_state.prob_state),
             env_map,
@@ -384,9 +390,10 @@ class PCGRLEnv(Environment):
         )
 
     @partial(jax.jit, static_argnums=(0, 4))
-    def step_env_ma(self, rng, env_state: PCGRLEnvState, action, env_params):
+    def step_env_ma(self, rng, env_state: PCGRLEnvState, action, env_params: PCGRLEnvParams):
         env_map = env_state.env_map
         rep_state = env_state.rep_state
+        static_map = env_state.static_map
         map_changed = False
 
         for i, agent in enumerate(self.agents):
@@ -397,9 +404,18 @@ class PCGRLEnv(Environment):
                 rep_state=rep_state, step_idx=env_state.step_idx, agent_id=i
             )
             # TODO: static map might be affected by one of these agent actions
-            new_env_map = jnp.where(env_state.static_map == 1,
-                                env_map, new_env_map,
-            )
+
+            # If the freezer is taking an action, all its changes are frozen
+            if self.a_freezer and i == 0:
+                static_map = jnp.logical_or(static_map, new_env_map != env_map)
+                
+            # Otherwise, changes cannot be made to previously frozen tiles
+            else:
+                new_env_map = jnp.where(static_map == 1,
+                                    env_map, new_env_map,
+                )
+
+
             env_map = new_env_map
 
         n_tiles_changed = jnp.sum(jnp.where(env_map != env_state.env_map, 1, 0))
@@ -407,16 +423,17 @@ class PCGRLEnv(Environment):
         pct_changed = n_tiles_changed / math.prod(self.map_shape)
         pct_changed = env_state.pct_changed + pct_changed
         reward, prob_state = jax.lax.cond(
-            map_changed,
+            jnp.logical_and(map_changed, (env_state.step_idx % env_params.reward_freq == 0)),
             lambda new_env_map: self.prob.step(new_env_map, env_state.prob_state),
             lambda _: (0., env_state.prob_state),
             env_map,
         )
         obs = self.get_obs(
-            env_map=env_map, frz_map=env_state.static_map,
+            env_map=env_map, frz_map=static_map,
             rep_state=rep_state, prob_state=prob_state)
         step_idx = env_state.step_idx + 1
-        env_state = env_state.replace(env_map=env_map, rep_state=rep_state, reward=reward, prob_state=prob_state, step_idx=step_idx, pct_changed=pct_changed)
+        env_state = env_state.replace(env_map=env_map, rep_state=rep_state, reward=reward, prob_state=prob_state, step_idx=step_idx, pct_changed=pct_changed,
+                                      static_map=static_map)
         done = self.is_terminal(env_state, env_params)
         env_state = env_state.replace(done=done)
 
@@ -603,7 +620,7 @@ def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
 
         return lvl_img
 
-    render_frozen_tiles(lvl_img)
+    lvl_img = render_frozen_tiles(lvl_img)
     # lvl_img = jax.lax.cond(
     #     # env.static_tile_prob > 0 or env.n_freezies > 0 or env_state.queued_state.has_queued_frz_map,
 

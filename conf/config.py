@@ -67,6 +67,8 @@ class Config:
 
     # To make the task simpler, always start with an empty map
     empty_start: bool = False
+    # Or a full (all-wall) map
+    full_start: bool = False
 
     # In problems with tile-types with specified valid numbers, fix/freeze their random placement at the beginning of 
     # each episode.
@@ -80,6 +82,8 @@ class Config:
     # A toggle, will add `n_envs` to the experiment name if we are profiling training FPS, so that we can distinguish 
     # results.
     profile_fps: bool = False
+
+    reward_freq: int = 1
 
 
 @dataclass
@@ -136,7 +140,7 @@ class MultiAgentConfig(TrainConfig):
     n_eval_envs: int = 10
     scale_clip_eps: bool = False
     hidden_dims: Tuple[int] = (512, -1)
-    empty_start: bool = True
+    a_freezer: bool = False
 
     # Save a checkpoint after (at least) this many ***update*** steps
     ckpt_freq: int = 40

@@ -144,7 +144,7 @@ class MultiTurtleRepresentation(TurtleRepresentation):
         padded_env_map = jnp.pad(
             env_map, self.rf_off, mode='constant',
             constant_values=self.tile_enum.BORDER)
-        # Each agent is associated with a static tile channel, and a onehot agentlocation channel
+        # Each agent observes a static tile channel, and a onehot agent location channel
         rf_obs = jnp.zeros((self.n_agents, *self.rf_shape, len(self.tile_enum) + 1 + self.n_agents))
         agent_loc_map = jnp.zeros(env_map.shape + (self.n_agents,))
 
@@ -182,6 +182,7 @@ class MultiTurtleRepresentation(TurtleRepresentation):
             )
             # Convert to one-hot encoding
             a_rf_obs = jax.nn.one_hot(rf_map_obs, self.num_tiles)
+
             if static_map is not None:
                 a_rf_static_obs = jax.lax.dynamic_slice(
                     padded_static_map,
