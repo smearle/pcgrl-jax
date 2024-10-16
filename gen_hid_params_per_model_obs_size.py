@@ -16,16 +16,17 @@ from utils import init_network, gymnax_pcgrl_make, init_config
 
 models = [
     # 'seqnca', 
-    # 'conv2',
+    'conv2',
     # 'conv'
-    'rnn'
+    # 'rnn'
 ]
 
 def compute_n_params(config):
     env, env_params = gymnax_pcgrl_make(config.env_name, config=config)
     network = init_network(env, env_params, config)
     rng = jax.random.PRNGKey(42)
-    if config.model == 'rnn':
+    # if config.model == 'rnn':
+    if config.multiagent:
         # FIXME: Hack
         env = MultiAgentWrapper(env, env_params)
         init_x, init_hstate = env.gen_dummy_obs(config)

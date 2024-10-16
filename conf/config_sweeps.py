@@ -504,7 +504,7 @@
 #         'map_width': [16],
 #         'n_agents': [1,2,3],
 #         'representation': ['turtle'],
-#         'model': ['rnn'],
+#         'model': ['conv2'],
 #         'obs_size_hid_dims': [3, 16, 31],
 #         'max_board_scans': [0.75, 1.0, 1.5],
 #         # 'max_board_scans': [3.0],
@@ -635,6 +635,26 @@ hypers = [
     },
 ]
 
+hypers = [
+    {
+        'NAME': 'ma_board_scans_conv2',
+        'multiagent': True,
+
+        'problem': ['binary'],
+        'map_width': [16],
+        'n_agents': [1,2,3],
+        'representation': ['turtle'],
+        'model': ['conv2'],
+        'obs_size': [3, 16, 31],
+        'max_board_scans': [0.75, 1.0, 1.5],
+        'n_envs': [400],
+        'empty_start': [False],
+        'total_timesteps': [1_000_000_000],
+        'ckpt_freq': [100],
+        'render_freq': [100],
+        'seed': [0, 1, 2],
+    },
+]
 
 # hypers = [
 #     {
@@ -648,7 +668,7 @@ hypers = [
 #         'representation': ['turtle'],
 #         'model': ['rnn'],
 #         'obs_size_hid_dims': [3],
-#         'max_board_scans': [0.75, 1.0, 1.5],
+#         'max_board_scans': [0.5, 0.75, 1.0, 1.5],
 #         # 'randomize_map_shape': [True, False],
 #         # 'randomize_map_shape': [True],
 #         # 'change_pct': [-1.0],
