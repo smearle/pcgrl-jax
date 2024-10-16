@@ -1,4 +1,4 @@
-NAME: ma_freezer
+NAME: ma_sparse_reward
 a_freezer:
 - true
 ckpt_freq:
@@ -17,15 +17,13 @@ eval_hypers:
 map_width:
 - 16
 max_board_scans:
-- 0.75
 - 1.0
-- 1.5
+- 3.0
 model:
 - rnn
 multiagent: true
 n_agents:
-- 2
-- 3
+- 1
 n_envs:
 - 400
 obs_size_hid_dims:
@@ -36,6 +34,12 @@ render_freq:
 - 100
 representation:
 - turtle
+reward_freq:
+- 1
+- 2
+- 3
+- 5
+- 10
 seed:
 - 0
 - 1

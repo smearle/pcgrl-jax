@@ -1,6 +1,4 @@
-NAME: ma_freezer
-a_freezer:
-- true
+NAME: ma_5_agents
 ckpt_freq:
 - 100
 empty_start:
@@ -24,10 +22,9 @@ model:
 - rnn
 multiagent: true
 n_agents:
-- 2
-- 3
+- 5
 n_envs:
-- 400
+- 200
 obs_size_hid_dims:
 - 3
 problem:

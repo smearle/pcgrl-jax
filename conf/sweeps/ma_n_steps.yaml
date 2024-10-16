@@ -1,6 +1,4 @@
-NAME: ma_freezer
-a_freezer:
-- true
+NAME: ma_n_steps
 ckpt_freq:
 - 100
 empty_start:
@@ -24,7 +22,6 @@ model:
 - rnn
 multiagent: true
 n_agents:
-- 2
 - 3
 n_envs:
 - 400

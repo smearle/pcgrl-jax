@@ -76,6 +76,7 @@ def sweep_grid(cfg, grid_hypers, _eval_hypers):
         cross_eval_diff_size(name=name, sweep_configs=sweep_configs,
                         eval_config=eval_config, hypers=grid_hypers)
     else:
+        os.makedirs(os.path.join(CROSS_EVAL_DIR, name), exist_ok=True)
         cross_eval_basic(name=name, sweep_configs=sweep_configs,
                         eval_config=eval_config, hypers=grid_hypers, eval_hypers=_eval_hypers)
         cross_eval_misc(name=name, sweep_configs=sweep_configs,
@@ -175,6 +176,8 @@ def clean_df_strings(df):
         df.columns.names = new_names
     
     for i, tpl in enumerate(df.index.values):
+        if not isinstance(tpl, tuple):
+            continue
         tpl = (str(t) for t in tpl)
         df.index.values[i] = tuple(tpl)
 
@@ -249,6 +252,10 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
                 col_tpl.insert(METRIC_COL_TPL_IDX, k)
                 col_tpl = tuple(col_tpl)
                 col_indices.add(col_tpl)
+
+                # FIXME: HACK reward to be fair among experiments with different numbers of agents. This should be handles in the eval script or the LogWrapper.
+                if k == 'mean_ep_reward':
+                    v = v / sec.n_agents
                 vals[col_tpl] = v
         row_vals.append(vals)
 
@@ -448,7 +455,6 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     misc_stats_df = pd.DataFrame(row_vals, index=row_index)
 
     # Save the dataframe to a csv
-    os.makedirs(os.path.join(CROSS_EVAL_DIR, name), exist_ok=True)
     # misc_stats_df.to_csv(os.path.join(CROSS_EVAL_DIR, name,
     #                                     "misc_stats.csv")) 
 
