@@ -1,5 +1,7 @@
 import functools
+import math
 from typing import Sequence
+from envs.pcgrl_env import PCGRLObs
 import flax
 import flax.linen as nn
 from flax.linen.initializers import constant, orthogonal
@@ -186,3 +188,97 @@ class Dense(nn.Module):
         )(critic)
 
         return act, jnp.squeeze(critic, axis=-1)
+
+
+class MAConvForward2(nn.Module):
+    """The way we crop out actions and values in ConvForward1 results in 
+    values skipping conv layers, which is not what we intended. This matches
+    the conv-dense model in the original paper without accounting for arf or 
+    vrf."""
+    action_dim: Sequence[int]
+    act_shape: Tuple[int, int]
+    hidden_dims: Tuple[int]
+    activation: str = "relu"
+
+    @nn.compact
+    def __call__(self, map_x, flat_x):
+        if self.activation == "relu":
+            activation = nn.relu
+        else:
+            activation = nn.tanh
+
+        flat_action_dim = self.action_dim * math.prod(self.act_shape)
+        h1, h2 = self.hidden_dims
+
+        map_x = nn.Conv(
+            features=h1, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
+        )(map_x)
+        act = activation(map_x)
+        map_x = nn.Conv(
+            features=h1, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
+        )(map_x)
+        map_x = activation(map_x)
+
+        map_x = act.reshape((*act.shape[:-3], -1))
+        flat_x = flat_x.reshape((*flat_x.shape[:-1], -1))
+        x = jnp.concatenate((map_x, flat_x), axis=-1)
+
+        x = nn.Dense(
+            h2, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+        )(x)
+        x = activation(x)
+
+        x = nn.Dense(
+            h1, kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0)
+        )(x)
+        x = activation(x)
+
+        act, critic = x, x
+
+        act = nn.Dense(
+            flat_action_dim, kernel_init=orthogonal(0.01),
+            bias_init=constant(0.0)
+        )(act)
+
+        critic = nn.Dense(
+            1, kernel_init=orthogonal(1.0), bias_init=constant(0.0)
+        )(critic)
+
+        return act, jnp.squeeze(critic, axis=-1)
+
+
+class ActorCriticPCGRL(nn.Module):
+    """Transform the action output into a distribution. Do some pre- and post-processing specific to the 
+    PCGRL environments."""
+    subnet: nn.Module
+    act_shape: Tuple[int, int]
+    n_agents: int
+    n_ctrl_metrics: int
+
+    @nn.compact
+    def __call__(self, x: PCGRLObs, avail_actions):
+        map_obs = x.map_obs
+        ctrl_obs = x.flat_obs   
+
+        # Hack. We had to put dummy ctrl obs's here to placate jax tree map during minibatch creation (FIXME?)
+        # Now we need to remove them :)
+        ctrl_obs = ctrl_obs[..., :self.n_ctrl_metrics]
+
+        # n_gpu = x.shape[0]
+        # n_envs = x.shape[1]
+        # x_shape = x.shape[2:]
+        # x = x.reshape((n_gpu * n_envs, *x_shape)) 
+
+        actor_mean, val = self.subnet(map_obs, ctrl_obs)
+        actor_mean = (nn.sigmoid(actor_mean) - 0.5) * 2
+
+        unavail_actions = 1 - avail_actions
+
+        actor_mean = actor_mean - (unavail_actions * 1e10)
+
+        # actor_mean = actor_mean[None]
+
+        pi = distrax.Categorical(logits=actor_mean)
+
+        return pi, val
+

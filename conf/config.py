@@ -61,10 +61,6 @@ class Config:
     # How many milliseconds to wait between frames of the rendered gifs
     gif_frame_duration: int = 25
 
-    """ DO NOT USE. WILL BE OVERWRITTEN. """
-    exp_dir: Optional[str] = None
-    n_gpus: int = 1
-
     # To make the task simpler, always start with an empty map
     empty_start: bool = False
     # Or a full (all-wall) map
@@ -84,6 +80,12 @@ class Config:
     profile_fps: bool = False
 
     reward_freq: int = 1
+
+
+    """ DO NOT USE. WILL BE OVERWRITTEN. """
+    exp_dir: Optional[str] = None
+    n_gpus: int = 1
+    _is_recurrent: bool = False
 
 
 @dataclass

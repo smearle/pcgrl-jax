@@ -113,6 +113,7 @@ class PCGRLEnvParams:
     a_freezer: bool = False
     reward_freq: int = 1
     pinpoints: bool = False
+    flatten_obs: bool = False
 
 
 def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):
