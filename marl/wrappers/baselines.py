@@ -19,6 +19,7 @@ from marl.model import ScannedRNN
 
 from safetensors.flax import save_file, load_file
 from flax.traverse_util import flatten_dict, unflatten_dict
+from jax_utils import stack_leaves
 
 def save_params(params: Dict, filename: Union[str, os.PathLike]) -> None:
     flattened_dict = flatten_dict(params, sep=',')
@@ -167,10 +168,11 @@ class MALossLogWrapper(MALogWrapper):
 
     
 class MultiAgentWrapper(JaxMARLWrapper):
-    def __init__(self, env, env_params):
+    def __init__(self, env, env_params: PCGRLEnvParams):
         super().__init__(env)
         self.agents = [f'agent_{i}' for i in range(env.n_agents)]
         self._env.agents = self.agents
+        self.flatten_obs = env_params.flatten_obs
 
         self.observation_spaces = {i: env.observation_space(env_params) for i in self.agents}
         self.action_spaces = {i: env.action_space(env_params) for i in self.agents}
@@ -204,8 +206,14 @@ class MultiAgentWrapper(JaxMARLWrapper):
         for i, agent in enumerate(self.agents):
             # TODO: Observe flat/scalar tings!
             # new_obs[agent] = jnp.concat((obs.map_obs[i].flatten(), obs.flat_obs.flatten()), axis=0)
-            new_obs[agent] = obs.map_obs[i].flatten()
-        new_obs['world_state'] = jnp.stack([new_obs[agent] for agent in self.agents])
+            if self.flatten_obs:
+                new_obs[agent] = obs.map_obs[i].flatten()
+            else:
+                new_obs[agent] = jax.tree.map(lambda x: x[i], obs)
+        if self.flatten_obs:
+            new_obs['world_state'] = jnp.stack([new_obs[agent] for agent in self.agents])
+        else:
+            new_obs['world_state'] = stack_leaves(new_obs.values())
         return new_obs
 
     def reset(self, key):

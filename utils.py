@@ -83,6 +83,7 @@ def get_exp_dir(config: Config):
 
 def init_config(config: Config):
     config.n_gpus = jax.local_device_count()
+    config._is_recurrent = config.model in {'rnn'}
 
     if config.env_name == 'Candy':
         config.exp_dir = get_exp_dir(config)
@@ -242,6 +243,7 @@ def get_env_params_from_config(config: Config):
         reward_freq=config.reward_freq,
         pinpoints=config.pinpoints,
         multiagent=config.multiagent or config.n_agents > 1,
+        flatten_obs=config._is_recurrent,
     )
     return env_params
 
