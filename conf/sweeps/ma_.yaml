@@ -1,6 +1,4 @@
-NAME: ma_freezer
-a_freezer:
-- true
+NAME: ma_
 ckpt_freq:
 - 100
 empty_start:
@@ -17,13 +15,12 @@ eval_hypers:
 map_width:
 - 16
 max_board_scans:
-- 0.75
 - 1.0
-- 1.5
 model:
 - rnn
 multiagent: true
 n_agents:
+- 1
 - 2
 - 3
 n_envs:

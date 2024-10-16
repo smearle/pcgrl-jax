@@ -1,6 +1,4 @@
-NAME: ma_freezer
-a_freezer:
-- true
+NAME: ma_obs_size
 ckpt_freq:
 - 100
 empty_start:
@@ -17,19 +15,18 @@ eval_hypers:
 map_width:
 - 16
 max_board_scans:
-- 0.75
 - 1.0
-- 1.5
 model:
 - rnn
 multiagent: true
 n_agents:
-- 2
 - 3
 n_envs:
 - 400
 obs_size_hid_dims:
 - 3
+- 16
+- 31
 problem:
 - binary
 render_freq:
