@@ -16,9 +16,9 @@ from utils import init_network, gymnax_pcgrl_make, init_config
 
 models = [
     # 'seqnca', 
-    # 'conv2',
+    'conv2',
     # 'conv'
-    'rnn'
+    # 'rnn'
 ]
 
 def compute_n_params(config):
