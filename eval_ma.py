@@ -35,7 +35,7 @@ class EvalData:
     n_eval_eps: int
     n_parameters: Optional[int] = None
 
-@hydra.main(version_base=None, config_path='./conf', config_name='eval_pcgrl')
+@hydra.main(version_base=None, config_path='./conf', config_name='eval_ma_pcgrl')
 def main_eval_ma(eval_config: MultiAgentEvalConfig):
     ma_init_config(eval_config)
     rng = jax.random.PRNGKey(eval_config.eval_seed)

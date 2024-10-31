@@ -410,9 +410,9 @@ def make_train(
                     # batch_size = config.MINIBATCH_SIZE * config.NUM_MINIBATCHES
                     batch_size = config.num_steps * config.n_envs * config.n_agents
                     assert (
-                        batch_size == config.num_steps * config.n_envs
+                        batch_size == config.num_steps * config.n_envs * config.n_agents
                     ), "batch size must be equal to number of steps * number " + \
-                        "of envs"
+                        "of envs * number of agents"
                     permutation = jax.random.permutation(_rng, batch_size)
                     batch = (traj_batch, advantages, targets)
                     batch = jax.tree_util.tree_map(

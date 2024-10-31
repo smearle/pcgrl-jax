@@ -1,4 +1,4 @@
-NAME: ma_sparse_reward
+NAME: ma_sparse_reward_n_agents
 a_freezer:
 - true
 ckpt_freq:
@@ -18,6 +18,7 @@ map_width:
 - 16
 max_board_scans:
 - 1.0
+- 3.0
 model:
 - rnn
 multiagent: true
