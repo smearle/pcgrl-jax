@@ -53,7 +53,10 @@ def cross_eval_main(cfg: SweepConfig):
 
 
 def sweep_grid(cfg, grid_hypers, _eval_hypers):
-    default_cfg = EvalConfig()
+    if grid_hypers['multiagent']:
+        default_cfg = MultiAgentEvalConfig(multiagent=True)
+    else:
+        default_cfg = EvalConfig()
     sweep_configs = get_grid_cfgs(default_cfg, grid_hypers, mode='eval', eval_hypers=_eval_hypers)
     sweep_configs = [init_config(sc) for sc in sweep_configs]
 
@@ -244,6 +247,7 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
         vals = {}
         for sec in sweep_eval_configs:
             sec_col_tpl = [getattr(sec, k) for k in eval_hyper_ks]
+            print(sc.exp_dir)
             sc_stats = json.load(open(
                 os.path.join(f'{sc.exp_dir}', 
                             'stats' + get_eval_name(sec, sec) + '.json')))
@@ -390,7 +394,6 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
         f.write(latex_str)
 
     print(f"Basic stats for {name} saved to {CROSS_EVAL_DIR}/{name}.")
-
 
         
 def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
