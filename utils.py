@@ -47,6 +47,7 @@ def get_exp_dir(config: Config):
             (f'cp-{config.change_pct}_' if config.change_pct > 0 else '') +
             f'arf-{config.arf_size}_' + \
             (f"hd-{'-'.join((str(hd) for hd in config.hidden_dims))}_" if not is_default_hiddims(config) else '') + \
+            (f"envs-{config.n_envs}_" if config.n_envs != 400 else '') + \
             f'sp-{config.static_tile_prob}_'
             f'bs-{config.max_board_scans}_' + \
             f'fz-{config.n_freezies}_' + \

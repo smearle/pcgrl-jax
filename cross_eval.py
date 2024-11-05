@@ -77,10 +77,10 @@ def sweep_grid(cfg, grid_hypers, _eval_hypers):
                         eval_config=eval_config, hypers=grid_hypers)
     else:
         os.makedirs(os.path.join(CROSS_EVAL_DIR, name), exist_ok=True)
-        cross_eval_basic(name=name, sweep_configs=sweep_configs,
-                        eval_config=eval_config, hypers=grid_hypers, eval_hypers=_eval_hypers)
         cross_eval_misc(name=name, sweep_configs=sweep_configs,
                         eval_config=eval_config, hypers=grid_hypers)
+        cross_eval_basic(name=name, sweep_configs=sweep_configs,
+                        eval_config=eval_config, hypers=grid_hypers, eval_hypers=_eval_hypers)
         
         if name.startswith('cp_'):
             cross_eval_cp(sweep_name=name, sweep_configs=sweep_configs,
@@ -421,6 +421,8 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
             train_metrics = sc_run.history()
             train_metrics = train_metrics.sort_values(by='env_step', ascending=True)
             max_timestep = train_metrics['env_step'].max()
+            if 'returns' not in train_metrics:
+                breakpoint()
             ep_returns = train_metrics['returns']
             sc_timesteps = train_metrics['env_step']
         else:
@@ -515,6 +517,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
         # Group by timesteps and take the mean for duplicate values
         ep_returns = pd.Series(ep_returns).groupby(timesteps).mean()
         timesteps = np.unique(timesteps)
+        timesteps = timesteps[~np.isnan(timesteps)]
         
         # Create a Series with the index set to the unique timesteps of the ep_returns
         indexed_returns = pd.Series(ep_returns.values, index=timesteps)

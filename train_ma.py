@@ -324,7 +324,7 @@ def make_train(
                     lambda x: jnp.swapaxes(
                         jnp.reshape(
                             x,
-                            [x.shape[0], config["NUM_MINIBATCHES"], -1]
+                            [x.shape[0], config.NUM_MINIBATCHES, -1]
                             + list(x.shape[2:]),
                         ),
                         1,

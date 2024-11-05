@@ -1,31 +1,30 @@
-NAME: ma_5_agents
+NAME: ma_n_envs
 ckpt_freq:
 - 100
 empty_start:
 - false
 eval_hypers:
-  eval_randomize_map_shape:
-  - true
-  - false
   eval_map_width:
   - 8
   - 16
   - 24
   - 32
+  eval_randomize_map_shape:
+  - true
+  - false
 map_width:
 - 16
 max_board_scans:
-- 0.75
 - 1.0
-- 1.5
 model:
 - rnn
 multiagent: true
 n_agents:
-- 4
-- 5
+- 1
 n_envs:
-- 200
+- 400
+- 800
+- 1200
 obs_size_hid_dims:
 - 3
 problem:
