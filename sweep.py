@@ -245,7 +245,7 @@ def sweep_main(cfg: SweepConfig):
                     mem_gb=30,
                     tasks_per_node=1,
                     cpus_per_task=1,
-                    timeout_min=60,
+                    timeout_min=120,
                     # gpus_per_node=1,
                     slurm_gres='gpu:rtx8000:1',
                     slurm_account='pr_174_general',

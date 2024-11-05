@@ -535,7 +535,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     network = init_network(env, env_params, config)
     init_x = env.gen_dummy_obs(env_params)
     # init_x = env.observation_space(env_params).sample(_rng)[None, ]
-    network_params = network.init(_rng, init_x)
+    network_params = network.init(_rng, x=init_x)
     tx = optax.chain(
         optax.clip_by_global_norm(config.MAX_GRAD_NORM),
         optax.adam(config.lr, eps=1e-5),

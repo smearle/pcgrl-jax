@@ -1,0 +1,40 @@
+NAME: ma_board_scans
+ckpt_freq:
+- 100
+empty_start:
+- false
+eval_hypers:
+  eval_map_width:
+  - 32
+  eval_randomize_map_shape:
+  - true
+  - false
+map_width:
+- 16
+max_board_scans:
+- 0.5
+model:
+- rnn
+multiagent: true
+n_agents:
+- 1
+- 2
+- 3
+n_envs:
+- 400
+obs_size_hid_dims:
+- 3
+- 16
+- 31
+problem:
+- binary
+render_freq:
+- 100
+representation:
+- turtle
+seed:
+- 0
+- 1
+- 2
+total_timesteps:
+- 1000000000
