@@ -21,17 +21,18 @@ def main_enjoy(enjoy_config: EnjoyConfig):
     enjoy_config = init_config(enjoy_config)
 
     exp_dir = enjoy_config.exp_dir
-    if not enjoy_config.random_agent:
+    if enjoy_config.random_agent:
+        # Save the gif of random agent behavior here. For debugging.
+        os.makedirs(exp_dir)
+        steps_prev_complete = 0
+    else:
+        if not os.path.exists(exp_dir):
+            exit(f"Experiment directory {exp_dir} does not exist")
         print(f'Loading checkpoint from {exp_dir}')
         checkpoint_manager, restored_ckpt = init_checkpointer(enjoy_config)
         runner_state = restored_ckpt['runner_state']
         network_params = runner_state.train_state.params
-        steps_prev_complete = restored_ckpt['steps_prev_complete']
-    else:
-        if not os.path.exists(exp_dir):
-            os.makedirs(exp_dir)
-        steps_prev_complete = 0
-    
+        steps_prev_complete = restored_ckpt['steps_prev_complete'] 
 
 
     if enjoy_config.render_ims:
