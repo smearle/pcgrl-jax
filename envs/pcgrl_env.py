@@ -441,13 +441,15 @@ class PCGRLEnv(Environment):
         ma_reward = {agent: reward for agent in self.agents}
         ma_done = {agent: done for agent in self.agents}
         ma_done['__all__'] = done
+        info = {}
+        info.update({name: env_state.prob_state.stats[i] for i, name in enumerate(self.prob.metric_names)})
 
         return (
             jax.lax.stop_gradient(obs),
             jax.lax.stop_gradient(env_state),
             ma_reward,
             ma_done,
-            {},
+            info,
         )
     
     def is_terminal(self, state: PCGRLEnvState, params: PCGRLEnvParams) \

@@ -138,7 +138,7 @@ class MultiAgentConfig(TrainConfig):
     model: str = 'rnn'
     representation: str = "turtle"
     n_agents: int = 2
-    n_envs: int = 300
+    n_envs: int = 4
     n_eval_envs: int = 10
     scale_clip_eps: bool = False
     hidden_dims: Tuple[int] = (512, -1)
@@ -184,12 +184,14 @@ class EvalConfig(TrainConfig):
     eval_seed: int = 0
 
     # Which eval metric to keep in our generated table if sweeping over eval hyperparams (in which case we want to 
-    # save space). Only applied when runnins `cross_eval.py`
+    # save space). Only applied when running `cross_eval.py`
     # metrics_to_keep = [
     #     # 'min_min_loss',
     #     'mean_ep_reward',
     # ]
-    metrics_to_keep: Tuple[str] = ('mean_ep_reward',)
+
+    # metrics_to_keep: Tuple[str] = ('mean_ep_reward',)
+    metrics_to_keep: Tuple[str] = ('mean_fps',)
 
 
 @dataclass

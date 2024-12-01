@@ -210,17 +210,23 @@ class MAConvForward2(nn.Module):
         flat_action_dim = self.action_dim * math.prod(self.act_shape)
         h1, h2 = self.hidden_dims
 
+        if h2 == -1:
+            raise Exception(
+                f"The second hidden dimension has undefined size of {h2}. "
+                """If running a single job from the command line with `python train_ma.py`, be sure to specify `hidden_dims="[X, Y]"). """
+                "If running a sweep with `python sweep.py`, be sure that hidden_dims are specified in your sweep config, or loaded from `conf/.*hid_params.json file."
+            )
+
         map_x = nn.Conv(
             features=h1, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
         )(map_x)
-        act = activation(map_x)
+        map_x = activation(map_x)
         map_x = nn.Conv(
             features=h1, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
         )(map_x)
         map_x = activation(map_x)
 
-        map_x = act.reshape((*act.shape[:-3], -1))
-        flat_x = flat_x.reshape((*flat_x.shape[:-1], -1))
+        map_x = map_x.reshape((*map_x.shape[:-3], -1))
         x = jnp.concatenate((map_x, flat_x), axis=-1)
 
         x = nn.Dense(
@@ -275,6 +281,9 @@ class ActorCriticPCGRL(nn.Module):
         unavail_actions = 1 - avail_actions
 
         actor_mean = actor_mean - (unavail_actions * 1e10)
+
+        actor_mean = actor_mean.reshape((actor_mean.shape[0], *self.act_shape, -1))
+        # breakpoint()
 
         # actor_mean = actor_mean[None]
 

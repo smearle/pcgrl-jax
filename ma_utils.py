@@ -265,7 +265,7 @@ def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PCGRLE
                 )
                 obs = jax.tree.map(lambda x: x[jnp.newaxis], obs)
                 obs = batchify(obs, env.agents, env.n_agents)
-                obs = obs.replace(flat_obs=obs.flat_obs[..., jnp.newaxis])
+                # obs = obs.replace(flat_obs=obs.flat_obs[..., jnp.newaxis])
                 pi, _ = actor_network.apply(actor_params, obs, avail_actions)
             action = pi.sample(seed=rng)
             env_act = unbatchify(

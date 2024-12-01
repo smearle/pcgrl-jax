@@ -88,13 +88,13 @@ class ConvForward2(nn.Module):
         map_x = nn.Conv(
             features=h1, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
         )(map_x)
-        act = activation(map_x)
+        map_x = activation(map_x)
         map_x = nn.Conv(
             features=h1, kernel_size=(7, 7), strides=(2, 2), padding=(3, 3)
         )(map_x)
         map_x = activation(map_x)
 
-        map_x = act.reshape((act.shape[0], -1))
+        map_x = map_x.reshape((map_x.shape[0], -1))
         x = jnp.concatenate((map_x, flat_x), axis=-1)
 
         x = nn.Dense(
