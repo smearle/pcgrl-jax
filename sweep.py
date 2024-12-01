@@ -159,7 +159,7 @@ def seq_main(main_fn, sweep_configs):
     return results
 
 
-@hydra.main(version_base=None, config_path='./', config_name='batch_pcgrl')
+@hydra.main(version_base="1.3", config_path='./', config_name='batch_pcgrl')
 def sweep_main(cfg: SweepConfig):
     if cfg.mode == 'plot' or not am_on_hpc():
         cfg.slurm = False

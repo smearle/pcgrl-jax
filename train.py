@@ -292,9 +292,9 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     #                         'save_args': save_args})
                     checkpoint_manager.save(t, args=ocp.args.StandardSave(ckpt))
 
-        # frames, states = render_episodes(train_state.params)
-        # jax.debug.callback(render_frames, frames, runner_state.update_i)
-        # old_render_results = (frames, states)
+        frames, states = render_episodes(train_state.params)
+        # jax.debug.callback(render_frames, frames, runner_state.update_i, metric)
+        old_render_results = (frames, states)
 
         # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
@@ -333,6 +333,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     update_i=update_i)
                 return runner_state, transition
 
+            # DO ROLLOUTS
             runner_state, traj_batch = jax.lax.scan(
                 _env_step, runner_state, None, config.num_steps
             )
@@ -476,18 +477,18 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             # FIXME: Inside vmap, both conditions are likely to get executed. Any way around this?
             # Currently not vmapping the train loop though, so it's ok.
             # start_time = timer()
-            # should_render = runner_state.update_i % config.render_freq == 0
-            # frames, states = jax.lax.cond(
-            #     should_render,
-            #     lambda: render_episodes(train_state.params),
-            #     lambda: old_render_results,)
-            # jax.lax.cond(
-            #     should_render,
-            #     partial(jax.debug.callback, render_frames),
-            #     lambda _, __, ___: None,
-            #     frames, runner_state.update_i, metric
-            # )
-            # jax.debug.callback(render_frames, frames, runner_state.update_i, metric)
+            should_render = runner_state.update_i % config.render_freq == 0
+            frames, states = jax.lax.cond(
+                should_render,
+                lambda: render_episodes(train_state.params),
+                lambda: old_render_results,)
+            jax.lax.cond(
+                should_render,
+                partial(jax.debug.callback, render_frames),
+                lambda _, __, ___: None,
+                frames, runner_state.update_i, metric
+            )
+            jax.debug.callback(render_frames, frames, runner_state.update_i, metric)
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
             jax.debug.callback(_log_callback, metric)

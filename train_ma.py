@@ -127,8 +127,8 @@ def make_train(
                     hstates = (ac_hstate, cr_hstate)
                 else:
                     # obs_batch = jax.tree.map(lambda x: x[np.newaxis], obs_batch)
-                    obs_batch_in = obs_batch.replace(flat_obs = obs_batch.flat_obs[..., np.newaxis])
-                    pi, value = network.apply(train_states[0].params, obs_batch_in, avail_actions)
+                    # obs_batch_in = obs_batch.replace(flat_obs = obs_batch.flat_obs[..., np.newaxis])
+                    pi, value = network.apply(train_states[0].params, obs_batch, avail_actions)
                     world_state = jax.tree.map(lambda x: x.swapaxes(0, 1), last_obs["world_state"])
                     # shape: (num_envs * num_max_objects, world_state_size)
                     world_state = jax.tree.map(lambda x: x.reshape((config._num_actors, -1)), world_state)
@@ -153,10 +153,13 @@ def make_train(
                 transition = Transition(
                     jnp.tile(done["__all__"], env.n_agents),
                     last_done,
-                    action.squeeze(),
-                    value.squeeze(),
+                    # action.squeeze(),
+                    action,
+                    # value.squeeze(),
+                    value,
                     batchify(reward, env.agents, config._num_actors).squeeze(),
-                    log_prob.squeeze(),
+                    # log_prob.squeeze(),
+                    log_prob,
                     obs_batch,
                     world_state,
                     info,
@@ -198,7 +201,6 @@ def make_train(
                     batchify(avail_actions, env.agents, config._num_actors)
                 )
                 obs_batch = batchify(last_obs, env.agents, config._num_actors)
-                obs_batch = obs_batch.replace(flat_obs=obs_batch.flat_obs[..., np.newaxis])
                 _, last_val = network.apply(train_states[0].params, obs_batch, avail_actions)
             last_val = last_val.squeeze()
 
@@ -239,8 +241,7 @@ def make_train(
                     def _loss_fn(params, traj_batch, gae, targets):
                         # RERUN NETWORK
                         # obs = traj_batch.obs[None]
-                        obs_in = traj_batch.obs.replace(flat_obs = traj_batch.obs.flat_obs[..., np.newaxis])
-                        pi, value = network.apply(params, obs_in, traj_batch.avail_actions)
+                        pi, value = network.apply(params, traj_batch.obs, traj_batch.avail_actions)
                         # action = traj_batch.action.reshape(pi.logits.shape[:-1])
                         log_prob = pi.log_prob(traj_batch.action)
 
@@ -261,7 +262,7 @@ def make_train(
                         gae = (gae - gae.mean()) / (gae.std() + 1e-8)
 
                         # Some reshaping to accomodate player, x, and y dimensions to action output. (Not used often...)
-                        # gae = gae[..., None, None, None]
+                        gae = gae[..., None, None]
 
                         loss_actor1 = ratio * gae
                         loss_actor2 = (
@@ -398,14 +399,6 @@ def make_train(
                     x, (1, config._num_actors, -1)
                 ), init_hstates)
                 
-                batch = (
-                    init_hstates[0],
-                    init_hstates[1],
-                    traj_batch,
-                    advantages.squeeze(),
-                    targets.squeeze(),
-                )
-
                 if not config._is_recurrent:
                     # batch_size = config.MINIBATCH_SIZE * config.NUM_MINIBATCHES
                     batch_size = config.num_steps * config.n_envs * config.n_agents
@@ -428,6 +421,13 @@ def make_train(
                         shuffled_batch,
                     )
                 else:
+                    batch = (
+                        init_hstates[0],
+                        init_hstates[1],
+                        traj_batch,
+                        advantages.squeeze(),
+                        targets.squeeze(),
+                    )
                     permutation = jax.random.permutation(_rng, config._num_actors)
 
                     shuffled_batch = jax.tree_util.tree_map(
@@ -502,7 +502,7 @@ def make_train(
             
             rng = update_state[-1]
             
-            def callback(metric):
+            def log_callback(metric):
 
                 wandb.log(
                     {
@@ -533,7 +533,7 @@ def make_train(
                     return
             
             metric["update_steps"] = update_steps
-            jax.experimental.io_callback(callback, None, metric)
+            jax.experimental.io_callback(log_callback, None, metric)
             runner_state = RunnerState(train_states, env_state, last_obs, last_done, hstates, rng)
             do_render = (config.render_freq != -1) and (update_steps % config.render_freq == 0)
             

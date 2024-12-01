@@ -7,8 +7,8 @@ def stack_leaves(trees):
     # Make sure each leaf is an array
     def to_array(x):
         x = jnp.array(x) if not isinstance(x, jnp.ndarray) else x
-        if x.shape == ():
-            x = x.reshape(1)
+        # if x.shape == ():
+        #     x = x.reshape(1)
         return x
 
     trees = [jax.tree.map(lambda x: to_array(x), tree) for tree in trees]

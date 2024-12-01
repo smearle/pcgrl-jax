@@ -210,6 +210,9 @@ class MultiAgentWrapper(JaxMARLWrapper):
                 new_obs[agent] = obs.map_obs[i].flatten()
             else:
                 new_obs[agent] = jax.tree.map(lambda x: x[i], obs)
+                new_obs[agent] = new_obs[agent].replace(
+                    flat_obs=jnp.expand_dims(new_obs[agent].flat_obs, axis=0)
+                )
         if self.flatten_obs:
             new_obs['world_state'] = jnp.stack([new_obs[agent] for agent in self.agents])
         else:

@@ -5,12 +5,12 @@ empty_start:
 - false
 eval_hypers:
   eval_map_width:
-  - 8
+  # - 8
   - 16
-  - 24
-  - 32
+  # - 24
+  # - 32
   eval_randomize_map_shape:
-  - true
+  # - true
   - false
 map_width:
 - 16
@@ -29,8 +29,8 @@ n_envs:
 - 400
 obs_size_hid_dims:
 - 3
-- 16
-- 31
+# - 16
+# - 31
 problem:
 - binary
 render_freq:

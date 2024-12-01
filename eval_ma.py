@@ -1,6 +1,7 @@
 import copy
 import json
 import os
+import time
 from typing import Optional
 
 import chex
@@ -139,6 +140,8 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig):
 
         return states, reward, dones
 
+    _jitted_eval = jax.jit(_eval)
+
     stats_name = \
         "stats" + \
         get_eval_name(eval_config=eval_config, train_config=train_config) + \
@@ -148,7 +151,12 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig):
     # For each bin, evaluate the change pct. at the center of the bin
     
     if eval_config.reevaluate or not os.path.exists(json_path):
-        states, rewards, dones = _eval(env_params)
+        start_time = time.time()
+        states, rewards, dones = _jitted_eval(env_params)
+        end_time = time.time()
+
+        total_steps = eval_config.n_eps * env.max_steps * eval_config._num_eval_actors
+        mean_fps = total_steps / (end_time - start_time)
 
         stats = get_eval_stats(states, dones)
         stats = stats.replace(
@@ -157,13 +165,16 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig):
 
         with open(json_path, 'w') as f:
             json_stats = {k: v.tolist() for k, v in stats.__dict__.items() if isinstance(v, jnp.ndarray)}
+            json_stats['mean_fps'] = mean_fps
             json.dump(json_stats, f, indent=4)
-    else:
-        with open(json_path, 'r') as f:
-            stats = json.load(f)
-            stats = EvalData(**stats)
+    
+    # Not clear why we need to load stats like this. Maybe a smarter way of doing cross-eval?
+    # else:
+    #     with open(json_path, 'r') as f:
+    #         stats = json.load(f)
+    #         stats = EvalData(**stats)
 
-def get_eval_stats(states, dones):
+def get_eval_stats(states, dones) -> EvalData:
     # Everything has size (n_bins, n_steps, n_envs)
     # Mask out so we only have the final step of each episode
     ep_rews = states.log_env_state.returned_episode_returns * dones[..., None]
