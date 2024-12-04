@@ -1,15 +1,10 @@
-NAME: ma_sparse_reward
-a_freezer:
-- true
+NAME: ma_board_scans_dungeon_obs_31
 ckpt_freq:
 - 100
 empty_start:
 - false
 eval_hypers:
   eval_map_width:
-  - 8
-  - 16
-  - 24
   - 32
   eval_randomize_map_shape:
   - true
@@ -18,31 +13,36 @@ map_width:
 - 16
 max_board_scans:
 - 1.0
-- 3.0
 model:
 - rnn
 multiagent: true
 n_agents:
 - 1
+- 2
+- 3
 n_envs:
 - 400
 obs_size_hid_dims:
-- 3
+- 31
 problem:
-- binary
+- dungeon
+randomize_map_shape:
+- true
+- false
 render_freq:
 - 100
 representation:
 - turtle
-reward_freq:
-- 1
-- 2
-- 3
-- 5
-- 10
 seed:
 - 0
 - 1
 - 2
+- 3
+- 4
+- 5
+- 6
+- 7
+- 8
+- 9
 total_timesteps:
-- 1000000000
+- 300000000

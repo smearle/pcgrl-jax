@@ -1,10 +1,6 @@
-NAME: ma_sparse_reward
-a_freezer:
-- true
+NAME: ma_n_agents_full_start
 ckpt_freq:
 - 100
-empty_start:
-- false
 eval_hypers:
   eval_map_width:
   - 8
@@ -14,16 +10,19 @@ eval_hypers:
   eval_randomize_map_shape:
   - true
   - false
+full_start:
+- true
 map_width:
 - 16
 max_board_scans:
-- 1.0
 - 3.0
 model:
 - rnn
 multiagent: true
 n_agents:
 - 1
+- 2
+- 3
 n_envs:
 - 400
 obs_size_hid_dims:
@@ -34,12 +33,6 @@ render_freq:
 - 100
 representation:
 - turtle
-reward_freq:
-- 1
-- 2
-- 3
-- 5
-- 10
 seed:
 - 0
 - 1

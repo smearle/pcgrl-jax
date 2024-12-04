@@ -1,15 +1,10 @@
-NAME: ma_sparse_reward
-a_freezer:
-- true
+NAME: ma_board_scans
 ckpt_freq:
 - 100
 empty_start:
 - false
 eval_hypers:
   eval_map_width:
-  - 8
-  - 16
-  - 24
   - 32
   eval_randomize_map_shape:
   - true
@@ -17,29 +12,26 @@ eval_hypers:
 map_width:
 - 16
 max_board_scans:
-- 1.0
-- 3.0
+- 0.5
 model:
 - rnn
 multiagent: true
 n_agents:
 - 1
+- 2
+- 3
 n_envs:
 - 400
 obs_size_hid_dims:
 - 3
+- 16
+- 31
 problem:
 - binary
 render_freq:
 - 100
 representation:
 - turtle
-reward_freq:
-- 1
-- 2
-- 3
-- 5
-- 10
 seed:
 - 0
 - 1
