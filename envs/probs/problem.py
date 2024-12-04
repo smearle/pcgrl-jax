@@ -130,7 +130,7 @@ def gen_init_map(rng, tile_enum, map_shape, tile_probs, randomize_map_shape=Fals
 
 
 class Problem:
-    tile_size = np.int8(16)
+    tile_size = 16
     stat_weights: chex.Array
     metrics_enum: IntEnum
     ctrl_metrics: chex.Array

@@ -503,7 +503,6 @@ def make_train(
             rng = update_state[-1]
             
             def log_callback(metric):
-
                 wandb.log(
                     {
                         # the metrics have an agent dimension, but this is identical
@@ -512,8 +511,7 @@ def make_train(
                             metric["returned_episode"][:, :, 0]
                         ].mean(),
                         "env_step": metric["update_steps"]
-                        * config.n_envs
-                        * config.num_steps,
+                        * config._num_actors,
                         **metric["loss"],
                         "obs_dist_min": metric["obs_dist_min"],
                         "obs_dist_max": metric["obs_dist_max"],
