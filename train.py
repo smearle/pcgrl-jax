@@ -45,8 +45,8 @@ class Transition(NamedTuple):
     # rng_act: jnp.ndarray
 
 
-def log_callback(metric, steps_prev_complete, config, writer, train_start_time):
-    timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
+def log_callback(metric, steps_prev_complete, config: Config, writer, train_start_time):
+    timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs * config.num_steps
     return_values = metric["returned_episode_returns"][metric["returned_episode"]]
 
     # for t in range(len(timesteps)):
@@ -488,7 +488,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 lambda _, __, ___: None,
                 frames, runner_state.update_i, metric
             )
-            jax.debug.callback(render_frames, frames, runner_state.update_i, metric)
             # jax.debug.print(f'Rendering episode gifs took {timer() - start_time} seconds')
 
             jax.debug.callback(_log_callback, metric)

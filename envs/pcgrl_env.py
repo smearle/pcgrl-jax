@@ -442,7 +442,7 @@ class PCGRLEnv(Environment):
         ma_done = {agent: done for agent in self.agents}
         ma_done['__all__'] = done
         info = {}
-        info.update({name: env_state.prob_state.stats[i] for i, name in enumerate(self.prob.metric_names)})
+        # info.update({name: env_state.prob_state.stats[i] for i, name in enumerate(self.prob.metric_names)})
 
         return (
             jax.lax.stop_gradient(obs),

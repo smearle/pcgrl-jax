@@ -276,7 +276,7 @@ class ActorCriticPCGRL(nn.Module):
         # x = x.reshape((n_gpu * n_envs, *x_shape)) 
 
         actor_mean, val = self.subnet(map_obs, ctrl_obs)
-        actor_mean = (nn.sigmoid(actor_mean) - 0.5) * 2
+        # actor_mean = (nn.sigmoid(actor_mean) - 0.5) * 2
 
         unavail_actions = 1 - avail_actions
 
