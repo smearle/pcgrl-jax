@@ -1,4 +1,4 @@
-NAME: ma_board_scans_maze_obs_31
+NAME: ma_board_scans_0.5_rebuttal
 ckpt_freq:
 - 100
 empty_start:
@@ -15,7 +15,7 @@ eval_hypers:
 map_width:
 - 16
 max_board_scans:
-- 1.0
+- 0.5
 model:
 - rnn
 multiagent: true
@@ -26,11 +26,12 @@ n_agents:
 n_envs:
 - 400
 obs_size_hid_dims:
+- 3
+- 16
 - 31
 problem:
-- maze
+- binary
 randomize_map_shape:
-- true
 - false
 render_freq:
 - 100

@@ -516,6 +516,32 @@
 #     },
 # ]
 
+
+
+hypers = [
+    {
+        'NAME': 'ma_board_scans_0.5_rebuttal',
+        'multiagent': True,
+
+        'problem': ['binary'],
+        'map_width': [16],
+        'n_agents': [1,2,3],
+        'representation': ['turtle'],
+        'model': ['rnn'],
+        'obs_size_hid_dims': [3, 16, 31],
+        'max_board_scans': [0.5],
+        'randomize_map_shape': [False],
+        # 'change_pct': [-1.0],
+        'n_envs': [400],
+        'empty_start': [False],
+        # 'pinpoints': [True, False],
+        'total_timesteps': [300_000_000],
+        'ckpt_freq': [100],
+        'render_freq': [100],
+        'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    },
+]
+
 # hypers = [
 #     {
 #         'NAME': 'ma_board_scans_binary_rebuttal_more_seeds',
@@ -613,28 +639,51 @@
 #     },
 # ]
 
-hypers = [
-    {
-        'NAME': 'ma_board_scans_dungeon_obs_31',
-        'multiagent': True,
+# hypers = [
+#     {
+#         'NAME': 'ma_board_scans_dungeon_obs_31',
+#         'multiagent': True,
 
-        'problem': ['dungeon'],
-        'map_width': [16],
-        'n_agents': [1, 2, 3],
-        'representation': ['turtle'],
-        'model': ['rnn'],
-        'obs_size_hid_dims': [31],
-        'max_board_scans': [1.0],
-        'randomize_map_shape': [True, False],
-        # 'change_pct': [-1.0],
-        'n_envs': [400],
-        'empty_start': [False],
-        'total_timesteps': [300_000_000],
-        'ckpt_freq': [100],
-        'render_freq': [100],
-        'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-    },
-]
+#         'problem': ['dungeon'],
+#         'map_width': [16],
+#         'n_agents': [1, 2, 3],
+#         'representation': ['turtle'],
+#         'model': ['rnn'],
+#         'obs_size_hid_dims': [31],
+#         'max_board_scans': [1.0],
+#         'randomize_map_shape': [True, False],
+#         # 'change_pct': [-1.0],
+#         'n_envs': [400],
+#         'empty_start': [False],
+#         'total_timesteps': [300_000_000],
+#         'ckpt_freq': [100],
+#         'render_freq': [100],
+#         'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+#     },
+# ]
+
+# hypers = [
+#     {
+#         'NAME': 'ma_board_scans_maze_and_dungeon_obs_3_empty_start',
+#         'multiagent': True,
+
+#         'problem': ['maze','dungeon'],
+#         'map_width': [16],
+#         'n_agents': [1, 2, 3],
+#         'representation': ['turtle'],
+#         'model': ['rnn'],
+#         'obs_size_hid_dims': [3],
+#         'max_board_scans': [1.0],
+#         'randomize_map_shape': [True, False],
+#         # 'change_pct': [-1.0],
+#         'n_envs': [400],
+#         'empty_start': [True],
+#         'total_timesteps': [300_000_000],
+#         'ckpt_freq': [100],
+#         'render_freq': [100],
+#         'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+#     },
+# ]
 
 # hypers = [
 #     {
