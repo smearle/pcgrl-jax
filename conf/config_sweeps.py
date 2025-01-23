@@ -797,48 +797,48 @@
 #     },
 # ]
 
-hypers = [
-    {
-        'NAME': 'ma_sparse_reward_n_agents',
-        'multiagent': True,
+# hypers = [
+#     {
+#         'NAME': 'ma_sparse_reward_n_agents',
+#         'multiagent': True,
 
-        'problem': ['binary'],
-        'a_freezer': [True],
-        'map_width': [16],
-        'n_agents': [1],
-        'reward_freq': [1, 2, 3, 5, 10],
-        'representation': ['turtle'],
-        'model': ['rnn'],
-        'obs_size_hid_dims': [3],
-        'max_board_scans': [1.0, 3.0],
-        # 'max_board_scans': [1.0, 3.0],
-        'n_envs': [400],
-        'empty_start': [False],
-        'total_timesteps': [1_000_000_000],
-    },
-]
-hypers = [
-    {
-        'NAME': 'ma_board_scans_dungeon_obs_31',
-        'multiagent': True,
+#         'problem': ['binary'],
+#         'a_freezer': [True],
+#         'map_width': [16],
+#         'n_agents': [1],
+#         'reward_freq': [1, 2, 3, 5, 10],
+#         'representation': ['turtle'],
+#         'model': ['rnn'],
+#         'obs_size_hid_dims': [3],
+#         'max_board_scans': [1.0, 3.0],
+#         # 'max_board_scans': [1.0, 3.0],
+#         'n_envs': [400],
+#         'empty_start': [False],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
+# hypers = [
+#     {
+#         'NAME': 'ma_board_scans_dungeon_obs_31',
+#         'multiagent': True,
 
-        'problem': ['dungeon'],
-        'map_width': [16],
-        'n_agents': [1, 2, 3],
-        'representation': ['turtle'],
-        'model': ['rnn'],
-        'obs_size_hid_dims': [31],
-        'max_board_scans': [1.0],
-        'randomize_map_shape': [True, False],
-        # 'change_pct': [-1.0],
-        'n_envs': [400],
-        'empty_start': [False],
-        'total_timesteps': [300_000_000],
-        'ckpt_freq': [100],
-        'render_freq': [100],
-        'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-    },
-]
+#         'problem': ['dungeon'],
+#         'map_width': [16],
+#         'n_agents': [1, 2, 3],
+#         'representation': ['turtle'],
+#         'model': ['rnn'],
+#         'obs_size_hid_dims': [31],
+#         'max_board_scans': [1.0],
+#         'randomize_map_shape': [True, False],
+#         # 'change_pct': [-1.0],
+#         'n_envs': [400],
+#         'empty_start': [False],
+#         'total_timesteps': [300_000_000],
+#         'ckpt_freq': [100],
+#         'render_freq': [100],
+#         'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+#     },
+# ]
 
 # hypers = [
 #     {
@@ -989,6 +989,28 @@ hypers = [
 #         'seed': [0, 1, 2],
 #     },
 # ]
+
+hypers = [
+    {
+        'NAME': 'ma_board_scans_n_agents_conv2',
+        'multiagent': True,
+
+        'problem': ['binary', 'dungeon'],
+        'map_width': [16],
+        'n_agents': [1,2,3],
+        'representation': ['turtle'],
+        'model': ['conv2'],
+        # 'obs_size_hid_dims': [3],
+        'max_board_scans': [0.75, 1.0, 1.5],
+        'randomize_map_shape': [True, False],
+        'n_envs': [400],
+        'empty_start': [False],
+        'total_timesteps': [1_000_000_000],
+        'ckpt_freq': [100],
+        'render_freq': [100],
+        'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    },
+]
 
 # hypers = [
 #     {
