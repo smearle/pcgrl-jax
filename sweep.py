@@ -8,7 +8,7 @@ from omegaconf import OmegaConf
 import submitit
 from tqdm import tqdm
 
-from conf.config import EnjoyConfig, EvalConfig, MultiAgentConfig, MultiAgentEvalConfig, SweepConfig, TrainConfig
+from conf.config import EnjoyConfig, EvalConfig, GetTracesConfig, MultiAgentConfig, MultiAgentEvalConfig, SweepConfig, TrainConfig
 from conf.config_sweeps import eval_hypers
 from utils import get_sweep_conf_path, load_sweep_hypers, write_sweep_confs
 from enjoy import main_enjoy
@@ -18,6 +18,7 @@ from eval_change_pct import main_eval_cp
 from plot import main as main_plot
 from train import main as main_train
 from train_ma import main as main_ma_train
+from get_traces import main_get_traces
 from gen_hid_params_per_obs_size import get_hiddims_dict_path 
 
 
@@ -49,7 +50,7 @@ def get_grid_cfgs(base_config, hypers, mode, eval_hypers={}):
     hyperparameter values specified by kwargs."""
 
     # If models were trained with different max_board_scans, evaluate them on the highest such value, for fairness.
-    if 'eval' in mode or 'enjoy' in mode:
+    if 'eval' in mode or 'enjoy' in mode or 'get_traces' in mode:
         # if 'max_board_scans' in hypers.keys() and 'max_board_scans' not in eval_hypers:
         #     base_config.eval_max_board_scans = max(hypers['max_board_scans'])
 
@@ -200,6 +201,9 @@ def sweep_main(cfg: SweepConfig):
     elif cfg.mode == 'enjoy':
         default_config = EnjoyConfig()
         main_fn = main_enjoy
+    elif cfg.mode == 'get_traces':
+        default_config = GetTracesConfig()
+        main_fn = main_get_traces
     elif cfg.mode == 'eval_cp':
         default_config = EvalConfig()
         main_fn = main_eval_cp
@@ -232,6 +236,19 @@ def sweep_main(cfg: SweepConfig):
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
                     job_name=f"{sweep_name}_enjoy",
+                    mem_gb=90,
+                    tasks_per_node=1,
+                    cpus_per_task=1,
+                    gpus_per_node=1,
+                    timeout_min=60,
+                    slurm_account='pr_174_general',
+                )
+            return executor.submit(seq_main, main_fn, sweep_configs)
+        
+        elif cfg.mode == 'get_traces':
+            executor = submitit.AutoExecutor(folder='submitit_logs')
+            executor.update_parameters(
+                    job_name=f"{sweep_name}_get_traces",
                     mem_gb=90,
                     tasks_per_node=1,
                     cpus_per_task=1,

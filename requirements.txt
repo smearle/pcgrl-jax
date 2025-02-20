@@ -26,3 +26,4 @@ tensorboardX
 tensorflow-probability[tf]
 tqdm==4.66.2
 wandb
+# imageio>=2.37.0

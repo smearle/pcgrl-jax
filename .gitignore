@@ -5,6 +5,7 @@ multirun*
 cross_eval/*
 saves*
 _saves*
+old_saves/
 log
 venv
 

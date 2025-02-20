@@ -186,7 +186,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
                 gif_name,
                 ep_frames,
                 # Not sure why but the frames are too slow otherwise (compared to 
-                # when captured in `train.py`). Are we saving extra frames?
+                # when captured in `train.py`). Are we saving extra frames? Z: yes line 134 and line 153 but I'll leave that there untill someone see this comment lmao
                 duration=enjoy_config.gif_frame_duration / 2
             )
 

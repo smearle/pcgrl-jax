@@ -19,15 +19,21 @@ __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file
 
 
 class DungeonTiles(IntEnum):
-    BORDER = 0
-    EMPTY = 1
-    WALL = 2
-    PLAYER = 3
-    BAT = 4
-    SCORPION = 5
-    SPIDER = 6
-    KEY = 7
-    DOOR = 8
+    BORDER = 0, "x"
+    EMPTY = 1, "."
+    WALL = 2, "#"
+    PLAYER = 3, "P"
+    BAT = 4, "E"
+    SCORPION = 5, "E"
+    SPIDER = 6, "E"
+    KEY = 7, "K"
+    DOOR = 8, "D"
+    
+    def __new__(cls, value, ascii_char):
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        obj.ascii_char = ascii_char
+        return obj
 
 
 class DungeonMetrics(IntEnum):

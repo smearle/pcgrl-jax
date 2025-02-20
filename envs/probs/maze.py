@@ -20,11 +20,17 @@ from envs.utils import Tiles
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
 class MazeTiles(IntEnum):
-    BORDER = 0
-    EMPTY = 1
-    WALL = 2
-    PLAYER = 3
-    DOOR = 4
+    BORDER = 0, "x"
+    EMPTY = 1, "."
+    WALL = 2, "#"
+    PLAYER = 3, "P"
+    DOOR = 4, "D"
+
+    def __new__(cls, value, ascii_char):
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        obj.ascii_char = ascii_char
+        return obj
 
 
 @struct.dataclass

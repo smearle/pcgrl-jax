@@ -12,7 +12,7 @@ from dataclasses import dataclass
 @dataclass
 class Config:
     lr: float = 1.0e-4
-    n_envs: int = 4
+    n_envs: int = 400
     # How many steps do I take in all of my batched environments before doing a gradient update
     num_steps: int = 128
     total_timesteps: int = int(5e7)
@@ -226,11 +226,19 @@ class SweepConfig(EnjoyConfig, EvalConfig):
     slurm: bool = True
     overwrite: bool = False
 
+@dataclass
+class GetTracesConfig(EnjoyConfig):
+    len_trace: int = 3 # deprecated, will filter the dataset later, just leave it here in case
+    n_enjoy_envs: int = 1
+    n_eps: int = 1  # keep it at 1 for each trace
+    render_stats: bool = False
+    render_ims: bool = False
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="ma_config", node=MultiAgentConfig)
 cs.store(name="enjoy_ma_pcgrl", node=EnjoyMultiAgentConfig)
+cs.store(name="get_traces_pcgrl", node=GetTracesConfig)
 cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)

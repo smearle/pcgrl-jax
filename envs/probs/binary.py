@@ -17,9 +17,15 @@ from envs.utils import Tiles
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
 class BinaryTiles(IntEnum):
-    BORDER = 0
-    EMPTY = 1
-    WALL = 2
+    BORDER = 0, "x"
+    EMPTY = 1, "."
+    WALL = 2, "#"
+
+    def __new__(cls, value, ascii_char):
+        obj = int.__new__(cls, value)
+        obj._value_ = value
+        obj.ascii_char = ascii_char
+        return obj
 
 
 @struct.dataclass
