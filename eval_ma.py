@@ -37,7 +37,10 @@ class EvalData:
     n_parameters: Optional[int] = None
 
 @hydra.main(version_base=None, config_path='./conf', config_name='eval_ma_pcgrl')
-def main_eval_ma(eval_config: MultiAgentEvalConfig):
+def _main_eval_ma(eval_config: MultiAgentEvalConfig):
+    main_eval_ma(eval_config)
+
+def main_eval_ma(eval_config: MultiAgentEvalConfig, render=False):
     ma_init_config(eval_config)
     rng = jax.random.PRNGKey(eval_config.eval_seed)
 
@@ -56,7 +59,7 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig):
     runner_state, actor_network, env, latest_update_step = init_run(
         eval_config, ckpt_manager, latest_update_step, rng)
     runner_state, wandb_run_id = restore_run(
-        eval_config, runner_state, ckpt_manager, latest_update_step
+        eval_config, runner_state, ckpt_manager, latest_update_step, load_wandb=False
     )
     # elif not os.path.exists(exp_dir):
     #     network_params = network.init(rng, init_x)
@@ -88,7 +91,7 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig):
 
     reset_rng = jax.random.split(rng, eval_config.n_eval_envs)
 
-    def eval(env_params):
+    def eval():
         queued_state = gen_dummy_queued_state(env)
         obs, env_state = jax.vmap(env.reset, in_axes=(0))(
             reset_rng)
@@ -105,16 +108,22 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig):
                 batchify(avail_actions, env.agents, eval_config._num_eval_actors)
             )
             obs_batch = batchify(obs, env.agents, eval_config._num_eval_actors)
-            ac_in = (
-                obs_batch[np.newaxis, :],
-                last_done[np.newaxis, :],
-                avail_actions,
-            )
 
             if eval_config.random_agent:
                 action = env.action_space(env_params).sample(rng_act)
             else:
-                hstate, pi = actor_network.apply(actor_network_params, hstate, ac_in)
+                if eval_config._is_recurrent:
+                    ac_in = (
+                        obs_batch[np.newaxis, :],
+                        # jax.tree.map(lambda x: x[np.newaxis, :], obs_batch),
+                        last_done[np.newaxis, :],
+                        # jax.tree.map(lambda x: x[np.newaxis, :], last_done),
+                        avail_actions,
+                    )
+                    args = (hstate, ac_in)
+                    hstate, pi = actor_network.apply(actor_network_params, *args)
+                else:
+                    pi, val = actor_network.apply(actor_network_params, obs_batch, avail_actions)
                 action = pi.sample(seed=_rng)
                 env_act = unbatchify(
                     action, env.agents, eval_config.n_eval_envs, eval_config.n_agents
@@ -131,12 +140,12 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig):
         print('Scanning episode steps:')
         _, (states, rewards, dones, infos) = jax.lax.scan(
             step_env, (rng, obs, done, env_state, hstate), None,
-            length=eval_config.n_eps*env.max_steps)
+            length=env.max_steps)
 
         return _, (states, rewards, dones, infos)
 
-    def _eval(env_params):
-        _, (states, reward, dones, infos) = eval(env_params)
+    def _eval():
+        _, (states, reward, dones, infos) = eval()
 
         return states, reward, dones
 
@@ -148,11 +157,20 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig):
         f".json"
     json_path = os.path.join(exp_dir, stats_name)
 
-    # For each bin, evaluate the change pct. at the center of the bin
-    
+    if render:
+        vid_dir = os.path.join(exp_dir, "vids" +\
+            get_eval_name(eval_config=eval_config, train_config=train_config))
+        os.makedirs(vid_dir, exist_ok=True)
+        env.init_graphics()
+        states, rewards, dones = _jitted_eval()
+        frames = jax.vmap(jax.vmap(env.render))(states.log_env_state.env_state)
+        for i in range(frames.shape[1]):
+            frames_i = jax.tree.map(lambda x: x[:, i], frames)
+            imageio.mimsave(os.path.join(vid_dir, f"{i}.gif"), np.array(frames_i), fps=20, loop=0)
+
     if eval_config.reevaluate or not os.path.exists(json_path):
         start_time = time.time()
-        states, rewards, dones = _jitted_eval(env_params)
+        states, rewards, dones = _jitted_eval()
         end_time = time.time()
 
         total_steps = eval_config.n_eps * env.max_steps * eval_config._num_eval_actors
@@ -168,11 +186,6 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig):
             json_stats['mean_fps'] = mean_fps
             json.dump(json_stats, f, indent=4)
     
-    # Not clear why we need to load stats like this. Maybe a smarter way of doing cross-eval?
-    # else:
-    #     with open(json_path, 'r') as f:
-    #         stats = json.load(f)
-    #         stats = EvalData(**stats)
 
 def get_eval_stats(states, dones) -> EvalData:
     # Everything has size (n_bins, n_steps, n_envs)
@@ -221,9 +234,8 @@ def get_eval_name(eval_config: MultiAgentEvalConfig, train_config: TrainConfig):
     """
     eval_name = \
         (f"_randMap-{eval_config.eval_randomize_map_shape}" if
-         eval_config.eval_randomize_map_shape is not None and 
+         eval_config.eval_randomize_map_shape is not None 
          # This is for backward compatibility, in terms of being able to re-use prior eval stats jsons.
-         eval_config.eval_randomize_map_shape != train_config.randomize_map_shape
          else "") + \
         (f"_w-{eval_config.eval_map_width}" if eval_config.eval_map_width is not None else "") + \
         (f"_bs-{eval_config.eval_max_board_scans}" if eval_config.eval_max_board_scans is not None else "") + \
@@ -232,4 +244,4 @@ def get_eval_name(eval_config: MultiAgentEvalConfig, train_config: TrainConfig):
 
     
 if __name__ == '__main__':
-    main_eval_ma()
+    _main_eval_ma()

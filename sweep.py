@@ -1,4 +1,5 @@
 import copy
+from functools import partial
 import json
 import os
 import pprint
@@ -8,10 +9,11 @@ from omegaconf import OmegaConf
 import submitit
 from tqdm import tqdm
 
-from conf.config import EnjoyConfig, EvalConfig, MultiAgentConfig, MultiAgentEvalConfig, SweepConfig, TrainConfig
+from conf.config import EnjoyConfig, EvalConfig, MultiAgentConfig, MultiAgentEvalConfig, EnjoyMultiAgentConfig, SweepConfig, TrainConfig
 from conf.config_sweeps import eval_hypers
 from utils import get_sweep_conf_path, load_sweep_hypers, write_sweep_confs
 from enjoy import main_enjoy
+from enjoy_ma import main_enjoy_ma
 from eval import main_eval
 from eval_ma import main_eval_ma
 from eval_change_pct import main_eval_cp
@@ -39,7 +41,10 @@ def get_hiddims_dict(hiddims_dict_path):
     hid_dims_dict = {}
     for model_obs_size, hid_dims, n_params in hid_params:
         # Should we be using this model info here?
-        model, obs_size = model_obs_size
+        if isinstance(model_obs_size, int):
+            obs_size = model_obs_size
+        else:
+            model, obs_size = model_obs_size
         hid_dims_dict[obs_size] = hid_dims
     return hid_dims_dict
 
@@ -198,8 +203,13 @@ def sweep_main(cfg: SweepConfig):
         default_config = TrainConfig()
         main_fn = main_plot
     elif cfg.mode == 'enjoy':
-        default_config = EnjoyConfig()
-        main_fn = main_enjoy
+        if cfg.multiagent:
+            main_fn = partial(main_eval_ma, render=True)
+            # main_fn = main_enjoy_ma
+            default_config = EnjoyMultiAgentConfig()
+        else:
+            default_config = EnjoyConfig()
+            main_fn = main_enjoy
     elif cfg.mode == 'eval_cp':
         default_config = EvalConfig()
         main_fn = main_eval_cp
@@ -237,7 +247,7 @@ def sweep_main(cfg: SweepConfig):
                     cpus_per_task=1,
                     gpus_per_node=1,
                     timeout_min=60,
-                    slurm_account='pr_174_general',
+                    slurm_account='pr_174_tandon_advanced',
                 )
             return executor.submit(seq_main, main_fn, sweep_configs)
 
@@ -251,8 +261,8 @@ def sweep_main(cfg: SweepConfig):
                     cpus_per_task=1,
                     timeout_min=120,
                     # gpus_per_node=1,
-                    slurm_gres='gpu:rtx8000:1',
-                    slurm_account='pr_174_general',
+                    slurm_gres='gpu:1',
+                    slurm_account='pr_174_tandon_advanced',
                 )
             pprint.pprint(sweep_configs)
             return executor.map_array(main_fn, sweep_configs)
@@ -269,7 +279,7 @@ def sweep_main(cfg: SweepConfig):
                     # gpus_per_node=1,
                     slurm_gres='gpu:rtx8000:1',
                     # partition='rtx8000',
-                    slurm_account='pr_174_general',
+                    slurm_account='pr_174_tandon_advanced',
                 )
             # Pretty print all configs to be executed
             pprint.pprint(sweep_configs)
