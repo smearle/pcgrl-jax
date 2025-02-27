@@ -349,7 +349,7 @@ class PCGRLEnv(Environment):
         obs = PCGRLObs(map_obs=rep_obs, flat_obs=prob_obs)
         return obs
 
-    @partial(jax.jit, static_argnums=(0, 4))
+    @partial(jax.jit, static_argnums=(0))
     def step_env(self, rng, env_state: PCGRLEnvState, action, env_params: PCGRLEnvParams):
         action = action[..., None]
         # if self.n_agents == 1:
