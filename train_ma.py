@@ -566,7 +566,7 @@ def make_train(
 
     return train
     
-@hydra.main(version_base=None, config_path="conf", config_name="ma_config")
+@hydra.main(version_base="1.3", config_path="conf", config_name="ma_config")
 def main(config: MultiAgentConfig):
     ma_init_config(config)
     

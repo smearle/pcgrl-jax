@@ -212,13 +212,13 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     return network
 
 
-def restore_run(config: MultiAgentConfig, runner_state: RunnerState, ckpt_manager, latest_update_step: int):
+def restore_run(config: MultiAgentConfig, runner_state: RunnerState, ckpt_manager, latest_update_step: int, load_wandb: bool = True):
+    wandb_run_id=None
     if latest_update_step is not None:
         runner_state = ckpt_manager.restore(latest_update_step, args=ocp.args.StandardRestore(runner_state))
-        with open(os.path.join(config._exp_dir, "wandb_run_id.txt"), "r") as f:
-            wandb_run_id = f.read()
-    else:
-        wandb_run_id=None
+        if load_wandb: 
+            with open(os.path.join(config._exp_dir, "wandb_run_id.txt"), "r") as f:
+                wandb_run_id = f.read()
 
     return runner_state, wandb_run_id
 

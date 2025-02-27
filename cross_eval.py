@@ -34,7 +34,7 @@ table_name_remaps = {
     'eval map width': 'map width',
 }
 
-@hydra.main(version_base=None, config_path='./', config_name='batch_pcgrl')
+@hydra.main(version_base="1.3", config_path='./', config_name='batch_pcgrl')
 def cross_eval_main(cfg: SweepConfig):
     sweep_conf_path = get_sweep_conf_path(cfg)
     sweep_conf_exists = os.path.exists(sweep_conf_path)

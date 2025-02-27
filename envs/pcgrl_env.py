@@ -390,7 +390,7 @@ class PCGRLEnv(Environment):
             {"discount": self.discount(env_state, env_params)},
         )
 
-    @partial(jax.jit, static_argnums=(0, 4))
+    @partial(jax.jit, static_argnums=(0,))
     def step_env_ma(self, rng, env_state: PCGRLEnvState, action, env_params: PCGRLEnvParams):
         env_map = env_state.env_map
         rep_state = env_state.rep_state

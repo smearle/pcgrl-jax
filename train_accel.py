@@ -650,7 +650,7 @@ def init_checkpointer(config: Config):
     return checkpoint_manager, restored_ckpt
 
 
-@hydra.main(version_base=None, config_path='./conf', config_name='train_accel')
+@hydra.main(version_base="1.3", config_path='./conf', config_name='train_accel')
 def main(config: TrainConfig):
     config = init_config(config)
     rng = jax.random.PRNGKey(config.seed)

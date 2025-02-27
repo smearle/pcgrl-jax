@@ -1044,20 +1044,25 @@ hypers = [
         'NAME': 'ma_board_scans_n_agents_conv2',
         'multiagent': True,
 
-        'problem': ['binary', 'dungeon'],
+        # 'problem': ['binary', 'dungeon'],
+        'problem': ['dungeon'],
         'map_width': [16],
-        'n_agents': [1,2,3],
+        # 'n_agents': [1,2,3],
+        'n_agents': [3],
         'representation': ['turtle'],
         'model': ['conv2'],
         # 'obs_size_hid_dims': [3],
-        'max_board_scans': [0.75, 1.0, 1.5],
-        'randomize_map_shape': [True, False],
+        # 'max_board_scans': [0.75, 1.0, 1.5],
+        'max_board_scans': [1.5],
+        # 'randomize_map_shape': [True, False],
+        'randomize_map_shape': [True],
         'n_envs': [400],
         'empty_start': [False],
         'total_timesteps': [1_000_000_000],
         'ckpt_freq': [100],
         'render_freq': [100],
-        'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        # 'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        'seed': [0],
     },
 ]
 
@@ -1180,11 +1185,10 @@ hypers = [
 
 
 eval_hypers = {
-    'eval_randomize_map_shape': [True, False],
-    'eval_map_width': [8, 16, 24, 32],
-    # 'eval_randomize_map_shape': [False],
-    # 'eval_randomize_map_shape': [False],
+    # 'eval_randomize_map_shape': [True, False],
+    'eval_randomize_map_shape': [False],
     # 'eval_map_width': [8, 16, 24, 32],
+    'eval_map_width': [16],
     # 'eval_max_board_scans': [10],
 }
 
