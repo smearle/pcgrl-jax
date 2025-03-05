@@ -1,0 +1,35 @@
+NAME: for_some_reasoning_seqnca
+arf_size:
+- 8
+- 5
+- 3
+change_pct:
+- -1.0
+eval_hypers:
+  eval_map_width:
+  - 16
+  eval_randomize_map_shape:
+  - false
+max_board_scans:
+- 1
+- 3
+model:
+- seqnca
+multiagent: false
+n_envs:
+- 400
+problem:
+- binary
+- maze
+- dungeon
+representation:
+- narrow
+seed:
+- 0
+- 1
+- 2
+- 3
+- 4
+- 5
+total_timesteps:
+- 1000000000

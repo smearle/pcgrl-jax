@@ -1,0 +1,41 @@
+NAME: for_some_reasoning_conv2
+ckpt_freq:
+- 100
+empty_start:
+- false
+- true
+eval_hypers:
+  eval_map_width:
+  - 16
+  eval_randomize_map_shape:
+  - false
+map_width:
+- 16
+max_board_scans:
+- 1.0
+- 3.0
+model:
+- conv2
+multiagent: false
+n_agents:
+- 1
+n_envs:
+- 400
+problem:
+- binary
+- maze
+- dungeon
+render_freq:
+- 100
+representation:
+- narrow
+- turtle
+seed:
+- 0
+- 1
+- 2
+- 3
+- 4
+- 5
+total_timesteps:
+- 1000000000
