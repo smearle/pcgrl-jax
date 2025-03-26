@@ -113,7 +113,9 @@ def main_enjoy(enjoy_config: EnjoyConfig):
         "`frames` has wrong shape"
 
     # Save gifs.
-    print('Adding stats to frames:')
+    print('Saving gifs.')
+    if enjoy_config.render_stats:
+        print('(Also adding stats to frames.)')
     for env_idx in range(enjoy_config.n_enjoy_envs):
         # ep_frames = frames[ep_is*env.max_steps:(ep_is+1)*env.max_steps]
 

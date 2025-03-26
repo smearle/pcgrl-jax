@@ -208,6 +208,36 @@
 
 # hypers = [
 #     {
+#         'NAME': 'obss_hiddims_dungeon',
+#         'problem': ['dungeon'],
+#         'obs_size_hid_dims': [3, 5, 8, 16, -1],
+#         'model': ['conv2'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(5)),
+#         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
+
+
+hypers = [
+    {
+        'NAME': 'obss_hiddims_dungeon2',
+        'problem': ['dungeon2'],
+        'obs_size_hid_dims': [3, 5, 8, 16, -1],
+        'model': ['conv2'],
+        'change_pct': [-1.0],
+        'seed': list(range(5)),
+        'n_envs': [600],
+        'max_board_scans': [5],
+        'total_timesteps': [1_000_000_000],
+    },
+]
+
+
+# hypers = [
+#     {
 #         'NAME': 'obss_hiddims_dungeon_conv2_ctrl_path',
 #         'problem': ['dungeon'],
 #         'ctrl_metrics': [['path_length']],
@@ -1158,25 +1188,25 @@
 #     },
 # ]
 
-hypers = [
-    {
-        'NAME': 'for_some_reasoning_conv2',
-        'multiagent': False,
+# hypers = [
+#     {
+#         'NAME': 'for_some_reasoning_conv2',
+#         'multiagent': False,
 
-        'problem': ['binary', 'maze', 'dungeon'],
-        'map_width': [16],
-        'n_agents': [1],
-        'representation': ['narrow','turtle'],
-        'model': ['conv2'],
-        'max_board_scans': [1.0, 3.0],
-        'n_envs': [400],
-        'empty_start': [False, True],
-        'total_timesteps': [1_000_000_000],
-        'ckpt_freq': [100],
-        'render_freq': [100],
-        'seed': [0, 1, 2, 3, 4, 5],
-    },
-]
+#         'problem': ['binary', 'maze', 'dungeon'],
+#         'map_width': [16],
+#         'n_agents': [1],
+#         'representation': ['narrow','turtle'],
+#         'model': ['conv2'],
+#         'max_board_scans': [1.0, 3.0],
+#         'n_envs': [400],
+#         'empty_start': [False, True],
+#         'total_timesteps': [1_000_000_000],
+#         'ckpt_freq': [100],
+#         'render_freq': [100],
+#         'seed': [0, 1, 2, 3, 4, 5],
+#     },
+# ]
 
 # hypers = [
 #     {   

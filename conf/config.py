@@ -206,7 +206,8 @@ class EnjoyConfig(EvalConfig):
     # How many episodes to render as gifs
     n_eps: int = 5
     eval_map_width: Optional[int] = None
-    render_stats: bool = True
+    # Add debugging text showing the current/target values for various stats to each frame of the episode (this is really slow)
+    render_stats: bool = False
     n_enjoy_envs: int = 1
     render_ims: bool = False
     a_freezer: bool = False

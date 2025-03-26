@@ -71,7 +71,7 @@ class LogEnvState:
     episode_lengths: int
     returned_episode_returns: float
     returned_episode_lengths: int
-    timestep: int
+    timestep: np.uint64
 
 class LogWrapper(GymnaxWrapper):
     """Log the episode returns and lengths."""

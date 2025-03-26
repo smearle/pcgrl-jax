@@ -186,7 +186,7 @@ def sweep_main(cfg: SweepConfig):
 
         sweep_name = _hypers[0]['NAME']
     
-    cfg.multiagent = _hypers[0]['multiagent']
+    cfg.multiagent = _hypers[0].get('multiagent', False)
 
 
     # This is a hack. Would mean that we can't overwrite trial-specific settings
@@ -247,27 +247,27 @@ def sweep_main(cfg: SweepConfig):
         if cfg.mode == 'enjoy':
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
-                    job_name=f"{sweep_name}_enjoy",
+                    slurm_job_name=f"{sweep_name}_enjoy",
                     mem_gb=90,
                     tasks_per_node=1,
                     cpus_per_task=1,
                     gpus_per_node=1,
                     timeout_min=60,
                     slurm_account='pr_174_tandon_advanced',
-                )
+            )
             return executor.submit(seq_main, main_fn, sweep_configs)
         
         elif cfg.mode == 'get_traces':
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
-                    job_name=f"{sweep_name}_get_traces",
+                    slurm_job_name=f"{sweep_name}_get_traces",
                     mem_gb=90,
                     tasks_per_node=1,
                     cpus_per_task=1,
                     gpus_per_node=1,
                     timeout_min=60,
                     slurm_account='pr_174_general',
-                )
+            )
             return executor.submit(seq_main, main_fn, sweep_configs)
 
         # Launch eval sweep on SLURM
@@ -290,13 +290,13 @@ def sweep_main(cfg: SweepConfig):
         elif cfg.mode == 'train':
             executor = submitit.AutoExecutor(folder='submitit_logs')
             executor.update_parameters(
-                    job_name=f"{sweep_name}_train",
+                    slurm_job_name=f"{sweep_name}_train",
                     mem_gb=30,
                     tasks_per_node=1,
                     cpus_per_task=1,
                     timeout_min=1440,
                     # gpus_per_node=1,
-                    slurm_gres='gpu:rtx8000:1',
+                    slurm_gres='gpu:1',
                     # partition='rtx8000',
                     slurm_account='pr_174_tandon_advanced',
                 )

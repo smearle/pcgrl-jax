@@ -46,7 +46,7 @@ class Transition(NamedTuple):
 
 
 def log_callback(metric, steps_prev_complete, config: Config, writer, train_start_time):
-    timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs * config.num_steps
+    timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
     return_values = metric["returned_episode_returns"][metric["returned_episode"]]
 
     # for t in range(len(timesteps)):
@@ -683,7 +683,7 @@ def main(config: TrainConfig):
     rng = jax.random.PRNGKey(config.seed)
 
     exp_dir = config.exp_dir
-    print(f'running experiment at {exp_dir}\n')
+    print(f'Running experiment to be logged at {exp_dir}\n')
 
 
     # Need to do this before setting up checkpoint manager so that it doesn't refer to old checkpoints.
