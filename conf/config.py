@@ -238,12 +238,12 @@ class GetTracesConfig(EnjoyConfig):
     n_eps: int = 1  # keep it at 1 for each trace
     render_stats: bool = False
     render_ims: bool = False
+    overwrite_traces: bool = False
 
 cs = ConfigStore.instance()
 cs.store(name="config", node=Config)
 cs.store(name="ma_config", node=MultiAgentConfig)
 cs.store(name="enjoy_ma_pcgrl", node=EnjoyMultiAgentConfig)
-cs.store(name="get_traces_pcgrl", node=GetTracesConfig)
 cs.store(name="evo_map_pcgrl", node=EvoMapConfig)
 cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
@@ -252,3 +252,4 @@ cs.store(name="eval_pcgrl", node=EvalConfig)
 cs.store(name="eval_ma_pcgrl", node=MultiAgentEvalConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
 cs.store(name="batch_pcgrl", node=SweepConfig)
+cs.store(name="get_traces_pcgrl", node=GetTracesConfig)

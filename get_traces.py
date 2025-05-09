@@ -2,6 +2,7 @@ import copy
 from dataclasses import asdict
 import json
 import os
+import shutil
 
 import hydra
 import imageio
@@ -18,7 +19,7 @@ from train import init_checkpointer
 from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 
 
-@hydra.main(version_base=None, config_path='./conf', config_name='get_traces_pcgrl')
+@hydra.main(version_base="1.3", config_path='./conf', config_name='get_traces_pcgrl')
 def main_get_traces(get_traces_config: GetTracesConfig):
     get_traces_config = init_config(get_traces_config)
 
@@ -29,7 +30,8 @@ def main_get_traces(get_traces_config: GetTracesConfig):
         steps_prev_complete = 0
     else:
         if not os.path.exists(exp_dir):
-            exit(f"Experiment directory {exp_dir} does not exist")
+            print(f"Experiment directory {exp_dir} does not exist")
+            return
         print(f'Loading checkpoint from {exp_dir}')
         checkpoint_manager, restored_ckpt = init_checkpointer(get_traces_config)
         runner_state = restored_ckpt['runner_state']
@@ -38,6 +40,11 @@ def main_get_traces(get_traces_config: GetTracesConfig):
 
     traces_dir = os.path.join(exp_dir, 'traces')
 
+    if get_traces_config.overwrite_traces:
+        print(f"Overwriting traces in {exp_dir}")
+        if os.path.exists(traces_dir):
+            print(f"Deleting traces directory {traces_dir}")
+            shutil.rmtree(traces_dir)
     os.makedirs(traces_dir, exist_ok=True)
 
     env: PCGRLEnv
@@ -154,13 +161,16 @@ def main_get_traces(get_traces_config: GetTracesConfig):
                 # env_state_i = asdict(env_state_i)
                 # env_state_i = convert_arrays(env_state_i)
 
-                json_path = f"{traces_dir}/trace_{env_idx}/stats_ep-{net_ep_idx}_step-{i}.json"
+                json_path = f"{traces_dir}/trace_{env_idx}-{net_ep_idx}/stats_ep-{net_ep_idx}_step-{i}.json"
+               
                 # print(f"Saving stats to {json_path}")
                 os.makedirs(os.path.dirname(json_path), exist_ok=True)
                 json.dump(final_stats, 
                           open(json_path, 'w'), 
                           indent=4) 
     print(f"Done saving traces to {traces_dir}")
+
+    return 
 
 def convert_arrays(obj):
     """ Recursively convert custom arrays to lists for JSON serialization """
