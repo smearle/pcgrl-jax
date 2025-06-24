@@ -129,6 +129,7 @@ def get_grid_cfgs(base_config, hypers, mode, eval_hypers={}):
                     setattr(nsc, 'arf_size', obs_size)
                     setattr(nsc, 'vrf_size', obs_size)
                     setattr(nsc, 'hidden_dims', hidden_dims)
+                    setattr(nsc, 'obs_size_hid_dims', obs_size)
                     new_subconfigs.append(nsc)
             subconfigs = new_subconfigs
 

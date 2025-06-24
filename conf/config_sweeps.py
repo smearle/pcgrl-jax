@@ -225,7 +225,9 @@ hypers = [
     {
         'NAME': 'obss_hiddims_dungeon2',
         'problem': ['dungeon2'],
-        'obs_size_hid_dims': [3, 5, 8, 16, -1],
+        # 'obs_size_hid_dims': [3, 5, 8, 16, -1],
+        'obs_size_hid_dims': [3, 5, 8, 16],
+        # 'obs_size_hid_dims': [-1],
         'model': ['conv2'],
         'change_pct': [-1.0],
         'seed': list(range(5)),

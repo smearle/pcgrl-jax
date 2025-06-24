@@ -534,6 +534,7 @@ def flatten_obs(obs: PCGRLObs) -> chex.Array:
 @partial(jax.jit, static_argnums=(0,))
 def render_map(env: PCGRLEnv, env_state: PCGRLEnvState,
                path_coords_tpl: chex.Array):
+    assert hasattr(env.prob, 'graphics'), "Have you forgotten to call `env.init_graphics()`?"
     tile_size = env.prob.tile_size
     env_map = env_state.env_map
     border_size = np.array((1, 1))

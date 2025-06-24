@@ -8,6 +8,7 @@ from typing import Iterable
 import hydra
 import matplotlib.pyplot as plt
 import numpy as np
+from omegaconf import OmegaConf
 import pandas as pd
 import wandb
 import yaml
@@ -53,11 +54,12 @@ def cross_eval_main(cfg: SweepConfig):
 
 
 def sweep_grid(cfg, grid_hypers, _eval_hypers):
-    if grid_hypers['multiagent']:
+    if grid_hypers.get('multiagent', False):
         default_cfg = MultiAgentEvalConfig(multiagent=True)
     else:
         default_cfg = EvalConfig()
     sweep_configs = get_grid_cfgs(default_cfg, grid_hypers, mode='eval', eval_hypers=_eval_hypers)
+    sweep_configs = [OmegaConf.create(sc) for sc in sweep_configs]
     sweep_configs = [init_config(sc) for sc in sweep_configs]
 
     for sc in sweep_configs:
@@ -418,6 +420,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
         # Load the `progress.csv`
         csv_path = os.path.join(exp_dir, 'progress.csv')
         if not os.path.isfile(csv_path):
+            breakpoint()
             with open(os.path.join(exp_dir, 'wandb_run_id.txt'), 'r') as f:
                 wandb_run_id = f.read()
             sc_run = wandb_api.run(f'/{MultiAgentEvalConfig.PROJECT}/{wandb_run_id}')
@@ -562,6 +565,9 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
             
             ep_returns = train_metrics['ep_return']
             sc_timesteps = train_metrics['timestep']
+        if sc_timesteps.shape[0] == 0:
+            print(f"Skipping {sc.exp_dir} because it has no timesteps.")
+            continue
         interpolated_returns = interpolate_returns(ep_returns, sc_timesteps, all_timesteps)
         row_vals_curves.append(interpolated_returns)
 

@@ -260,6 +260,7 @@ def get_play_env_params_from_config(config: Config):
     )
 
 def gymnax_pcgrl_make(env_name, config: Config, **env_kwargs):
+    assert config.vrf_size != -1, "Have you forgotten to call `init_config(cfg)`?"
     if env_name in gymnax.registered_envs:
         return gymnax.make(env_name)
 

@@ -1,0 +1,29 @@
+NAME: obss_hiddims_dungeon2
+change_pct:
+- -1.0
+eval_hypers:
+  eval_map_width:
+  - 16
+  eval_randomize_map_shape:
+  - false
+max_board_scans:
+- 5
+model:
+- conv2
+n_envs:
+- 600
+obs_size_hid_dims:
+- 3
+- 5
+- 8
+- 16
+problem:
+- dungeon2
+seed:
+- 0
+- 1
+- 2
+- 3
+- 4
+total_timesteps:
+- 1000000000

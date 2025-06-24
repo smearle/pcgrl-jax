@@ -116,6 +116,7 @@ class TrainConfig(Config):
     # discount factor for regret value calculation is the same as GAMMA
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
+    obs_size_hid_dims: int = -1
     NUM_UPDATES: Optional[int] = None
     MINIBATCH_SIZE: Optional[int] = None
     ###########################################################################
