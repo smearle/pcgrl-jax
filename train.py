@@ -81,10 +81,10 @@ def log_callback(metric, steps_prev_complete, config: Config, writer, train_star
 
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
-    config.NUM_UPDATES = (
+    config._num_updates = (
         config.total_timesteps // config.num_steps // config.n_envs
     )
-    config.MINIBATCH_SIZE = (
+    config._minibatch_size = (
         config.n_envs * config.num_steps // config.NUM_MINIBATCHES
     )
     env_r, env_params = gymnax_pcgrl_make(config.env_name, config=config)
@@ -96,7 +96,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         frac = (
             1.0
             - (count // (config.NUM_MINIBATCHES * config.update_epochs))
-            / config.NUM_UPDATES
+            / config._num_updates
         )
         return config["LR"] * frac
 
@@ -178,7 +178,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             steps_prev_complete = restored_ckpt['steps_prev_complete']
             runner_state = restored_ckpt['runner_state']
             steps_remaining = config.total_timesteps - steps_prev_complete
-            config.NUM_UPDATES = int(
+            config._num_updates = int(
                 steps_remaining // config.num_steps // config.n_envs)
 
             # TODO: Overwrite certain config values
@@ -432,7 +432,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 train_state, traj_batch, advantages, targets, rng = \
                     update_state
                 rng, _rng = jax.random.split(rng)
-                batch_size = config.MINIBATCH_SIZE * config.NUM_MINIBATCHES
+                batch_size = config._minibatch_size * config.NUM_MINIBATCHES
                 assert (
                     batch_size == config.num_steps * config.n_envs
                 ), "batch size must be equal to number of steps * number " + \
@@ -499,7 +499,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             return runner_state, metric
 
         runner_state, metric = jax.lax.scan(
-            _update_step, runner_state, None, config.NUM_UPDATES
+            _update_step, runner_state, None, config._num_updates
         )
 
         # One final logging/checkpointing call to ensure things finish off

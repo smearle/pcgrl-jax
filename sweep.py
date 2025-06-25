@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 import submitit
 from tqdm import tqdm
 
-from conf.config import EnjoyConfig, EvalConfig, GetTracesConfig, MultiAgentConfig, MultiAgentEvalConfig, EnjoyMultiAgentConfig, SweepConfig, TrainConfig
+from conf.config import EnjoyConfig, EvalConfig, GetTracesConfig, MultiAgentConfig, EvalMultiAgentConfig, EnjoyMultiAgentConfig, SweepConfig, TrainConfig
 from conf.config_sweeps import eval_hypers
 from utils import get_sweep_conf_path, load_sweep_hypers, write_sweep_confs
 from enjoy import main_enjoy
@@ -205,8 +205,6 @@ def sweep_main(cfg: SweepConfig):
         default_config = TrainConfig()
         main_fn = main_plot
     elif cfg.mode == 'enjoy':
-        default_config = EnjoyConfig()
-        main_fn = main_enjoy
         if cfg.multiagent:
             main_fn = partial(main_eval_ma, render=True)
             # main_fn = main_enjoy_ma
@@ -220,13 +218,10 @@ def sweep_main(cfg: SweepConfig):
     elif cfg.mode == 'eval_cp':
         default_config = EvalConfig()
         main_fn = main_eval_cp
-    # elif cfg.mode == 'eval_diff_size':
-    #     default_config = EvalConfig()
-    #     main_fn = main_eval_diff_size
     elif cfg.mode == 'eval':
         if cfg.multiagent:
             main_fn = main_eval_ma
-            default_config = MultiAgentEvalConfig()
+            default_config = EvalMultiAgentConfig()
         else:
             default_config = EvalConfig()
             main_fn = main_eval

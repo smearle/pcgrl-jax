@@ -89,7 +89,7 @@ def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
     config._num_actors = env.n_agents * config.n_envs
     
     config._num_updates = int(
-        config.total_timesteps // config.num_steps // config.n_envs
+        config.total_timesteps // config.num_steps // config._num_actors
     )
     config._minibatch_size = (
         config._num_actors * config.num_steps // config.NUM_MINIBATCHES
@@ -319,6 +319,7 @@ def get_ckpt_dir(config: MultiAgentConfig):
     
 def ma_init_config(config: MultiAgentConfig):
     config._num_eval_actors = config.n_eval_envs * config.n_agents
+    config._num_actors = config.n_agents * config.n_envs
     init_config(config)
     config._exp_dir = get_exp_dir(config)
     config._ckpt_dir = get_ckpt_dir(config)

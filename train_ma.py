@@ -588,7 +588,7 @@ def main(config: MultiAgentConfig):
     
     if latest_update_step is not None:
         runner_state, wandb_run_id = restore_run(config, runner_state, checkpoint_manager, latest_update_step)
-        wandb_resume = "Must"
+        wandb_resume = "must"
     else:
         wandb_run_id, wandb_resume = None, None
 

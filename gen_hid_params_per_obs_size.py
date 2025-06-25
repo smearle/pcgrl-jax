@@ -25,7 +25,7 @@ def main_gen_hid(config: EnjoyConfig):
         rng = jax.random.PRNGKey(42)
         init_x = env.gen_dummy_obs(env_params)
         network_params = network.init(rng, init_x)
-        n_parameters = sum(np.prod(p.shape) for p in jax.tree_leaves(network_params) if isinstance(p, jnp.ndarray))
+        n_parameters = sum(np.prod(p.shape) for p in jax.tree.leaves(network_params) if isinstance(p, jnp.ndarray))
         return n_parameters
 
     # Assuming arf=vrf for now
@@ -34,6 +34,10 @@ def main_gen_hid(config: EnjoyConfig):
     obs_size_to_params = [
         (obs_size, tuple([int(hd) for hd in config.hidden_dims]), base_n_params)
     ]
+
+    # Save as json
+    hid_params_path = get_hiddims_dict_path(config)
+
     for obs_size in list(range(3, config.arf_size))[::-1]:
         config.arf_size = config.vrf_size = obs_size
         n_params = compute_n_params(config)
@@ -50,11 +54,8 @@ def main_gen_hid(config: EnjoyConfig):
             else:
                 new_config.hidden_dims[0] += 1
             new_n_params = compute_n_params(new_config)
-            print(f"obs_size {obs_size} hidden_dims {new_config.hidden_dims} n_params {new_n_params}")
+            print(f"obs_size {obs_size} hidden_dims {new_config.hidden_dims} n_params {new_n_params:,}")
         obs_size_to_params.append((obs_size, tuple([int(hd) for hd in config.hidden_dims]), int(n_params)))
-
-        # Save as json
-        hid_params_path = get_hiddims_dict_path(config)
 
         with open(hid_params_path, 'w') as f:
             json.dump(obs_size_to_params, f)

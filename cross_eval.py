@@ -13,9 +13,10 @@ import pandas as pd
 import wandb
 import yaml
 
-from conf.config import EvalConfig, MultiAgentEvalConfig, SweepConfig, TrainConfig
+from conf.config import EvalConfig, EvalMultiAgentConfig, SweepConfig, TrainConfig
 from eval import get_eval_name
 from eval_change_pct import EvalData, get_change_pcts
+from ma_utils import ma_init_config
 from sweep import get_grid_cfgs, eval_hypers
 from utils import get_sweep_conf_path, init_config, load_sweep_hypers, write_sweep_confs
 
@@ -55,7 +56,7 @@ def cross_eval_main(cfg: SweepConfig):
 
 def sweep_grid(cfg, grid_hypers, _eval_hypers):
     if grid_hypers.get('multiagent', False):
-        default_cfg = MultiAgentEvalConfig(multiagent=True)
+        default_cfg = EvalMultiAgentConfig(multiagent=True)
     else:
         default_cfg = EvalConfig()
     sweep_configs = get_grid_cfgs(default_cfg, grid_hypers, mode='eval', eval_hypers=_eval_hypers)
@@ -398,7 +399,7 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     print(f"Basic stats for {name} saved to {CROSS_EVAL_DIR}/{name}.")
 
         
-def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
+def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
 
                     eval_config: EvalConfig, hypers):
 
@@ -415,22 +416,25 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
     wandb_api = wandb.Api()
 
     for sc in sweep_configs:
+        if sc.multiagent:
+            ma_init_config(sc)
+        else:
+            init_config(sc)
         exp_dir = sc.exp_dir
         
         # Load the `progress.csv`
         csv_path = os.path.join(exp_dir, 'progress.csv')
         if not os.path.isfile(csv_path):
-            breakpoint()
             with open(os.path.join(exp_dir, 'wandb_run_id.txt'), 'r') as f:
                 wandb_run_id = f.read()
-            sc_run = wandb_api.run(f'/{MultiAgentEvalConfig.PROJECT}/{wandb_run_id}')
+            sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
             train_metrics = sc_run.history()
-            train_metrics = train_metrics.sort_values(by='env_step', ascending=True)
-            max_timestep = train_metrics['env_step'].max()
+            train_metrics = train_metrics.sort_values(by='_step', ascending=True)
+            sc_timesteps = train_metrics['_step'] * sc._num_actors * sc.num_steps
+            max_timestep = sc_timesteps.max()
             if 'returns' not in train_metrics:
                 breakpoint()
             ep_returns = train_metrics['returns']
-            sc_timesteps = train_metrics['env_step']
         else:
             train_metrics = pd.read_csv(csv_path)
             train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
@@ -553,11 +557,11 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[SweepConfig],
         if not os.path.isfile(csv_path):
             with open(os.path.join(exp_dir, 'wandb_run_id.txt'), 'r') as f:
                 wandb_run_id = f.read()
-            sc_run = wandb_api.run(f'/{MultiAgentEvalConfig.PROJECT}/{wandb_run_id}')
+            sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
             train_metrics = sc_run.history()
-            train_metrics = train_metrics.sort_values(by='env_step', ascending=True)
+            train_metrics = train_metrics.sort_values(by='_step', ascending=True)
+            sc_timesteps = train_metrics['_step'] * sc._num_actors * sc.num_steps
             ep_returns = train_metrics['returns']
-            sc_timesteps = train_metrics['env_step']
 
         else:
             train_metrics = pd.read_csv(csv_path)

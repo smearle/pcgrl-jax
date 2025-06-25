@@ -221,21 +221,21 @@
 # ]
 
 
-hypers = [
-    {
-        'NAME': 'obss_hiddims_dungeon2',
-        'problem': ['dungeon2'],
-        # 'obs_size_hid_dims': [3, 5, 8, 16, -1],
-        'obs_size_hid_dims': [3, 5, 8, 16],
-        # 'obs_size_hid_dims': [-1],
-        'model': ['conv2'],
-        'change_pct': [-1.0],
-        'seed': list(range(5)),
-        'n_envs': [600],
-        'max_board_scans': [5],
-        'total_timesteps': [1_000_000_000],
-    },
-]
+# hypers = [
+#     {
+#         'NAME': 'obss_hiddims_dungeon2',
+#         'problem': ['dungeon2'],
+#         # 'obs_size_hid_dims': [3, 5, 8, 16, -1],
+#         'obs_size_hid_dims': [3, 5, 8, 16],
+#         # 'obs_size_hid_dims': [-1],
+#         'model': ['conv2'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(5)),
+#         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#     },
+# ]
 
 
 # hypers = [
@@ -832,6 +832,30 @@ hypers = [
 #     },
 # ]
 
+hypers = [
+    {
+        'NAME': 'ma_n_agents_dungeon_conv2_obs_3',
+        'multiagent': True,
+
+        'problem': ['dungeon'],
+        'map_width': [16],
+        'n_agents': [1, 2, 3],
+        'representation': ['turtle'],
+        'model': ['conv2'],
+        'obs_size_hid_dims': [3],
+        # 'obs_size_hid_dims': [3, 5, 8],
+        'max_board_scans': [1.0],
+        'randomize_map_shape': [False],
+        # 'change_pct': [-1.0],
+        'n_envs': [400],
+        'empty_start': [False],
+        'total_timesteps': [900_000_000],
+        'ckpt_freq': [100],
+        'render_freq': [100],
+        'seed': [0, 1, 2, 3, 4],
+    },
+]
+
 # hypers = [
 #     {
 #         'NAME': 'ma_board_scans_dungeon_obs_31',
@@ -1231,8 +1255,8 @@ hypers = [
 eval_hypers = {
     # 'eval_randomize_map_shape': [True, False],
     'eval_randomize_map_shape': [False],
-    # 'eval_map_width': [8, 16, 24, 32],
-    'eval_map_width': [16],
+    'eval_map_width': [8, 16, 24, 32],
+    # 'eval_map_width': [16],
     # 'eval_max_board_scans': [10],
 }
 

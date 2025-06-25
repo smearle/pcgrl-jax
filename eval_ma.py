@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import orbax.checkpoint as ocp
 
-from conf.config import TrainConfig, MultiAgentEvalConfig
+from conf.config import TrainConfig, EvalMultiAgentConfig
 from envs.pcgrl_env import PCGRLEnv, gen_dummy_queued_state
 from envs.probs.problem import ProblemState, get_loss
 from ma_utils import batchify, ma_init_config, init_run, restore_run, unbatchify
@@ -37,10 +37,10 @@ class EvalData:
     n_parameters: Optional[int] = None
 
 @hydra.main(version_base=None, config_path='./conf', config_name='eval_ma_pcgrl')
-def _main_eval_ma(eval_config: MultiAgentEvalConfig):
+def _main_eval_ma(eval_config: EvalMultiAgentConfig):
     main_eval_ma(eval_config)
 
-def main_eval_ma(eval_config: MultiAgentEvalConfig, render=False):
+def main_eval_ma(eval_config: EvalMultiAgentConfig, render=False):
     ma_init_config(eval_config)
     rng = jax.random.PRNGKey(eval_config.eval_seed)
 
@@ -61,6 +61,7 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig, render=False):
     runner_state, wandb_run_id = restore_run(
         eval_config, runner_state, ckpt_manager, latest_update_step, load_wandb=False
     )
+    assert latest_update_step is not None
     # elif not os.path.exists(exp_dir):
     #     network_params = network.init(rng, init_x)
     #     os.makedirs(exp_dir)
@@ -83,11 +84,15 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig, render=False):
     # network = init_network(env, env_params, eval_config)
     rng, _rng_actor = jax.random.split(rng, 2)
 
-    ac_init_hstate = ScannedRNN.initialize_carry(eval_config._num_eval_actors, eval_config.hidden_dims[0])
+    if eval_config._is_recurrent:
+        ac_init_hstate = ScannedRNN.initialize_carry(eval_config._num_eval_actors, eval_config.hidden_dims[0])
+    else:
+        network = actor_network
+        ac_init_hstate = None
 
     hstate = ac_init_hstate
     actor_network_params = runner_state.train_states[0].params
-    n_parameters = sum(np.prod(p.shape) for p in jax.tree_leaves(actor_network_params) if isinstance(p, jnp.ndarray))
+    n_parameters = sum(np.prod(p.shape) for p in jax.tree.leaves(actor_network_params) if isinstance(p, jnp.ndarray))
 
     reset_rng = jax.random.split(rng, eval_config.n_eval_envs)
 
@@ -123,7 +128,8 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig, render=False):
                     args = (hstate, ac_in)
                     hstate, pi = actor_network.apply(actor_network_params, *args)
                 else:
-                    pi, val = actor_network.apply(actor_network_params, obs_batch, avail_actions)
+                    pi, val = network.apply(actor_network_params, obs_batch, avail_actions)
+
                 action = pi.sample(seed=_rng)
                 env_act = unbatchify(
                     action, env.agents, eval_config.n_eval_envs, eval_config.n_agents
@@ -163,10 +169,18 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig, render=False):
         os.makedirs(vid_dir, exist_ok=True)
         env.init_graphics()
         states, rewards, dones = _jitted_eval()
-        frames = jax.vmap(jax.vmap(env.render))(states.log_env_state.env_state)
+
+        # frames = jax.vmap(jax.vmap(env.render))(states.log_env_state.env_state)
+
+        # Let's do a scan instead of the inner vmap (to same on VRAM at the expense of runtime speed)
+        _, frames = jax.lax.scan(
+            lambda _, e: (None, jax.vmap(env.render)(e)), init=None, xs=states.log_env_state.env_state)
+
         for i in range(frames.shape[1]):
             frames_i = jax.tree.map(lambda x: x[:, i], frames)
-            imageio.mimsave(os.path.join(vid_dir, f"{i}.gif"), np.array(frames_i), fps=20, loop=0)
+            gif_path = os.path.join(vid_dir, f"{i}.gif")
+            imageio.mimsave(gif_path, np.array(frames_i), fps=20, loop=0)
+        print(f"Saved eval video to {vid_dir}")
 
     if eval_config.reevaluate or not os.path.exists(json_path):
         start_time = time.time()
@@ -185,6 +199,7 @@ def main_eval_ma(eval_config: MultiAgentEvalConfig, render=False):
             json_stats = {k: v.tolist() for k, v in stats.__dict__.items() if isinstance(v, jnp.ndarray)}
             json_stats['mean_fps'] = mean_fps
             json.dump(json_stats, f, indent=4)
+        print(f"Eval stats saved to {json_path}")
     
 
 def get_eval_stats(states, dones) -> EvalData:
@@ -224,7 +239,7 @@ def init_config_for_eval(config):
     return config
 
 
-def get_eval_name(eval_config: MultiAgentEvalConfig, train_config: TrainConfig):
+def get_eval_name(eval_config: EvalMultiAgentConfig, train_config: TrainConfig):
     """Get a name for the eval stats file, based on the eval hyperparams.
     
     If eval_config has been initialized for eval (with standard hyperparameters being replaced by their `eval_`

@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 import pandas as pd
 import wandb
 
-from conf.config import MultiAgentEvalConfig
+from conf.config import EvalMultiAgentConfig
 from utils import get_exp_dir, init_config
 
 # Get path of current file's directory
@@ -24,7 +24,7 @@ def main(cfg):
     if not os.path.exists(progress_csv):
         with open(os.path.join(exp_dir, 'wandb_run_id.txt'), 'r') as f:
             wandb_run_id = f.read()
-        sc_run = wandb_api.run(f'/{MultiAgentEvalConfig.PROJECT}/{wandb_run_id}')
+        sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
         df = sc_run.history()
         df.plot.scatter(x="env_step", y="returns", title="Training Progress").get_figure().savefig(plot_path)
         last_timestep = int(df["env_step"].iloc[-1])

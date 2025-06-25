@@ -1,0 +1,37 @@
+NAME: ma_n_agents_dungeon_conv2_obs_3
+ckpt_freq:
+- 100
+empty_start:
+- false
+eval_hypers:
+  eval_map_width:
+  - 16
+  eval_randomize_map_shape:
+  - false
+map_width:
+- 16
+max_board_scans:
+- 1.0
+model:
+- conv2
+multiagent: true
+n_agents:
+- 1
+- 2
+- 3
+n_envs:
+- 400
+obs_size_hid_dims:
+- 3
+problem:
+- dungeon
+randomize_map_shape:
+- false
+render_freq:
+- 100
+representation:
+- turtle
+seed:
+- 0
+total_timesteps:
+- 300000000

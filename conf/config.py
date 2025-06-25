@@ -54,7 +54,7 @@ class Config:
 
     static_tile_prob: Optional[float] = 0.0
     n_freezies: int = 0
-    n_agents: int = 1  # multi-agent is fake and broken
+    n_agents: int = 1
     multiagent: bool = False
     max_board_scans: float = 3.0
 
@@ -70,7 +70,7 @@ class Config:
     # each episode.
     pinpoints: bool = False
 
-    hidden_dims: Tuple[int] = (64, 256)
+    hidden_dims: Tuple[int] = (256, 512)
 
     # TODO: Implement this. Just a placeholder for now.
     reward_every: int = 1
@@ -117,8 +117,8 @@ class TrainConfig(Config):
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     obs_size_hid_dims: int = -1
-    NUM_UPDATES: Optional[int] = None
-    MINIBATCH_SIZE: Optional[int] = None
+    _num_updates: int = -1
+    _minibatch_size: int = -1
     ###########################################################################
 
 
@@ -139,10 +139,10 @@ class MultiAgentConfig(TrainConfig):
     model: str = 'rnn'
     representation: str = "turtle"
     n_agents: int = 2
-    n_envs: int = 4
+    n_envs: int = 400
     n_eval_envs: int = 10
     scale_clip_eps: bool = False
-    hidden_dims: Tuple[int] = (512, -1)
+    # hidden_dims: Tuple[int] = (512, 256)
     a_freezer: bool = False
 
     # Save a checkpoint after (at least) this many ***update*** steps
@@ -196,8 +196,7 @@ class EvalConfig(TrainConfig):
 
 
 @dataclass
-class MultiAgentEvalConfig(EvalConfig, MultiAgentConfig):
-    multiagent = True
+class EvalMultiAgentConfig(MultiAgentConfig, EvalConfig):
     pass
 
 
@@ -250,7 +249,7 @@ cs.store(name="train_pcgrl", node=TrainConfig)
 cs.store(name="train_accel_pcgrl", node=TrainAccelConfig)
 cs.store(name="enjoy_pcgrl", node=EnjoyConfig)
 cs.store(name="eval_pcgrl", node=EvalConfig)
-cs.store(name="eval_ma_pcgrl", node=MultiAgentEvalConfig)
+cs.store(name="eval_ma_pcgrl", node=EvalMultiAgentConfig)
 cs.store(name="profile_pcgrl", node=ProfileEnvConfig)
 cs.store(name="batch_pcgrl", node=SweepConfig)
 cs.store(name="get_traces_pcgrl", node=GetTracesConfig)
