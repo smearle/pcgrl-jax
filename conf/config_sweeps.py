@@ -840,11 +840,13 @@ hypers = [
         'problem': ['dungeon'],
         'map_width': [16],
         'n_agents': [1, 2, 3],
+        # 'n_agents': [3],
         'representation': ['turtle'],
         'model': ['conv2'],
         'obs_size_hid_dims': [3],
         # 'obs_size_hid_dims': [3, 5, 8],
         'max_board_scans': [1.0],
+        # 'max_board_scans': [3.0],
         'randomize_map_shape': [False],
         # 'change_pct': [-1.0],
         'n_envs': [400],
@@ -1254,7 +1256,7 @@ hypers = [
 
 eval_hypers = {
     # 'eval_randomize_map_shape': [True, False],
-    'eval_randomize_map_shape': [False],
+    'eval_randomize_map_shape': [True],
     'eval_map_width': [8, 16, 24, 32],
     # 'eval_map_width': [16],
     # 'eval_max_board_scans': [10],

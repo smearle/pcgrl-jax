@@ -13,7 +13,7 @@ N_EPS = 1
 a = poo
 
 
-@hydra.main(version_base=None, config_path='./', config_name='enjoy')
+@hydra.main(version_base="1.3", config_path='./', config_name='enjoy')
 def enjoy(config: EnjoyConfig):
     config = init_config(config)
 

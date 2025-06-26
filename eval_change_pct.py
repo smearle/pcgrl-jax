@@ -36,7 +36,7 @@ class EvalData:
     # cell_rewards: chex.Array
     cell_rewards: chex.Array
 
-@hydra.main(version_base=None, config_path='./', config_name='eval_pcgrl')
+@hydra.main(version_base="1.3", config_path='./', config_name='eval_pcgrl')
 def main_eval_cp(config: EvalConfig):
     config = init_config(config)
 

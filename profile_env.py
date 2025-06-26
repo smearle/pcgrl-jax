@@ -18,7 +18,7 @@ problems = [
 n_envss= [1, 10, 50, 100, 200, 400, 600]
 
 
-@hydra.main(version_base=None, config_path='./', config_name='profile_pcgrl')
+@hydra.main(version_base="1.3", config_path='./', config_name='profile_pcgrl')
 def profile(config: ProfileEnvConfig):
     if config.reevaluate:
         config = init_config(config)

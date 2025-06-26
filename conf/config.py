@@ -191,8 +191,8 @@ class EvalConfig(TrainConfig):
     #     'mean_ep_reward',
     # ]
 
-    # metrics_to_keep: Tuple[str] = ('mean_ep_reward',)
-    metrics_to_keep: Tuple[str] = ('mean_fps',)
+    metrics_to_keep: Tuple[str] = ('mean_ep_reward',)
+    # metrics_to_keep: Tuple[str] = ('mean_fps',)
 
 
 @dataclass

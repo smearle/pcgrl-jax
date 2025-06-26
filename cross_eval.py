@@ -73,6 +73,7 @@ def sweep_grid(cfg, grid_hypers, _eval_hypers):
     #  default params as defined in the class below. We should probably save
     #  the eval config in the eval directory.
     eval_config = EvalConfig()
+    init_config(eval_config)
 
     name = grid_hypers.pop('NAME') if 'NAME' in grid_hypers else 'default'
 
@@ -253,7 +254,7 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
             print(sc.exp_dir)
             sc_stats = json.load(open(
                 os.path.join(f'{sc.exp_dir}', 
-                            'stats' + get_eval_name(sec, sec) + '.json')))
+                            'stats' + get_eval_name(sec, sc) + '.json')))
             for k, v in sc_stats.items():
                 col_tpl = copy.deepcopy(sec_col_tpl)
                 col_tpl.insert(METRIC_COL_TPL_IDX, k)

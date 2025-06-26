@@ -20,7 +20,7 @@ def np_array_to_surface(array):
     array = array.swapaxes(0, 1)
     return pygame.surfarray.make_surface(array)
 
-@hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
+@hydra.main(version_base="1.3", config_path='./', config_name='enjoy_pcgrl')
 def enjoy_pygame(config: EnjoyConfig):
     config = init_config(config)
     if not config.random_agent:

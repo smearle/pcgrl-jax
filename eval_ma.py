@@ -36,7 +36,7 @@ class EvalData:
     n_eval_eps: int
     n_parameters: Optional[int] = None
 
-@hydra.main(version_base=None, config_path='./conf', config_name='eval_ma_pcgrl')
+@hydra.main(version_base="1.3", config_path='./conf', config_name='eval_ma_pcgrl')
 def _main_eval_ma(eval_config: EvalMultiAgentConfig):
     main_eval_ma(eval_config)
 

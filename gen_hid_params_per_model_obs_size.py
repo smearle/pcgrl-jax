@@ -42,7 +42,7 @@ def compute_n_params(config):
     return n_parameters
 
 
-@hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
+@hydra.main(version_base="1.3", config_path='./', config_name='enjoy_pcgrl')
 def main_gen_hid(config: EnjoyConfig):
     config = init_config(config)
     env: PCGRLEnv

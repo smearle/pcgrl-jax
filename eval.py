@@ -31,7 +31,7 @@ class EvalData:
     n_eval_eps: int
     n_parameters: Optional[int] = None
 
-@hydra.main(version_base=None, config_path='./conf', config_name='eval_pcgrl')
+@hydra.main(version_base="1.3", config_path='./conf', config_name='eval_pcgrl')
 def main_eval(eval_config: EvalConfig):
     eval_config = init_config(eval_config)
 
@@ -161,11 +161,7 @@ def get_eval_name(eval_config: EvalConfig, train_config: TrainConfig):
     the same config (with differing train/eval hyperparams).
     """
     eval_name = \
-        (f"_randMap-{eval_config.eval_randomize_map_shape}" if
-         eval_config.eval_randomize_map_shape is not None and 
-         # This is for backward compatibility, in terms of being able to re-use prior eval stats jsons.
-         eval_config.eval_randomize_map_shape != train_config.randomize_map_shape
-         else "") + \
+        f"_randMap-{eval_config.eval_randomize_map_shape}" + \
         (f"_w-{eval_config.eval_map_width}" if eval_config.eval_map_width is not None else "") + \
         (f"_bs-{eval_config.eval_max_board_scans}" if eval_config.eval_max_board_scans is not None else "") + \
         (f"_seed-{eval_config.eval_seed}" if eval_config.eval_seed is not None else "")

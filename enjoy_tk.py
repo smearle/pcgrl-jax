@@ -25,7 +25,7 @@ def set_ctrl_trgs(env, trgs, env_state: PCGRLEnvState):
     return env_state
 
 
-@hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
+@hydra.main(version_base="1.3", config_path='./', config_name='enjoy_pcgrl')
 def main_enjoy_tk(config: EnjoyConfig):
     config = init_config(config)
 

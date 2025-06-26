@@ -12,7 +12,7 @@ from utils import get_exp_dir, init_config
 # Get path of current file's directory
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
-@hydra.main(config_path="./", config_name="config")
+@hydra.main(version_base="1.3", config_path="./", config_name="config")
 def main(cfg):
     wandb_api = wandb.Api()
     cfg = init_config(cfg)

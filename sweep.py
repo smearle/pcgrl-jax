@@ -241,9 +241,9 @@ def sweep_main(cfg: SweepConfig):
 
         # Launch rendering sweep on SLURM
         if cfg.mode == 'enjoy':
-            executor = submitit.AutoExecutor(folder='submitit_logs')
+            executor = submitit.AutoExecutor(folder=os.path.join('submitit_logs', 'enjoy'))
             executor.update_parameters(
-                    slurm_job_name=f"{sweep_name}_enjoy",
+                    slurm_job_name=f"enjoy_{sweep_name}",
                     mem_gb=90,
                     tasks_per_node=1,
                     cpus_per_task=1,
@@ -251,10 +251,11 @@ def sweep_main(cfg: SweepConfig):
                     timeout_min=60,
                     slurm_account='pr_174_tandon_advanced',
             )
-            return executor.submit(seq_main, main_fn, sweep_configs)
+            # return executor.submit(seq_main, main_fn, sweep_configs)
+            return executor.map_array(main_fn, sweep_configs)
         
         elif cfg.mode == 'get_traces':
-            executor = submitit.AutoExecutor(folder='submitit_logs')
+            executor = submitit.AutoExecutor(folder=os.path.join('submitit_logs', 'get_traces'))
             executor.update_parameters(
                     slurm_job_name=f"{sweep_name}_get_traces",
                     mem_gb=90,
@@ -268,7 +269,7 @@ def sweep_main(cfg: SweepConfig):
 
         # Launch eval sweep on SLURM
         elif cfg.mode.startswith('eval'):
-            executor = submitit.AutoExecutor(folder='submitit_logs')
+            executor = submitit.AutoExecutor(folder=os.path.join('submitit_logs', 'eval'))
             executor.update_parameters(
                     slurm_job_name=f"eval_{sweep_name}",
                     mem_gb=30,
@@ -284,7 +285,7 @@ def sweep_main(cfg: SweepConfig):
 
         # Launch training sweep on SLURM
         elif cfg.mode == 'train':
-            executor = submitit.AutoExecutor(folder='submitit_logs')
+            executor = submitit.AutoExecutor(folder=os.path.join('submitit_logs', 'train'))
             executor.update_parameters(
                     slurm_job_name=f"{sweep_name}_train",
                     mem_gb=30,

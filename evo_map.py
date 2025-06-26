@@ -26,7 +26,7 @@ class EvoMapState:
     rng: jax.random.PRNGKey
 
 
-@hydra.main(version_base=None, config_path="./", config_name="evo_map_pcgrl")
+@hydra.main(version_base="1.3", config_path="./", config_name="evo_map_pcgrl")
 def evolve_main(config: EvoMapConfig):
     config = init_config_evo_map(config)
     os.makedirs(os.path.join(config.exp_dir, 'renders'), exist_ok=True)

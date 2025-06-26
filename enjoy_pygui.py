@@ -13,7 +13,7 @@ from train import init_checkpointer
 from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 
 
-@hydra.main(version_base=None, config_path='./', config_name='enjoy_pcgrl')
+@hydra.main(version_base="1.3", config_path='./', config_name='enjoy_pcgrl')
 def enjoy_pygui(config: EnjoyConfig):
     init_config(config)
     exp_dir = config.exp_dir

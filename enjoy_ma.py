@@ -19,7 +19,7 @@ from purejaxrl.experimental.s5.wrappers import LossLogWrapper
 from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config
 
 
-@hydra.main(config_path='./conf', config_name='enjoy_ma_pcgrl', version_base="1.3")
+@hydra.main(version_base="1.3", config_path='./conf', config_name='enjoy_ma_pcgrl')
 def main_enjoy_ma(enjoy_config: EnjoyMultiAgentConfig):
     # enjoy_config = init_config(enjoy_config)
     ma_init_config(enjoy_config)

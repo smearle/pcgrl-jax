@@ -5,7 +5,10 @@ empty_start:
 - false
 eval_hypers:
   eval_map_width:
+  - 8
   - 16
+  - 24
+  - 32
   eval_randomize_map_shape:
   - false
 map_width:
@@ -33,5 +36,9 @@ representation:
 - turtle
 seed:
 - 0
+- 1
+- 2
+- 3
+- 4
 total_timesteps:
-- 300000000
+- 900000000
