@@ -131,13 +131,14 @@ class MultiTurtleRepresentation(TurtleRepresentation):
         return new_env_map, rep_state
 
     def reset(self, frz_map, rng):
-        # Get all indices of board positions
-        # shuffle
-        # shuffled_indices = jax.random.shuffle(rng, self.act_coords)
-        shuffled_indices = jax.random.permutation(rng, self.act_coords, independent=True)
-        return TurtleRepresentationState(pos=shuffled_indices[:self.n_agents])
-        # return TurtleRepresentationState(pos=jnp.repeat(self.center_position[None], self.n_agents,
-                                                        # axis=0))
+        # Get all indices of board positions that are not frozen
+        # TODO: Could do this in O(n) time in theory...
+        act_coords = jnp.argwhere(~frz_map, size=np.prod(self.map_shape), fill_value=-1)
+        shuffled_coords = jax.random.permutation(rng, act_coords, independent=True)
+        coords_are_valid = jnp.where(shuffled_coords[:, 0] >= 0, True, False)
+        shuffled_coords_indices = jnp.argsort(coords_are_valid)
+        shuffled_coords = jnp.take_along_axis(shuffled_coords, shuffled_coords_indices[:, None], axis=0)
+        return TurtleRepresentationState(pos=shuffled_coords[:self.n_agents])
 
     def get_obs(self, env_map: chex.Array, static_map: chex.Array,
                 rep_state: RepresentationState):

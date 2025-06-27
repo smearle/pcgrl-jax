@@ -309,7 +309,7 @@ def make_sim_render_episode(config: MultiAgentConfig, actor_network, env: PCGRLE
 def render_callback(env: PCGRLEnv, frames, save_dir: str, t: int, max_steps: int):
 
     imageio.mimsave(os.path.join(save_dir, f"enjoy_{t}.gif"), np.array(frames), fps=20, loop=0)
-    wandb.log({"video": wandb.Video(os.path.join(save_dir, f"enjoy_{t}.gif"), fps=20, format="gif")})
+    wandb.log({"video": wandb.Video(os.path.join(save_dir, f"enjoy_{t}.gif"), format="gif")})
 
 
 def get_ckpt_dir(config: MultiAgentConfig):

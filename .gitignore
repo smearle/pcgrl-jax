@@ -9,7 +9,7 @@ old_saves/
 log
 venv
 
-
+.vscode
 *.swp
 submitit_logs
 

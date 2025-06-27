@@ -131,6 +131,8 @@ def main_eval_ma(eval_config: EvalMultiAgentConfig, render=False):
                     pi, val = network.apply(actor_network_params, obs_batch, avail_actions)
 
                 action = pi.sample(seed=_rng)
+                # action = pi.logits.argmax(axis=-1)
+
                 env_act = unbatchify(
                     action, env.agents, eval_config.n_eval_envs, eval_config.n_agents
                 )
@@ -182,6 +184,11 @@ def main_eval_ma(eval_config: EvalMultiAgentConfig, render=False):
             imageio.mimsave(gif_path, np.array(frames_i), fps=20, loop=0)
         print(f"Saved eval video to {vid_dir}")
 
+        best_frame_path = os.path.join(vid_dir, "best.png")
+        best_state_idxs = jnp.array(jnp.where(states.loss == states.loss.min())).T[0]
+        best_frame = frames[tuple(best_state_idxs)]
+        imageio.imsave(best_frame_path, np.array(best_frame))
+
     if eval_config.reevaluate or not os.path.exists(json_path):
         start_time = time.time()
         states, rewards, dones = _jitted_eval()
@@ -212,13 +219,11 @@ def get_eval_stats(states, dones) -> EvalData:
     mean_ep_rew = ep_rews / n_eval_eps
 
     # Get the average min. episode loss
-    min_ep_losses = states.min_episode_losses
-    # Mask out so we only have the final step of each episode
-    min_ep_losses = jnp.where(dones, min_ep_losses, jnp.nan)
+    min_ep_losses = states.loss.min(axis=0)
     # Get mean episode loss
-    sum_min_ep_losses = jnp.nansum(min_ep_losses)
-    mean_min_ep_loss = sum_min_ep_losses / n_eval_eps
-    min_min_ep_loss = jnp.nanmin(min_ep_losses)
+    sum_min_ep_losses = jnp.sum(min_ep_losses)
+    mean_min_ep_loss = jnp.mean(min_ep_losses)
+    min_min_ep_loss = jnp.min(min_ep_losses)
 
     stats = EvalData(
         mean_ep_reward=mean_ep_rew,

@@ -119,8 +119,7 @@ class MALogWrapper(JaxMARLWrapper):
 @struct.dataclass
 class MALossLogEnvState:
     log_env_state: LogEnvState
-    losses: float
-    min_episode_losses: float
+    loss: float
 
 class MALossLogWrapper(MALogWrapper):
     """Log the episode returns and lengths."""
@@ -132,7 +131,7 @@ class MALossLogWrapper(MALogWrapper):
     def reset(
         self, key: chex.PRNGKey) -> Tuple[chex.Array, MultiAgentEnv]:
         obs, log_env_state = super().reset(key)
-        state = MALossLogEnvState(log_env_state, jnp.inf, jnp.inf)
+        state = MALossLogEnvState(log_env_state, jnp.inf)
         return obs, state
 
     @partial(jax.jit, static_argnums=(0, 4))
@@ -153,15 +152,9 @@ class MALossLogWrapper(MALogWrapper):
         # Normalize the loss to be in [0, 1]
         loss = loss / self._env.prob.max_loss
 
-        new_best_loss = jnp.minimum(loss, state.losses)
         state = MALossLogEnvState(
             log_env_state = log_env_state,
-            losses = jax.lax.select(
-                done['__all__'],
-                jnp.inf,
-                new_best_loss,
-            ),
-            min_episode_losses = new_best_loss,
+            loss = loss,
         )
         return obs, state, reward, done, info
 

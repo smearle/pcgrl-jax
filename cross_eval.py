@@ -229,20 +229,17 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     # for exp_dir, stats in basic_stats.items():
     for sc in sweep_configs:
 
-        sweep_eval_configs = [copy.deepcopy(sc)]
+        sweep_eval_configs = []
 
         # Do this so that we can get the correct stats file depending on eval parameters
         # sc = init_config_for_eval(sc)
 
         # For each train config, also sweep over eval params to get all the relevant stats
         for eval_hyper_combo in eval_hyper_combos:
-            new_sweep_eval_configs = copy.deepcopy(sweep_eval_configs)
-            for sec in sweep_eval_configs:
-                new_sec = copy.deepcopy(sec)
-                for k, v in zip(eval_hyper_ks, eval_hyper_combo):
-                    setattr(new_sec, k, v)
-                new_sweep_eval_configs.append(new_sec)
-            sweep_eval_configs = new_sweep_eval_configs
+            new_sec = copy.deepcopy(sc)
+            for k, v in zip(eval_hyper_ks, eval_hyper_combo):
+                setattr(new_sec, k, v)
+            sweep_eval_configs.append(new_sec)
         
         row_tpl = tuple(getattr(sc, k) for k in row_headers)
         row_tpl = tuple(tuple(v) if isinstance(v, list) else v for v in row_tpl)
@@ -425,8 +422,12 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
         
         # Load the `progress.csv`
         csv_path = os.path.join(exp_dir, 'progress.csv')
+        wandb_path = os.path.join(exp_dir, 'wandb_run_id.txt')
+        if not (os.path.isfile(csv_path) or os.path.isfile(wandb_path)):
+            print(f"Skipping {exp_dir} as it does not have a progress.csv or wandb-run-id.txt file.")
+            continue
         if not os.path.isfile(csv_path):
-            with open(os.path.join(exp_dir, 'wandb_run_id.txt'), 'r') as f:
+            with open(wandb_path, 'r') as f:
                 wandb_run_id = f.read()
             sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
             train_metrics = sc_run.history()
@@ -555,8 +556,12 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
                 sc.obs_size = mw * 2 - 1
         exp_dir = sc.exp_dir
         csv_path = os.path.join(exp_dir, 'progress.csv')
+        wandb_path = os.path.join(exp_dir, 'wandb_run_id.txt')
+        if not (os.path.isfile(csv_path) or os.path.isfile(wandb_path)):
+            print(f"Skipping {sc.exp_dir} because it has no progress.csv or wandb_run_id.txt.")
+            continue
         if not os.path.isfile(csv_path):
-            with open(os.path.join(exp_dir, 'wandb_run_id.txt'), 'r') as f:
+            with open(wandb_path, 'r') as f:
                 wandb_run_id = f.read()
             sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
             train_metrics = sc_run.history()
