@@ -587,14 +587,17 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
     metric_curves_df.index = row_index
     metric_curves_mean = metric_curves_df.groupby(group_row_indices).mean()
     metric_curves_mean = metric_curves_mean.droplevel(levels_to_drop)
+    metric_curves_std = metric_curves_df.groupby(group_row_indices).std()
+    metric_curves_std = metric_curves_std.droplevel(levels_to_drop)
 
     # Create a line plot of the metric curves w.r.t. timesteps. Each row in the
     # column corresponds to a different line
     fig, ax = plt.subplots(
         # figsize=(20, 10)
     )
-    for i, row in metric_curves_df.iterrows():
+    for ((i, row), (_, row_std)) in metric_curves_df.iterrows():
         ax.plot(row, label=str(i))
+
     ax.set_xlabel('Timesteps')
     ax.set_ylabel('Return')
     # ax.legend()
@@ -604,13 +607,14 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
     # cut off the first and last 100 timesteps to remove outliers
     metric_curves_mean = metric_curves_mean.drop(columns=metric_curves_mean.columns[:25])
     metric_curves_mean = metric_curves_mean.drop(columns=metric_curves_mean.columns[-25:])
+    metric_curves_std = metric_curves_std.drop(columns=metric_curves_std.columns[:25])
+    metric_curves_std = metric_curves_std.drop(columns=metric_curves_std.columns[-25:])
     columns = copy.deepcopy(metric_curves_mean.columns)
     # columns = columns[100:-100]
-    for i, row in metric_curves_mean.iterrows():
+    for ((i, row), (_, row_std)) in metric_curves_df.iterrows():
 
         if len(row) == 0:
             continue
-
         # Apply a convolution to smooth the curve
         row = np.convolve(row, np.ones(10), 'same') / 10
         # row = row[100:-100]
@@ -622,10 +626,20 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
         if row.index.shape[0] > 100:
             row = row.drop(row.index[:25])
             row = row.drop(row.index[-25:])
-
+            row_std = row_std.drop(row_std.index[:25])
+            row_std = row_std.drop(row_std.index[-25:])
         
-
         ax.plot(row, label=str(i))
+        ax.fill_between(
+            row.index,
+            row - row_std,
+            row + row_std,
+            alpha=0.2,
+            color=ax.get_lines()[-1].get_color(),
+            linewidth=0.5,
+            linestyle='--',
+        )
+
     metric_curves_mean.columns = columns
     ax.set_xlabel('Timesteps')
     ax.set_ylabel('Return')
