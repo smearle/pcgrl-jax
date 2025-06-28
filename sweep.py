@@ -247,7 +247,7 @@ def sweep_main(cfg: SweepConfig):
                     mem_gb=90,
                     tasks_per_node=1,
                     cpus_per_task=1,
-                    # gpus_per_node=1,
+                    gpus_per_node=1,
                     timeout_min=60,
                     slurm_account='pr_174_tandon_advanced',
             )
