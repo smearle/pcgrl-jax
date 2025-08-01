@@ -10,11 +10,13 @@ eval_hypers:
   - 24
   - 32
   eval_randomize_map_shape:
+  - true
   - false
 map_width:
 - 16
 max_board_scans:
 - 1.0
+- 3.0
 model:
 - conv2
 multiagent: true
@@ -25,7 +27,7 @@ n_agents:
 n_envs:
 - 400
 obs_size_hid_dims:
-- 3
+- 5
 problem:
 - dungeon
 randomize_map_shape:
@@ -41,4 +43,4 @@ seed:
 - 3
 - 4
 total_timesteps:
-- 900000000
+- 2000000000
