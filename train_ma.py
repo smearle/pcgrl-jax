@@ -2,6 +2,7 @@
 Based on PureJaxRL Implementation of IPPO, with changes to give a centralised critic.
 """
 import dataclasses
+from timeit import default_timer as timer
 from functools import partial
 import os
 import shutil

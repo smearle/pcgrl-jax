@@ -427,10 +427,19 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
             print(f"Skipping {exp_dir} as it does not have a progress.csv or wandb-run-id.txt file.")
             continue
         if not os.path.isfile(csv_path):
+            print(f"Loading wandb run for {sc.exp_dir}...")
             with open(wandb_path, 'r') as f:
                 wandb_run_id = f.read()
-            sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
+            try:
+                sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
+            except wandb.errors.CommError:
+                wandb_run_dirs = os.listdir(os.path.join(exp_dir, 'wandb'))
+                for d in wandb_run_dirs:
+                    if d.startswith(f'run-{wandb_run_id}'):
+                        os.system(f'wandb sync {os.path.join(exp_dir, "wandb", d)}')
+
             train_metrics = sc_run.history()
+            breakpoint()
             train_metrics = train_metrics.sort_values(by='_step', ascending=True)
             sc_timesteps = train_metrics['_step'] * sc._num_actors * sc.num_steps
             max_timestep = sc_timesteps.max()
@@ -609,9 +618,10 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
     metric_curves_mean = metric_curves_mean.drop(columns=metric_curves_mean.columns[-25:])
     metric_curves_std = metric_curves_std.drop(columns=metric_curves_std.columns[:25])
     metric_curves_std = metric_curves_std.drop(columns=metric_curves_std.columns[-25:])
+
     columns = copy.deepcopy(metric_curves_mean.columns)
     # columns = columns[100:-100]
-    for ((i, row), (_, row_std)) in metric_curves_df.iterrows():
+    for ((i, row), (_, row_std)) in zip(metric_curves_mean.iterrows(), metric_curves_std.iterrows()):
 
         if len(row) == 0:
             continue
@@ -628,7 +638,6 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
             row = row.drop(row.index[-25:])
             row_std = row_std.drop(row_std.index[:25])
             row_std = row_std.drop(row_std.index[-25:])
-        
         ax.plot(row, label=str(i))
         ax.fill_between(
             row.index,

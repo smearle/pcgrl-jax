@@ -72,9 +72,6 @@ class Config:
 
     hidden_dims: Tuple[int] = (256, 512)
 
-    # TODO: Implement this. Just a placeholder for now.
-    reward_every: int = 1
-
     # A toggle, will add `n_envs` to the experiment name if we are profiling training FPS, so that we can distinguish 
     # results.
     profile_fps: bool = False

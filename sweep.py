@@ -247,7 +247,7 @@ def sweep_main(cfg: SweepConfig):
                     mem_gb=90,
                     tasks_per_node=1,
                     cpus_per_task=1,
-                    # gpus_per_node=1,
+                    slurm_gres='gpu:1',
                     timeout_min=60,
                     slurm_account='pr_174_tandon_advanced',
             )
@@ -261,7 +261,7 @@ def sweep_main(cfg: SweepConfig):
                     mem_gb=90,
                     tasks_per_node=1,
                     cpus_per_task=1,
-                    gpus_per_node=1,
+                    slurm_gres='gpu:1',
                     timeout_min=60,
                     slurm_account='pr_174_general',
             )
@@ -276,7 +276,6 @@ def sweep_main(cfg: SweepConfig):
                     tasks_per_node=1,
                     cpus_per_task=1,
                     timeout_min=120,
-                    # gpus_per_node=1,
                     slurm_gres='gpu:1',
                     slurm_account='pr_174_tandon_advanced',
                 )
@@ -287,12 +286,11 @@ def sweep_main(cfg: SweepConfig):
         elif cfg.mode == 'train':
             executor = submitit.AutoExecutor(folder=os.path.join('submitit_logs', 'train'))
             executor.update_parameters(
-                    slurm_job_name=f"{sweep_name}_train",
+                    slurm_job_name=f"train_{sweep_name}",
                     mem_gb=30,
                     tasks_per_node=1,
                     cpus_per_task=1,
                     timeout_min=1440,
-                    # gpus_per_node=1,
                     slurm_gres='gpu:1',
                     # partition='rtx8000',
                     slurm_account='pr_174_tandon_advanced',

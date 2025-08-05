@@ -170,7 +170,9 @@ def main_eval_ma(eval_config: EvalMultiAgentConfig, render=False):
             get_eval_name(eval_config=eval_config, train_config=train_config))
         os.makedirs(vid_dir, exist_ok=True)
         env.init_graphics()
+        start_time = time.time()
         states, rewards, dones = _jitted_eval()
+        end_time = time.time()
 
         # frames = jax.vmap(jax.vmap(env.render))(states.log_env_state.env_state)
 
@@ -190,9 +192,10 @@ def main_eval_ma(eval_config: EvalMultiAgentConfig, render=False):
         imageio.imsave(best_frame_path, np.array(best_frame))
 
     if eval_config.reevaluate or not os.path.exists(json_path):
-        start_time = time.time()
-        states, rewards, dones = _jitted_eval()
-        end_time = time.time()
+        if not render:  # Otherwise we've already done this
+            start_time = time.time()
+            states, rewards, dones = _jitted_eval()
+            end_time = time.time()
 
         total_steps = eval_config.n_eps * env.max_steps * eval_config._num_eval_actors
         mean_fps = total_steps / (end_time - start_time)
