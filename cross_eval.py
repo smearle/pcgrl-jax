@@ -439,7 +439,8 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
                         os.system(f'wandb sync {os.path.join(exp_dir, "wandb", d)}')
 
             train_metrics = sc_run.history()
-            breakpoint()
+            if '_step' not in train_metrics:
+                breakpoint()
             train_metrics = train_metrics.sort_values(by='_step', ascending=True)
             sc_timesteps = train_metrics['_step'] * sc._num_actors * sc.num_steps
             max_timestep = sc_timesteps.max()
@@ -572,7 +573,12 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
         if not os.path.isfile(csv_path):
             with open(wandb_path, 'r') as f:
                 wandb_run_id = f.read()
-            sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
+            try:
+                sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
+            except wandb.errors.CommError:
+                wandb_run_dirs = os.listdir(os.path.join(exp_dir, 'wandb'))
+                for d in wandb_run_dirs:
+                    os.system(f'wandb sync {os.path.join(exp_dir, "wandb", d)}')
             train_metrics = sc_run.history()
             train_metrics = train_metrics.sort_values(by='_step', ascending=True)
             sc_timesteps = train_metrics['_step'] * sc._num_actors * sc.num_steps
@@ -601,18 +607,11 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
 
     # Create a line plot of the metric curves w.r.t. timesteps. Each row in the
     # column corresponds to a different line
-    fig, ax = plt.subplots(
-        # figsize=(20, 10)
-    )
-    for ((i, row), (_, row_std)) in metric_curves_df.iterrows():
-        ax.plot(row, label=str(i))
-
-    ax.set_xlabel('Timesteps')
-    ax.set_ylabel('Return')
-    # ax.legend()
     plt.savefig(os.path.join(CROSS_EVAL_DIR, name, f"metric_curves.png"))
 
     fig, ax = plt.subplots()
+    ax.set_xlabel('Timesteps')
+    ax.set_ylabel('Return')
     # cut off the first and last 100 timesteps to remove outliers
     metric_curves_mean = metric_curves_mean.drop(columns=metric_curves_mean.columns[:25])
     metric_curves_mean = metric_curves_mean.drop(columns=metric_curves_mean.columns[-25:])
@@ -648,6 +647,8 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
             linewidth=0.5,
             linestyle='--',
         )
+
+    ax.set_ylim(bottom=30, top=(row + row_std).max())
 
     metric_curves_mean.columns = columns
     ax.set_xlabel('Timesteps')

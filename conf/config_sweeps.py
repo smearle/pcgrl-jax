@@ -1306,7 +1306,7 @@ hypers = [
 
 hypers = [
     {
-        'NAME': 'ma_board_scans_binary_aiide',
+        'NAME': 'ma_n_agents',
         'multiagent': True,
 
         'problem': ['binary'],
@@ -1314,7 +1314,7 @@ hypers = [
         'n_agents': [1,2,3],
         'representation': ['turtle'],
         'model': ['conv2'],
-        'obs_size_hid_dims': [3, 31],
+        'obs_size_hid_dims': [3],
         'max_board_scans': [1.0],
         # 'max_board_scans': [3.0],
         'randomize_map_shape': [False],
@@ -1324,7 +1324,7 @@ hypers = [
         'total_timesteps': [900_000_000],
         'ckpt_freq': [100],
         'render_freq': [100],
-        'seed': [0, 1, 2, 3, 4],
+        'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
     },
 ]
 
