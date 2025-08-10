@@ -27,7 +27,6 @@ n_envs:
 - 400
 obs_size_hid_dims:
 - 3
-- 31
 problem:
 - binary
 randomize_map_shape:

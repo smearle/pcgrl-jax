@@ -54,24 +54,26 @@ def get_grid_cfgs(base_config, hypers, mode, eval_hypers={}):
     """Return set of experiment configs corresponding to the grid of 
     hyperparameter values specified by kwargs."""
 
+    hypers2 = copy.deepcopy(hypers)
+
     # If models were trained with different max_board_scans, evaluate them on the highest such value, for fairness.
     if 'eval' in mode or 'enjoy' in mode or 'get_traces' in mode:
         # if 'max_board_scans' in hypers.keys() and 'max_board_scans' not in eval_hypers:
         #     base_config.eval_max_board_scans = max(hypers['max_board_scans'])
 
         # Add eval hypers
-        hypers = {**hypers, **eval_hypers}
+        hypers2 = {**hypers2, **eval_hypers}
 
     # Because this may depend on a bunch of other hyperparameters, so we need to compute hiddims last.
     has_obs_size_hid_dims = False
-    if 'obs_size_hid_dims' in hypers:
+    if 'obs_size_hid_dims' in hypers2:
         has_obs_size_hid_dims = True
-        obs_size_hid_dims = hypers.pop('obs_size_hid_dims')
-    items = sorted(list(hypers.items()))
+        obs_size_hid_dims = hypers2.pop('obs_size_hid_dims')
+    items = sorted(list(hypers2.items()))
     if has_obs_size_hid_dims:
         items.append(('obs_size_hid_dims', obs_size_hid_dims))
 
-    subconfigs = [base_config]
+    subconfigs = [copy.deepcopy(base_config)]
     # Name of hyper, list of values
     hid_dims_dicts = {}
     for k, v in items:

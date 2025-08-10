@@ -1328,6 +1328,63 @@ hypers = [
     },
 ]
 
+# hypers = [
+#     {
+#         'NAME': 'ma_board_scans_n_agents',
+#         'multiagent': True,
+
+#         'problem': ['binary'],
+#         'map_width': [16],
+#         'n_agents': [1],
+#         'representation': ['turtle'],
+#         'model': ['conv2'],
+#         'obs_size_hid_dims': [3],
+#         'max_board_scans': [1.5, 3.0],
+#         'n_envs': [400],
+#         'empty_start': [False],
+#         'total_timesteps': [900_000_000],
+#         'ckpt_freq': [100],
+#         'render_freq': [100],
+#         'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+#     },
+#     {
+#         'NAME': 'ma_board_scans_n_agents',
+#         'multiagent': True,
+
+#         'problem': ['binary'],
+#         'map_width': [16],
+#         'n_agents': [2],
+#         'representation': ['turtle'],
+#         'model': ['conv2'],
+#         'obs_size_hid_dims': [3],
+#         'max_board_scans': [0.75, 1.5],
+#         'n_envs': [400],
+#         'empty_start': [False],
+#         'total_timesteps': [900_000_000],
+#         'ckpt_freq': [100],
+#         'render_freq': [100],
+#         'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+#     },
+#     {
+#         'NAME': 'ma_board_scans_n_agents',
+#         'multiagent': True,
+
+#         'problem': ['binary'],
+#         'map_width': [16],
+#         'n_agents': [3],
+#         'representation': ['turtle'],
+#         'model': ['conv2'],
+#         'obs_size_hid_dims': [3],
+#         'max_board_scans': [0.5, 1.0],
+#         'n_envs': [400],
+#         'empty_start': [False],
+#         'total_timesteps': [900_000_000],
+#         'ckpt_freq': [100],
+#         'render_freq': [100],
+#         'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+#     },
+# ]
+
 eval_hypers = {
     'eval_randomize_map_shape': [True, False],
     # 'eval_randomize_map_shape': [True],

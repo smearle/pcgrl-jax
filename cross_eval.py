@@ -12,12 +12,13 @@ from omegaconf import OmegaConf
 import pandas as pd
 import wandb
 import yaml
+from scipy import stats
 
 from conf.config import EvalConfig, EvalMultiAgentConfig, SweepConfig, TrainConfig
 from eval import get_eval_name
 from eval_change_pct import EvalData, get_change_pcts
 from ma_utils import ma_init_config
-from sweep import get_grid_cfgs, eval_hypers
+from sweep import get_grid_cfgs, eval_hypers, get_sweep_cfgs
 from utils import get_sweep_conf_path, init_config, load_sweep_hypers, write_sweep_confs
 
 
@@ -50,16 +51,11 @@ def cross_eval_main(cfg: SweepConfig):
         _eval_hypers = eval_hypers
         write_sweep_confs(_hypers, _eval_hypers)
     
-    for grid_hypers in _hypers:
-        sweep_grid(cfg, grid_hypers, _eval_hypers)
+    sweep_grid(cfg, _hypers, _eval_hypers)
 
 
-def sweep_grid(cfg, grid_hypers, _eval_hypers):
-    if grid_hypers.get('multiagent', False):
-        default_cfg = EvalMultiAgentConfig(multiagent=True)
-    else:
-        default_cfg = EvalConfig()
-    sweep_configs = get_grid_cfgs(default_cfg, grid_hypers, mode='eval', eval_hypers=_eval_hypers)
+def get_sweep_configs(default_cfg, grid_hypers, _eval_hypers, mode):
+    sweep_configs = get_sweep_cfgs(default_cfg, grid_hypers, mode=mode, eval_hypers=_eval_hypers)
     sweep_configs = [OmegaConf.create(sc) for sc in sweep_configs]
     sweep_configs = [init_config(sc) for sc in sweep_configs]
 
@@ -69,24 +65,37 @@ def sweep_grid(cfg, grid_hypers, _eval_hypers):
                 if v == -1:
                     setattr(sc, k, sc.map_width * 2 - 1)
 
+    return sweep_configs
+
+
+def sweep_grid(cfg: SweepConfig, grid_hypers, _eval_hypers):
+    if grid_hypers[0].get('multiagent', False):
+        default_cfg = EvalMultiAgentConfig(multiagent=True)
+    else:
+        default_cfg = EvalConfig()
+
+    train_sweep_configs = get_sweep_configs(default_cfg, grid_hypers, _eval_hypers, mode='train')
+    eval_sweep_configs = get_sweep_configs(default_cfg, grid_hypers, _eval_hypers, mode='eval')
+
     # FIXME: This part is messy, we have to assume we ran the eval with the 
     #  default params as defined in the class below. We should probably save
     #  the eval config in the eval directory.
     eval_config = EvalConfig()
     init_config(eval_config)
 
-    name = grid_hypers.pop('NAME') if 'NAME' in grid_hypers else 'default'
+    name = grid_hypers[0].get('NAME', 'default')
+    [gh.pop('NAME') for gh in grid_hypers]
 
     # Save the eval config to a yaml at `conf/sweeps/{name}.yaml`        
 
     if 'eval_map_width' in grid_hypers:      # if we are sweeping over eval_map_width
-        cross_eval_diff_size(name=name, sweep_configs=sweep_configs,
+        cross_eval_diff_size(name=name, sweep_configs=eval_sweep_configs,
                         eval_config=eval_config, hypers=grid_hypers)
     else:
         os.makedirs(os.path.join(CROSS_EVAL_DIR, name), exist_ok=True)
-        cross_eval_misc(name=name, sweep_configs=sweep_configs,
-                        eval_config=eval_config, hypers=grid_hypers)
-        cross_eval_basic(name=name, sweep_configs=sweep_configs,
+        # cross_eval_misc(name=name, sweep_configs=train_sweep_configs,
+        #                 eval_config=eval_config, hypers=grid_hypers)
+        cross_eval_basic(name=name, sweep_configs=eval_sweep_configs,
                         eval_config=eval_config, hypers=grid_hypers, eval_hypers=_eval_hypers)
         
         if name.startswith('cp_'):
@@ -220,7 +229,8 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     col_headers.insert(METRIC_COL_TPL_IDX, '')
     col_indices = set({})
 
-    row_headers = [tuple(v) if isinstance(v, list) else v for v in list(hypers.keys())]
+    row_headers = []
+    row_headers = [tuple(v) if isinstance(v, list) else v for v in list(hypers[0].keys())]
     row_indices = []
     row_vals = []
 
@@ -248,7 +258,7 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
         vals = {}
         for sec in sweep_eval_configs:
             sec_col_tpl = [getattr(sec, k) for k in eval_hyper_ks]
-            print(sc.exp_dir)
+            print(f"Collecting eval metrics from: {sc.exp_dir}")
             sc_stats = json.load(open(
                 os.path.join(f'{sc.exp_dir}', 
                             'stats' + get_eval_name(sec, sc) + '.json')))
@@ -350,6 +360,7 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
     
     # Drop these columns
     basic_stats_concise_df = basic_stats_concise_df.droplevel(col_levels_to_drop, axis=1)
+    basic_stats_df = basic_stats_df.droplevel(col_levels_to_drop, axis=1)
 
     # Drop the `n_parameters` `n_eval_eps` metrics, and others if `metrics_to_keep` is specified
     for col_tpl in basic_stats_concise_df.columns:
@@ -359,8 +370,83 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
             metric_str = col_tpl[METRIC_COL_TPL_IDX]
         if metric_str == 'n_parameters' or metric_str == 'n_eval_eps':
             basic_stats_concise_df = basic_stats_concise_df.drop(columns=col_tpl)
+            basic_stats_df = basic_stats_df.drop(columns=col_tpl)
         elif _metrics_to_keep is not None and metric_str not in _metrics_to_keep:
             basic_stats_concise_df = basic_stats_concise_df.drop(columns=col_tpl)
+            basic_stats_df = basic_stats_df.drop(columns=col_tpl)
+
+    # Compute pairwise p-values across groups (e.g., seeds grouped by hyperparameters) using Mann-Whitney U tests.
+    def _label_from_key(key, keys):
+        if not isinstance(key, tuple):
+            key = (key,)
+        return ",".join(f"{k}={v}" for k, v in zip(keys, key) if k not in row_levels_to_drop)
+
+    def compute_pairwise_mannwhitney_pvalues(df: pd.DataFrame) -> pd.DataFrame:
+        # Group rows by all index levels except 'seed'; each group's distribution is values over seeds
+        group_levels = [lvl for lvl in df.index.names if lvl != 'seed']
+        if len(group_levels) == 0:
+            raise ValueError("Expected a 'seed' level in the index to form distributions per group.")
+
+        results = []
+        grouped = df.groupby(group_levels, dropna=False)
+        group_keys = list(grouped.groups.keys())
+        if len(group_keys) < 2:
+            return pd.DataFrame(columns=[
+                'metric', 'group_a', 'group_b', 'n_a', 'n_b', 'stat', 'pvalue'
+            ])
+
+        # For each column (metric/eval setting), compute pairwise tests across all groups
+        for col in df.columns:
+            # Collect distributions per group
+            group_to_vals = {}
+            for gk, gdf in grouped:
+                s = gdf[col]
+                vals = pd.Series(s).dropna().to_numpy()
+                group_to_vals[gk] = vals
+
+            # Pairwise comparisons
+            from itertools import combinations
+            for g1, g2 in combinations(group_keys, 2):
+                a = group_to_vals.get(g1, np.array([]))
+                b = group_to_vals.get(g2, np.array([]))
+                na, nb = a.size, b.size
+                if na == 0 or nb == 0:
+                    stat, p = np.nan, np.nan
+                else:
+                    try:
+                        stat, p = stats.mannwhitneyu(a, b, alternative='two-sided', method='auto')
+                    except TypeError:
+                        stat, p = stats.mannwhitneyu(a, b, alternative='two-sided')
+
+                # Column label to a compact string (preserve metric name at METRIC_COL_TPL_IDX)
+                if isinstance(col, tuple):
+                    metric_label = col[METRIC_COL_TPL_IDX]
+                else:
+                    metric_label = col
+                results.append({
+                    'metric': metric_label,
+                    'column': str(col),
+                    'group_a': _label_from_key(g1, group_levels),
+                    'group_b': _label_from_key(g2, group_levels),
+                    'n_a': na,
+                    'n_b': nb,
+                    'stat': float(stat) if np.isfinite(stat) else np.nan,
+                    'pvalue': float(p) if np.isfinite(p) else np.nan,
+                })
+        return pd.DataFrame(results)
+
+    pvals_df = compute_pairwise_mannwhitney_pvalues(basic_stats_df)
+    if not pvals_df.empty:
+        pvals_df['significant_0.05'] = pvals_df['pvalue'] <= 0.05
+        os.makedirs(os.path.join(CROSS_EVAL_DIR, name), exist_ok=True)
+        # Include eval sweep name to disambiguate different eval settings
+        eval_sweep_name = ('eval_' + '_'.join(k.strip('eval_') for k, v in eval_hypers.items() if len(v) > 1 and k != 'metrics_to_keep') if 
+                            len(eval_hypers) > 0 else '')
+        csv_path = os.path.join(CROSS_EVAL_DIR, name, f"{eval_sweep_name}_pairwise_pvalues.csv")
+        md_path = os.path.join(CROSS_EVAL_DIR, name, f"{eval_sweep_name}_pairwise_pvalues.md")
+        pvals_df.to_csv(csv_path, index=False)
+        with open(md_path, 'w') as f:
+            f.write(pvals_df.to_markdown(index=False))
 
     # Save the dataframe to a csv
     # basic_stats_concise_df.to_csv(os.path.join(CROSS_EVAL_DIR,
@@ -402,7 +488,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
                     eval_config: EvalConfig, hypers):
 
     # Create a dataframe with miscellaneous stats for each experiment
-    row_headers = list(hypers.keys())
+    row_headers = list(hypers[0].keys())
     row_indices = []
     row_vals = []
 
@@ -508,7 +594,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
 
     # Now, remove all row indices that have the same value across all rows
     levels_to_drop = \
-        [level for level in misc_stats_mean_df.index.names if 
+       [level for level in misc_stats_mean_df.index.names if 
          misc_stats_mean_df.index.get_level_values(level).nunique() == 1]
     levels_to_keep = \
         [level for level in misc_stats_mean_df.index.names if
@@ -648,7 +734,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
             linestyle='--',
         )
 
-    ax.set_ylim(bottom=30, top=(row + row_std).max())
+    ax.set_ylim(bottom=30, top=(metric_curves_mean + metric_curves_std).max().max())
 
     metric_curves_mean.columns = columns
     ax.set_xlabel('Timesteps')
