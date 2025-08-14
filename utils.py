@@ -19,7 +19,7 @@ from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEnco
 
 def get_exp_dir_evo_map(config: EvoMapConfig):
     exp_dir = os.path.join(
-        'saves_evo_map',
+        config.save_dir,
         config.problem,
         f'pop-{config.evo_pop_size}_' + 
         f'parents-{config.n_parents}_' +
@@ -39,7 +39,7 @@ def get_exp_dir(config: Config):
     if config.env_name == 'PCGRL':
         ctrl_str = '_ctrl_' + '_'.join(config.ctrl_metrics) if len(config.ctrl_metrics) > 0 else '' 
         exp_dir = os.path.join(
-            'saves',
+            config.save_dir,
             f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
             f'{config.activation}_w-{config.map_width}_' + \
             ('random-shape_' if config.randomize_map_shape else '') + \
@@ -62,7 +62,7 @@ def get_exp_dir(config: Config):
             f'{config.seed}_{config.exp_name}')
     elif config.env_name == 'PlayPCGRL':
         exp_dir = os.path.join(
-            'saves',
+            config.save_dir,
             f'play_w-{config.map_width}_' + \
             f'{config.model}-{config.activation}_' + \
             f'vrf-{config.vrf_size}_arf-{config.arf_size}_' + \
@@ -70,13 +70,13 @@ def get_exp_dir(config: Config):
         )
     elif config.env_name == 'Candy':
         exp_dir = os.path.join(
-            'saves',
+            config.save_dir,
             'candy_' + \
             f'{config.seed}_{config.exp_name}',
         )
     else:
         exp_dir = os.path.join(
-            'saves',
+            config.save_dir,
             config.env_name,
         )
     return exp_dir

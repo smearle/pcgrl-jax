@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
+    save_dir: str = "saves"
     lr: float = 1.0e-4
     n_envs: int = 400
     # How many steps do I take in all of my batched environments before doing a gradient update
@@ -87,6 +88,7 @@ class Config:
 
 @dataclass
 class EvoMapConfig(Config):
+    save_dir: str = "saves_evo_map"
     n_generations: int = 100_000
     evo_pop_size: int = 100
     n_parents: int = 50

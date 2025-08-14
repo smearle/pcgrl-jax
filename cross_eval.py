@@ -93,8 +93,8 @@ def sweep_grid(cfg: SweepConfig, grid_hypers, _eval_hypers):
                         eval_config=eval_config, hypers=grid_hypers)
     else:
         os.makedirs(os.path.join(CROSS_EVAL_DIR, name), exist_ok=True)
-        # cross_eval_misc(name=name, sweep_configs=train_sweep_configs,
-        #                 eval_config=eval_config, hypers=grid_hypers)
+        cross_eval_misc(name=name, sweep_configs=train_sweep_configs,
+                        eval_config=eval_config, hypers=grid_hypers)
         cross_eval_basic(name=name, sweep_configs=eval_sweep_configs,
                         eval_config=eval_config, hypers=grid_hypers, eval_hypers=_eval_hypers)
         

@@ -57,6 +57,11 @@ def make_train(
     # Define which parts of the callback we don't want to trace
     _render_callback = partial(render_callback, save_dir=config._vid_dir, max_steps=env.max_steps, env=env)
 
+    # Track host-side timing to compute FPS between updates (env steps per second)
+    # Using simple mutable containers to allow updates from inside the callback.
+    _last_log_time = [timer()]
+    _last_env_step = [int(latest_update_step or 0) * int(config._num_actors)]
+
     def train(rng, runner_state=None):
 
         # INIT ENV
@@ -504,6 +509,14 @@ def make_train(
             rng = update_state[-1]
             
             def log_callback(metric):
+                # Compute FPS from host wall time and env steps progressed since last log
+                now = timer()
+                env_step = int(metric["update_steps"]) * config.num_steps * int(config._num_actors)
+                dt = max(now - _last_log_time[0], 1e-9)
+                dsteps = max(env_step - _last_env_step[0], 0)
+                fps = dsteps / dt
+                _last_log_time[0] = now
+                _last_env_step[0] = env_step
                 wandb.log(
                     {
                         # the metrics have an agent dimension, but this is identical
@@ -511,8 +524,8 @@ def make_train(
                         "returns": metric["returned_episode_returns"][:, :, 0][
                             metric["returned_episode"][:, :, 0]
                         ].mean(),
-                        "env_step": metric["update_steps"]
-                        * config._num_actors,
+                        "env_step": env_step,
+                        "fps": fps,
                         **metric["loss"],
                         "obs_dist_min": metric["obs_dist_min"],
                         "obs_dist_max": metric["obs_dist_max"],
@@ -521,8 +534,19 @@ def make_train(
                         "act_dist_std": metric["act_dist_std"],
                     }
                 )
+                returns = metric["returned_episode_returns"][:, :, 0][
+                    metric["returned_episode"][:, :, 0]
+                ]
+                returns_mean = returns.mean()
+                # returns_max = returns.max()
+                # returns_min = returns.min()
 
-                print(f"Step: {metric['update_steps']}, Returns: {metric['returned_episode_returns'][:, :, 0][metric['returned_episode'][:, :, 0]].mean()}")
+                print(
+                    f"Update step: {metric['update_steps']}, Env step: {env_step}, Returns mean: "
+                    f"{returns_mean}, "
+                    # f"Returns max: {returns_max}, Returns min: {returns_min}, "
+                    f"FPS: {fps:.1f}"
+                )
 
             def ckpt_callback(metric, runner_state):
                 try:

@@ -396,7 +396,6 @@ class PCGRLEnv(Environment):
         rep_state = env_state.rep_state
         static_map = env_state.static_map
         map_changed = False
-
         for i, agent in enumerate(self.agents):
             agent_action = action[agent][None, None, ..., None]
 

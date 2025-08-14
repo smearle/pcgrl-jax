@@ -3,14 +3,15 @@ import math
 from typing import Optional, Tuple
 import numpy as np
 from flax import struct
-from flax.core.frozen_dict import unfreeze
-import flax.linen as nn
 import jax
 import jax.numpy as jnp
-from flax.linen.initializers import constant, orthogonal
 import chex
 
 from envs.utils import Tiles
+
+
+# Sentinel value to use for very big int32s
+BIG_INT32 = jnp.iinfo(jnp.int32).max - 1  # 2**31 - 2
 
 
 @struct.dataclass
@@ -22,8 +23,7 @@ class FloodPathState:
     # FIXME: For some reason, we need to do this for the dungeon environment (why not maze?). Think this might be 
     #   causing a phantom path tile to render in upper-left corner of map when rendering.
     # nearest_trg_xy: Optional[chex.Array] = None #  = jnp.zeros(2, dtype=jnp.int32)
-    nearest_trg_xy: Optional[chex.Array] = field(default_factory=lambda: 
-                                                 (jnp.zeros(2, dtype=jnp.int32) - 1))
+    nearest_trg_xy: Optional[chex.Array] = field(default_factory=lambda: (jnp.zeros(2, dtype=jnp.int32) - 1))
     done: bool = False
 
 
@@ -36,34 +36,51 @@ class FloodRegionsState:
 
 # FIXME: It's probably definitely (?) inefficient to use NNs here. We should use `jax.lax.convolve` directly.
 #   (Also would allow us to use ints instead of floats?)
-class FloodPath(nn.Module):
+class FloodPath:
+    """Flood fill using a fixed 3x3 convolutional kernel implemented with jax.lax.conv_general_dilated."""
 
-    @nn.compact
-    def __call__(self, x):
-        x = nn.Conv(1, kernel_size=(3, 3), padding='SAME', kernel_init=constant(0.0), bias_init=constant(0.0))(x)
-        return x
+    def __init__(self):
+        # Kernel will be initialized via init_params(map_shape)
+        self.flood_kernel: Optional[jax.Array] = None  # shape: (3, 3, in_ch=2, out_ch=1)
+
+    def _conv(self, x: chex.Array) -> chex.Array:
+        """Apply 2D convolution with SAME padding using the fixed kernel.
+
+        Args:
+            x: [H, W, C] input.
+        Returns:
+            y: [H, W, Cout] output.
+        """
+        assert self.flood_kernel is not None, "Call init_params(map_shape) before using FloodPath."
+        # Add batch dim to match NHWC expected by lax conv, then remove it after.
+        x_b = jnp.expand_dims(x, 0)
+        y_b = jax.lax.conv_general_dilated(
+            lhs=x_b,
+            rhs=self.flood_kernel,
+            window_strides=(1, 1),
+            padding="SAME",
+            dimension_numbers=("NHWC", "HWIO", "NHWC"),
+        )
+        return jnp.squeeze(y_b, axis=0)
 
     def init_params(self, map_shape):
-        rng = jax.random.PRNGKey(0) # This key doesn't matter since we'll reset before playing anyway(?)
-        init_x = jnp.zeros(map_shape + (2,), dtype=jnp.float32)
-        self.flood_params = unfreeze(self.init(rng, init_x))
-        flood_kernel = self.flood_params['params']['Conv_0']['kernel']
-        # Walls on center tile prevent it from being flooded
-        flood_kernel = flood_kernel.at[1, 1, 0].set(-5)
-        # Flood at adjacent tile produces flood toward center tile
-        flood_kernel = flood_kernel.at[1, 2, 1].set(1)
-        flood_kernel = flood_kernel.at[2, 1, 1].set(1)
-        flood_kernel = flood_kernel.at[1, 0, 1].set(1) 
-        flood_kernel = flood_kernel.at[0, 1, 1].set(1)
-        flood_kernel = flood_kernel.at[1, 1, 1].set(1)
-        self.flood_params['params']['Conv_0']['kernel'] = flood_kernel
+        # Build a static kernel with shape (3, 3, in_ch=2, out_ch=1)
+        flood_kernel = jnp.zeros((3, 3, 2, 1), dtype=jnp.float32)
+        # Walls on center tile prevent it from being flooded (input channel 0 is occupied_map)
+        flood_kernel = flood_kernel.at[1, 1, 0, 0].set(-5)
+        # Flood at adjacent tile produces flood toward center tile (input channel 1 is flood)
+        flood_kernel = flood_kernel.at[1, 2, 1, 0].set(1)
+        flood_kernel = flood_kernel.at[2, 1, 1, 0].set(1)
+        flood_kernel = flood_kernel.at[1, 0, 1, 0].set(1)
+        flood_kernel = flood_kernel.at[0, 1, 1, 0].set(1)
+        flood_kernel = flood_kernel.at[1, 1, 1, 0].set(1)
+        self.flood_kernel = flood_kernel
 
     def flood_step(self, flood_state: FloodPathState):
         """Flood until no more tiles can be flooded."""
         flood_input, flood_count = flood_state.flood_input, flood_state.flood_count
-        flood_params = self.flood_params
         occupied_map = flood_input[..., 0]
-        flood_out = self.apply(flood_params, flood_input)
+        flood_out = self._conv(flood_input)
         flood_out = jnp.clip(flood_out, a_min=0, a_max=1)
         flood_out = jnp.stack([occupied_map, flood_out[..., -1]], axis=-1)
         flood_count = flood_out[..., -1] + flood_count
@@ -75,9 +92,8 @@ class FloodPath(nn.Module):
         """Flood until a target tile type is reached."""
         flood_input, flood_count = flood_state.flood_input, flood_state.flood_count
         trg = flood_state.trg
-        flood_params = self.flood_params
         occupied_map = flood_input[..., 0]
-        flood_out = self.apply(flood_params, flood_input)
+        flood_out = self._conv(flood_input)
         flood_out = jnp.clip(flood_out, a_min=0, a_max=1)
         flood_out = jnp.stack([occupied_map, flood_out[..., -1]], axis=-1)
         flood_count = flood_out[..., -1] + flood_count
@@ -88,41 +104,57 @@ class FloodPath(nn.Module):
         no_trg = jnp.all(flood_state.env_map != trg)
         no_change = jnp.all(flood_input == flood_out)
         done = has_reached_trg | no_trg | no_change
-        flood_state = FloodPathState(flood_input=flood_out, flood_count=flood_count, done=done,
-                                     env_map=flood_state.env_map, trg=trg,
-                                     nearest_trg_xy=nearest_trg_xy)
+        flood_state = FloodPathState(
+            flood_input=flood_out,
+            flood_count=flood_count,
+            done=done,
+            env_map=flood_state.env_map,
+            trg=trg,
+            nearest_trg_xy=nearest_trg_xy,
+        )
         return flood_state
 
 
-class FloodRegions(nn.Module):
+class FloodRegions:
 
-    @nn.compact
-    def __call__(self, x):
-        x = nn.Conv(5, kernel_size=(3, 3), padding='SAME', kernel_init=constant(0.0), bias_init=constant(0.0))(x)
-        return x
+    def __init__(self):
+        # Kernel will be initialized via init_params(map_shape)
+        self.flood_kernel: Optional[jax.Array] = None  # shape: (3, 3, in_ch=1, out_ch=5)
+
+    def _conv(self, x: chex.Array) -> chex.Array:
+        assert self.flood_kernel is not None, "Call init_params(map_shape) before using FloodRegions."
+        x_b = jnp.expand_dims(x, 0)
+        y_b = jax.lax.conv_general_dilated(
+            lhs=x_b,
+            rhs=self.flood_kernel,
+            window_strides=(1, 1),
+            padding="SAME",
+            dimension_numbers=("NHWC", "HWIO", "NHWC"),
+        )
+        return jnp.squeeze(y_b, axis=0)
 
     def init_params(self, map_shape):
-        rng = jax.random.PRNGKey(0) # This key doesn't matter since we'll reset before playing anyway(?)
-        init_x = jnp.zeros(map_shape + (1,), dtype=jnp.float32)
-        self.flood_params = unfreeze(self.init(rng, init_x))
-        flood_kernel = self.flood_params['params']['Conv_0']['kernel']
+        # Build a static kernel with shape (3, 3, in_ch=1, out_ch=5)
+        flood_kernel = jnp.zeros((3, 3, 1, 5), dtype=jnp.float32)
         flood_kernel = flood_kernel.at[1, 1, 0, 0].set(1)
         flood_kernel = flood_kernel.at[1, 2, 0, 1].set(1)
         flood_kernel = flood_kernel.at[2, 1, 0, 2].set(1)
-        flood_kernel = flood_kernel.at[1, 0, 0, 3].set(1) 
+        flood_kernel = flood_kernel.at[1, 0, 0, 3].set(1)
         flood_kernel = flood_kernel.at[0, 1, 0, 4].set(1)
-        self.flood_params['params']['Conv_0']['kernel'] = flood_kernel
+        self.flood_kernel = flood_kernel
 
     def flood_step(self, flood_regions_state: FloodRegionsState):
         """Flood until no more tiles can be flooded."""
         occupied_map, flood_count = flood_regions_state.occupied_map, flood_regions_state.flood_count
-        flood_params = self.flood_params
-        flood_out = self.apply(flood_params, flood_count)
+        flood_out = self._conv(flood_count)
         flood_count = jnp.max(flood_out, -1, keepdims=True)
         flood_count = flood_count * (1 - occupied_map[..., None])
         done = jnp.all(flood_count == flood_regions_state.flood_count)
-        flood_regions_state = FloodRegionsState(flood_count=flood_count,
-                                                occupied_map=occupied_map, done=done)
+        flood_regions_state = FloodRegionsState(
+            flood_count=flood_count,
+            occupied_map=occupied_map,
+            done=done,
+        )
         return flood_regions_state
 
     # def flood_step(self, flood_state: FloodRegionsState, unused):
@@ -132,7 +164,7 @@ class FloodRegions(nn.Module):
     #     return flood_state, None
 
     def flood_step_while(self, flood_state: FloodRegionsState):
-        flood_state, _ = self.flood_step(flood_state=flood_state, unused=None)
+        flood_state = self.flood_step(flood_regions_state=flood_state)
         return flood_state
 
         
@@ -182,21 +214,21 @@ def get_path_coords_diam(flood_count: chex.Array, max_path_len):
     return get_path_coords(flood_count, max_path_len, yx)
 
 
-def get_max_path_length(map_shape: Tuple[int]):
+def get_max_path_length(map_shape: Tuple[int, ...]):
     map_shape = jnp.array(map_shape)
     return (jnp.ceil(jnp.prod(map_shape) / 2) + jnp.max(map_shape)).astype(int)
 
 
-def get_max_path_length_static(map_shape: Tuple[int]):
+def get_max_path_length_static(map_shape: Tuple[int, ...]):
     return int(math.ceil(math.prod(map_shape) / 2) + max(map_shape))
 
 
-def get_max_n_regions(map_shape: Tuple[int]):
+def get_max_n_regions(map_shape: Tuple[int, ...]):
     map_shape = jnp.array(map_shape)
     return jnp.ceil(jnp.prod(map_shape) / 2).astype(int)
 
 
-def get_max_n_regions_static(map_shape: Tuple[int]):
+def get_max_n_regions_static(map_shape: Tuple[int, ...]):
     return int(math.ceil(math.prod(map_shape) / 2))
 
     
@@ -233,7 +265,7 @@ def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passabl
 
 
 def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: jnp.ndarray, src: int, trg: chex.Array):
-    occupied_map = (env_map[..., None] != passable_tiles).all(-1).astype(jnp.float32)
+    occupied_map = (env_map[..., None] != passable_tiles).all(-1).astype(float32)
     init_flood = (env_map == src).astype(jnp.float32)
     init_flood_count = init_flood.copy()
     # Concatenate init_flood with new_occ_map
