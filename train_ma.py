@@ -25,7 +25,7 @@ from omegaconf import OmegaConf
 from envs.pcgrl_env import PCGRLEnv
 from marl.model import ActorRNN, CriticRNN, ScannedRNN
 from conf.config import MultiAgentConfig
-from ma_utils import RunnerState, batchify, init_config, init_run, ma_init_config, make_sim_render_episode, render_callback, restore_run, save_checkpoint, unbatchify
+from utils_ma import RunnerState, batchify, init_config, init_run, ma_init_config, make_sim_render_episode, render_callback, restore_run, save_checkpoint, unbatchify
 from utils import get_env_params_from_config, init_network
 
 class Transition(NamedTuple):
@@ -511,7 +511,7 @@ def make_train(
             def log_callback(metric):
                 # Compute FPS from host wall time and env steps progressed since last log
                 now = timer()
-                env_step = int(metric["update_steps"]) * config.num_steps * int(config._num_actors)
+                env_step = int(metric["update_steps"]) * config.num_steps * int(config.n_envs)
                 dt = max(now - _last_log_time[0], 1e-9)
                 dsteps = max(env_step - _last_env_step[0], 0)
                 fps = dsteps / dt
@@ -545,7 +545,7 @@ def make_train(
                     f"Update step: {metric['update_steps']}, Env step: {env_step}, Returns mean: "
                     f"{returns_mean}, "
                     # f"Returns max: {returns_max}, Returns min: {returns_min}, "
-                    f"FPS: {fps:.1f}"
+                    f"FPS: {fps:,.1f}"
                 )
 
             def ckpt_callback(metric, runner_state):
@@ -623,10 +623,10 @@ def main(config: MultiAgentConfig):
     os.makedirs(config._vid_dir, exist_ok=True)
 
     run = wandb.init(
-        project=config.PROJECT,
+        project=config.wandb_project,
         tags=["MAPPO"],
         config=OmegaConf.to_container(config),
-        mode=config.WANDB_MODE,
+        mode=config.wandb_mode,
         dir=config._exp_dir,
         id=wandb_run_id,
         resume=wandb_resume,

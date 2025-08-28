@@ -53,6 +53,7 @@ def get_exp_dir(config: Config):
             f'fz-{config.n_freezies}_' + \
             f'act-{"x".join([str(e) for e in config.act_shape])}_' + \
             f'nag-{config.n_agents}_' + \
+            (f'ag-rewfrq-{config.per_agent_reward_freq}_' if config.multiagent and config.per_agent_reward_freq > 0 else '') + \
             ('afreezer_' if config.multiagent and config.a_freezer else '') + \
             (f'rewfrq-{config.reward_freq}_' if config.reward_freq > 1 else '') + \
             ('empty-start_' if config.empty_start else '') + \
@@ -245,6 +246,13 @@ def get_env_params_from_config(config: Config):
         pinpoints=config.pinpoints,
         multiagent=config.multiagent or config.n_agents > 1,
         flatten_obs=config._is_recurrent,
+    )
+    return env_params
+
+def get_env_params_from_config_ma(config: MultiAgentConfig):
+    env_params = get_env_params_from_config(config)
+    env_params = env_params.replace(
+        per_agent_reward_freq=config.per_agent_reward_freq,
     )
     return env_params
 

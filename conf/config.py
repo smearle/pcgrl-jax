@@ -143,15 +143,16 @@ class MultiAgentConfig(TrainConfig):
     scale_clip_eps: bool = False
     # hidden_dims: Tuple[int] = (512, 256)
     a_freezer: bool = False
+    per_agent_reward_freq: int = -1
 
     # Save a checkpoint after (at least) this many ***update*** steps
     ckpt_freq: int = 40
     render_freq: int = 20
 
     # WandB Params
-    WANDB_MODE: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
-    ENTITY: str = ''
-    PROJECT: str = 'smearle_pcgrl_mappo'
+    wandb_mode: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
+    wandb_entity: str = ''
+    wandb_project: str = 'smearle_pcgrl_mappo'
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     _num_actors: int = -1

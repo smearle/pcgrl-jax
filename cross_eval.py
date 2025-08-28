@@ -17,7 +17,7 @@ from scipy import stats
 from conf.config import EvalConfig, EvalMultiAgentConfig, SweepConfig, TrainConfig
 from eval import get_eval_name
 from eval_change_pct import EvalData, get_change_pcts
-from ma_utils import ma_init_config
+from utils_ma import ma_init_config
 from sweep import get_grid_cfgs, eval_hypers, get_sweep_cfgs
 from utils import get_sweep_conf_path, init_config, load_sweep_hypers, write_sweep_confs
 
@@ -517,7 +517,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
             with open(wandb_path, 'r') as f:
                 wandb_run_id = f.read()
             try:
-                sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
+                sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.wandb_project}/{wandb_run_id}')
             except wandb.errors.CommError:
                 wandb_run_dirs = os.listdir(os.path.join(exp_dir, 'wandb'))
                 for d in wandb_run_dirs:
@@ -528,7 +528,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
             if '_step' not in train_metrics:
                 breakpoint()
             train_metrics = train_metrics.sort_values(by='_step', ascending=True)
-            sc_timesteps = train_metrics['_step'] * sc._num_actors * sc.num_steps
+            sc_timesteps = train_metrics['_step'] * sc.n_envs * sc.num_steps
             max_timestep = sc_timesteps.max()
             if 'returns' not in train_metrics:
                 breakpoint()
@@ -660,14 +660,14 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
             with open(wandb_path, 'r') as f:
                 wandb_run_id = f.read()
             try:
-                sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
+                sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.wandb_project}/{wandb_run_id}')
             except wandb.errors.CommError:
                 wandb_run_dirs = os.listdir(os.path.join(exp_dir, 'wandb'))
                 for d in wandb_run_dirs:
                     os.system(f'wandb sync {os.path.join(exp_dir, "wandb", d)}')
             train_metrics = sc_run.history()
             train_metrics = train_metrics.sort_values(by='_step', ascending=True)
-            sc_timesteps = train_metrics['_step'] * sc._num_actors * sc.num_steps
+            sc_timesteps = train_metrics['_step'] * sc.n_envs * sc.num_steps
             ep_returns = train_metrics['returns']
 
         else:
@@ -734,7 +734,7 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
             linestyle='--',
         )
 
-    ax.set_ylim(bottom=30, top=(metric_curves_mean + metric_curves_std).max().max())
+    # ax.set_ylim(bottom=30, top=(metric_curves_mean + metric_curves_std).max().max())
 
     metric_curves_mean.columns = columns
     ax.set_xlabel('Timesteps')

@@ -17,7 +17,7 @@ import orbax.checkpoint as ocp
 from conf.config import TrainConfig, EvalMultiAgentConfig
 from envs.pcgrl_env import PCGRLEnv, gen_dummy_queued_state
 from envs.probs.problem import ProblemState, get_loss
-from ma_utils import batchify, ma_init_config, init_run, restore_run, unbatchify
+from utils_ma import batchify, ma_init_config, init_run, restore_run, unbatchify
 from marl.model import ScannedRNN
 from marl.wrappers.baselines import MALossLogWrapper, MultiAgentWrapper
 from purejaxrl.experimental.s5.wrappers import LogWrapper, LossLogWrapper

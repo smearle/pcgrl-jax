@@ -32,7 +32,7 @@ from marl.model import ActorCategorical, ActorCriticPCGRL, ActorMLP, ActorRNN, C
 from conf.config import Config, MultiAgentConfig
 from envs.pcgrl_env import PCGRLEnv, PCGRLEnvParams, PCGRLEnvState, PCGRLObs
 from marl.wrappers.baselines import MALogWrapper, MultiAgentWrapper
-from utils import get_env_params_from_config, get_exp_dir, init_config
+from utils import get_env_params_from_config_ma, get_exp_dir, init_config
 
 
 @struct.dataclass
@@ -76,7 +76,7 @@ def linear_schedule(config, count):
 
 def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
     # Create PCGRL environment
-    env_params = get_env_params_from_config(config)
+    env_params = get_env_params_from_config_ma(config)
     env = PCGRLEnv(env_params)
 
     # Wrap environment with JAXMARL wrapper
@@ -89,7 +89,7 @@ def init_run(config: MultiAgentConfig, ckpt_manager, latest_update_step, rng):
     config._num_actors = env.n_agents * config.n_envs
     
     config._num_updates = int(
-        config.total_timesteps // config.num_steps // config._num_actors
+        config.total_timesteps // config.num_steps // config.n_envs
     )
     config._minibatch_size = (
         config._num_actors * config.num_steps // config.NUM_MINIBATCHES

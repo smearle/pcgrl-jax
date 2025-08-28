@@ -1,4 +1,4 @@
-NAME: ma_n_agents
+NAME: ma_agent_rew_freq
 ckpt_freq:
 - 100
 empty_start:
@@ -20,16 +20,15 @@ model:
 - conv2
 multiagent: true
 n_agents:
-- 1
-- 2
-- 3
-- 5
-- 10
 - 20
 n_envs:
 - 400
 obs_size_hid_dims:
 - 3
+per_agent_reward_freq:
+- 1
+- 5
+- 10
 problem:
 - binary
 randomize_map_shape:
@@ -42,12 +41,5 @@ seed:
 - 0
 - 1
 - 2
-- 3
-- 4
-- 5
-- 6
-- 7
-- 8
-- 9
 total_timesteps:
-- 1000000000
+- 500000000

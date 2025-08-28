@@ -13,7 +13,7 @@ from conf.config import EnjoyConfig, EnjoyMultiAgentConfig
 from envs.pcgrl_env import PCGRLEnv, render_stats, gen_dummy_queued_state
 from envs.probs.problem import get_loss
 from eval import get_eval_name, init_config_for_eval
-from ma_utils import MALogWrapper, MultiAgentWrapper, batchify, init_run, ma_init_config, make_sim_render_episode, render_callback, restore_run
+from utils_ma import MALogWrapper, MultiAgentWrapper, batchify, init_run, ma_init_config, make_sim_render_episode, render_callback, restore_run
 from marl.model import ScannedRNN
 from purejaxrl.experimental.s5.wrappers import LossLogWrapper
 from utils import get_exp_dir, init_network, gymnax_pcgrl_make, init_config

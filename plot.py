@@ -24,7 +24,7 @@ def main(cfg):
     if not os.path.exists(progress_csv):
         with open(os.path.join(exp_dir, 'wandb_run_id.txt'), 'r') as f:
             wandb_run_id = f.read()
-        sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.PROJECT}/{wandb_run_id}')
+        sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.wandb_project}/{wandb_run_id}')
         df = sc_run.history()
         df.plot.scatter(x="env_step", y="returns", title="Training Progress").get_figure().savefig(plot_path)
         last_timestep = int(df["env_step"].iloc[-1])
