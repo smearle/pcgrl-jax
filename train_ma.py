@@ -60,7 +60,7 @@ def make_train(
     # Track host-side timing to compute FPS between updates (env steps per second)
     # Using simple mutable containers to allow updates from inside the callback.
     _last_log_time = [timer()]
-    _last_env_step = [int(latest_update_step or 0) * int(config._num_actors)]
+    _last_env_step = [int(latest_update_step or 0) * int(config.n_envs)]
 
     def train(rng, runner_state=None):
 
@@ -132,6 +132,7 @@ def make_train(
                     cr_hstate, value = critic_network.apply(train_states[1].params, hstates[1], cr_in)
                     hstates = (ac_hstate, cr_hstate)
                 else:
+                    # Decentralized critic
                     # obs_batch = jax.tree.map(lambda x: x[np.newaxis], obs_batch)
                     # obs_batch_in = obs_batch.replace(flat_obs = obs_batch.flat_obs[..., np.newaxis])
                     pi, value = network.apply(train_states[0].params, obs_batch, avail_actions)
@@ -635,7 +636,7 @@ def main(config: MultiAgentConfig):
     with open(os.path.join(config._exp_dir, "wandb_run_id.txt"), "w") as f:
         f.write(wandb_run_id)
     
-    with jax.disable_jit(True):
+    with jax.disable_jit(False):
         
         train_jit = jax.jit(
             make_train(
