@@ -635,7 +635,7 @@ def main(config: MultiAgentConfig):
     with open(os.path.join(config._exp_dir, "wandb_run_id.txt"), "w") as f:
         f.write(wandb_run_id)
     
-    with jax.disable_jit(False):
+    with jax.disable_jit(True):
         
         train_jit = jax.jit(
             make_train(

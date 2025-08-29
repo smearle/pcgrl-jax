@@ -332,8 +332,10 @@ def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, en
             flood_path_state)
 
     # We need to find the max path length in *each region*. So we'll mask out the path lengths of all other regions.
-    # Unique (max) region indices
-    region_idxs = jnp.unique(regions_flood_count, size=max_n_regions+1, fill_value=0)[1:]  # exclude the `0` non-region
+    # Add a `0` non-region in case there were no walls in the input map
+    flat_regions_flood_count = jnp.concat([regions_flood_count.flatten(), jnp.array([0])])
+    # Find unique (max) region indices
+    region_idxs = jnp.unique(flat_regions_flood_count, size=max_n_regions+1, fill_value=0)[1:]  # exclude the `0` non-region
     region_masks = jnp.where(regions_flood_count[..., None] == region_idxs, 1, 0)
     path_flood_count = flood_path_state.flood_count
     region_path_floods = path_flood_count[..., None] * region_masks

@@ -1321,7 +1321,7 @@ hypers = [
         'n_envs': [400],
         'empty_start': [False],
         # 'pinpoints': [True, False],
-        'total_timesteps': [1_000_000_000],
+        'total_timesteps': [1_500_000_000],
         'ckpt_freq': [100],
         'render_freq': [100],
         'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
@@ -1450,30 +1450,30 @@ hypers = [
 #     },
 # ]
 
-hypers = [
-    {
-        'NAME': 'ma_agent_rew_freq',
-        'multiagent': True,
+# hypers = [
+#     {
+#         'NAME': 'ma_agent_rew_freq',
+#         'multiagent': True,
 
-        'problem': ['binary'],
-        'map_width': [16],
-        'n_agents': [20],
-        'per_agent_reward_freq': [1, 5, 10],
-        'representation': ['turtle'],
-        'model': ['conv2'],
-        'obs_size_hid_dims': [3],
-        'max_board_scans': [3.0],
-        # 'max_board_scans': [3.0],
-        'randomize_map_shape': [False],
-        'n_envs': [400],
-        'empty_start': [False],
-        # 'pinpoints': [True, False],
-        'total_timesteps': [500_000_000],
-        'ckpt_freq': [100],
-        'render_freq': [100],
-        'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-    },
-]
+#         'problem': ['binary'],
+#         'map_width': [16],
+#         'n_agents': [20],
+#         'per_agent_reward_freq': [1, 5, 10],
+#         'representation': ['turtle'],
+#         'model': ['conv2'],
+#         'obs_size_hid_dims': [3],
+#         'max_board_scans': [3.0],
+#         # 'max_board_scans': [3.0],
+#         'randomize_map_shape': [False],
+#         'n_envs': [400],
+#         'empty_start': [False],
+#         # 'pinpoints': [True, False],
+#         'total_timesteps': [500_000_000],
+#         'ckpt_freq': [100],
+#         'render_freq': [100],
+#         'seed': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+#     },
+# ]
 
 eval_hypers = {
     'eval_randomize_map_shape': [True, False],

@@ -526,11 +526,13 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
 
             train_metrics = sc_run.history()
             if '_step' not in train_metrics:
+                continue
                 breakpoint()
             train_metrics = train_metrics.sort_values(by='_step', ascending=True)
             sc_timesteps = train_metrics['_step'] * sc.n_envs * sc.num_steps
             max_timestep = sc_timesteps.max()
             if 'returns' not in train_metrics:
+                continue
                 breakpoint()
             ep_returns = train_metrics['returns']
         else:
