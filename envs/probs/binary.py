@@ -61,7 +61,7 @@ class BinaryProblem(Problem):
 
     metrics_enum = BinaryMetrics
 
-    passable_tiles = jnp.array([BinaryTiles.EMPTY])
+    passable_tiles = (BinaryTiles.EMPTY,)
 
     def __init__(self, map_shape, ctrl_metrics, pinpoints):
         self.flood_path_net = FloodPath()

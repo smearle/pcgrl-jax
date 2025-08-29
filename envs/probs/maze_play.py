@@ -55,7 +55,7 @@ class MazePlayProblem(Problem):
 
     metrics_enum = MazePlayMetrics
 
-    passable_tiles = jnp.array([MazePlayTiles.EMPTY, MazePlayTiles.PLAYER, MazePlayTiles.DOOR])
+    passable_tiles = (MazePlayTiles.EMPTY, MazePlayTiles.PLAYER, MazePlayTiles.DOOR)
 
     def __init__(self, map_shape, ctrl_metrics):
         self.flood_path_net = FloodPath()

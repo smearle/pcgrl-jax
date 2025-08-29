@@ -118,7 +118,7 @@ class Dungeon2Problem(Problem):
         Dungeon2Metrics.TREASURE_IN_ROOM: 1,
     }
 
-    passable_tiles = jnp.array([Dungeon2Tiles.EMPTY, Dungeon2Tiles.KEY])
+    passable_tiles = (Dungeon2Tiles.EMPTY, Dungeon2Tiles.KEY)
                                 # DungeonTiles.SCORPION, DungeonTiles.SPIDER,
                                 # DungeonTiles.BAT])
 

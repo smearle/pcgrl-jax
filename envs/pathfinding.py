@@ -1,13 +1,13 @@
 from dataclasses import field
+from functools import partial
 import math
+import time
 from typing import Optional, Tuple
 import numpy as np
 from flax import struct
 import jax
 import jax.numpy as jnp
 import chex
-
-from envs.utils import Tiles
 
 
 # Sentinel value to use for very big int32s
@@ -232,8 +232,10 @@ def get_max_n_regions_static(map_shape: Tuple[int, ...]):
     return int(math.ceil(math.prod(map_shape) / 2))
 
     
-def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passable_tiles: chex.Array):
+@partial(jax.jit, static_argnames=('flood_regions_net', 'passable_tiles'))
+def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passable_tiles: Tuple[int, ...]):
     """Approximate the diameter of a maze-like tile map."""
+    passable_tiles = jnp.array(passable_tiles)
     max_path_length = get_max_path_length_static(env_map.shape)
     max_n_regions = get_max_n_regions_static(env_map.shape)
 
@@ -264,8 +266,9 @@ def calc_n_regions(flood_regions_net: FloodRegions, env_map: chex.Array, passabl
     return n_regions, regions_flood_count[..., 0]
 
 
-def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: jnp.ndarray, src: int, trg: chex.Array):
-    occupied_map = (env_map[..., None] != passable_tiles).all(-1).astype(float32)
+def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: Tuple[int, ...], src: int, trg: chex.Array):
+    passable_tiles = jnp.array(passable_tiles)
+    occupied_map = (env_map[..., None] != passable_tiles).all(-1).astype(jnp.float32)
     init_flood = (env_map == src).astype(jnp.float32)
     init_flood_count = init_flood.copy()
     # Concatenate init_flood with new_occ_map
@@ -283,9 +286,12 @@ def calc_path_length(flood_path_net, env_map: jnp.ndarray, passable_tiles: jnp.n
     return path_length, flood_state.flood_count, flood_state.nearest_trg_xy
 
 
-def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, env_map: chex.Array, passable_tiles: chex.Array):
+@partial(jax.jit, static_argnames=('flood_regions_net', 'flood_path_net', 'passable_tiles'))
+def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, env_map: chex.Array,
+                  passable_tiles: Tuple[int, ...]):
     """Approximate the diameter of a maze-like tile map. Simultaneously compute 
     the number of regions (connected traversible components) in the map."""
+    passable_tiles = jnp.array(passable_tiles)
     max_path_length = get_max_path_length_static(env_map.shape)
     max_n_regions = get_max_n_regions_static(env_map.shape)
 
@@ -368,3 +374,96 @@ def calc_diameter(flood_regions_net: FloodRegions, flood_path_net: FloodPath, en
     path_length = jnp.clip(flood_path_state.flood_count.max() - jnp.where(flood_path_state.flood_count == 0, max_path_length, flood_path_state.flood_count).min(), 0)
 
     return path_length, flood_path_state, n_regions, flood_regions_state
+
+
+def main():
+    key = jax.random.PRNGKey(0)
+    sizes = [8, 16, 24, 32]
+    n_maps_per_size = 20
+    wall_prob = 0.35  # probability a tile is a wall (1). passable tile is 0.
+
+    # Instantiate nets and init their kernels (map_shape not used internally but required by signature)
+    fr = FloodRegions()
+    fp = FloodPath()
+    fr.init_params((3, 3))
+    fp.init_params((3, 3))
+
+    def gen_random_map(k, size, p_wall):
+        # 0 = passable, 1 = wall
+        k, sub = jax.random.split(k)
+        env_map = jax.random.bernoulli(sub, p=p_wall, shape=(size, size)).astype(jnp.int32)
+        return k, env_map
+
+    def wait_tree(tree):
+        leaves, _ = jax.tree_util.tree_flatten(tree)
+        for l in leaves:
+            try:
+                jax.block_until_ready(l)
+            except Exception:
+                pass
+
+    print(f"Profiling pathfinding on random binary maps (0=passable, 1=wall)")
+    print(f"wall_prob={wall_prob}, runs per size={n_maps_per_size}\n")
+
+    for size in sizes:
+        passable_tiles = (0,)
+
+        # Warm-up (compile) for this size
+        key, wm = gen_random_map(key, size, wall_prob)
+        _nr, _rf = calc_n_regions(fr, wm, passable_tiles)
+        wait_tree((_nr, _rf))
+        _pl, _fps, _nr2, _frs = calc_diameter(fr, fp, wm, passable_tiles)
+        wait_tree((_pl, _fps, _nr2, _frs))
+        diameter_available = True
+
+        n_regions_times = []
+        n_regions_vals = []
+        diam_times = []
+        diam_lengths = []
+        diam_regions = []
+
+        for i in range(n_maps_per_size):
+            key, env_map = gen_random_map(key, size, wall_prob)
+
+            # calc_n_regions timing
+            t0 = time.perf_counter()
+            n_regions, regions_flood_count = calc_n_regions(fr, env_map, passable_tiles)
+            wait_tree((n_regions, regions_flood_count))
+            t1 = time.perf_counter()
+            n_regions_times.append((t1 - t0) * 1000.0)
+            n_regions_vals.append(np.array(n_regions))
+
+            if diameter_available:
+                t0 = time.perf_counter()
+                path_length, flood_path_state, n_regions_d, flood_regions_state = calc_diameter(fr, fp, env_map, passable_tiles)
+                # Block on representative leaves
+                wait_tree((path_length, flood_path_state.flood_count, n_regions_d, flood_regions_state.flood_count))
+                t1 = time.perf_counter()
+                diam_times.append((t1 - t0) * 1000.0)
+                diam_lengths.append(np.array(path_length))
+                diam_regions.append(np.array(n_regions_d))
+
+        # Summaries
+        nr_mean = float(np.mean(n_regions_times)) if n_regions_times else float('nan')
+        nr_min = float(np.min(n_regions_times)) if n_regions_times else float('nan')
+        nr_max = float(np.max(n_regions_times)) if n_regions_times else float('nan')
+        nr_val_mean = float(np.mean(n_regions_vals)) if n_regions_vals else float('nan')
+
+        print(f"[{size}x{size}] calc_n_regions: avg={nr_mean:.2f} ms (min={nr_min:.2f}, max={nr_max:.2f}), "
+              f"avg_n_regions={nr_val_mean:.2f}")
+
+        if diameter_available and diam_times:
+            d_mean = float(np.mean(diam_times))
+            d_min = float(np.min(diam_times))
+            d_max = float(np.max(diam_times))
+            d_len_mean = float(np.mean(diam_lengths))
+            d_reg_mean = float(np.mean(diam_regions))
+            print(f"[{size}x{size}] calc_diameter: avg={d_mean:.2f} ms (min={d_min:.2f}, max={d_max:.2f}), "
+                  f"avg_diameter={d_len_mean:.2f}, avg_n_regions={d_reg_mean:.2f}")
+        elif not diameter_available:
+            print(f"[{size}x{size}] calc_diameter: skipped (warm-up failed)")
+
+        print("")
+
+if __name__ == "__main__":
+    main()

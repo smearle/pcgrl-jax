@@ -103,7 +103,7 @@ class DungeonProblem(Problem):
         DungeonMetrics.NEAREST_ENEMY: (2, np.inf),
     }
 
-    passable_tiles = jnp.array([DungeonTiles.EMPTY, DungeonTiles.KEY])
+    passable_tiles = (DungeonTiles.EMPTY, DungeonTiles.KEY)
                                 # DungeonTiles.SCORPION, DungeonTiles.SPIDER,
                                 # DungeonTiles.BAT])
 
