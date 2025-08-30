@@ -174,8 +174,8 @@ def seq_main(main_fn, sweep_configs):
 
 @hydra.main(version_base="1.3", config_path='./', config_name='batch_pcgrl')
 def sweep_main(cfg: SweepConfig):
-    if cfg.mode == 'plot' or not am_on_hpc():
-        cfg.slurm = False
+    # if cfg.mode == 'plot' or not am_on_hpc():
+    #     cfg.slurm = False
 
     if cfg.name is not None:
         _hypers, _eval_hypers = load_sweep_hypers(cfg)
