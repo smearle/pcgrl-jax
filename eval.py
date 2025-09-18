@@ -36,60 +36,6 @@ def main_eval(eval_config: EvalConfig):
     eval_config = init_config(eval_config)
 
     exp_dir = eval_config.exp_dir
-    if not eval_config.random_agent:
-        print(f'Attempting to load checkpoint from {exp_dir}')
-        checkpoint_manager, restored_ckpt = init_checkpointer(eval_config)
-        network_params = restored_ckpt['runner_state'].train_state.params
-    elif not os.path.exists(exp_dir):
-        network_params = network.init(rng, init_x)
-        os.makedirs(exp_dir)
-
-    # Preserve the config as it was during training (minus `eval_` hyperparams), for future reference
-    train_config = copy.deepcopy(eval_config)
-    eval_config = init_config_for_eval(eval_config)
-    env, env_params = gymnax_pcgrl_make(eval_config.env_name, config=eval_config)
-    env = LossLogWrapper(env)
-    env.prob.init_graphics()
-    network = init_network(env, env_params, eval_config)
-    rng = jax.random.PRNGKey(eval_config.eval_seed)
-
-    init_x = env.gen_dummy_obs(env_params)
-    # init_x = env.observation_space(env_params).sample(_rng)[None]
-    # model_summary = network.subnet.tabulate(rng, init_x.map_obs, init_x.flat_obs)
-    n_parameters = sum(np.prod(p.shape) for p in jax.tree.leaves(network_params) if isinstance(p, jnp.ndarray))
-
-    reset_rng = jax.random.split(rng, eval_config.n_eval_envs)
-
-    def eval(env_params):
-        queued_state = gen_dummy_queued_state(env)
-        obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(
-            reset_rng, env_params, queued_state)
-
-        def step_env(carry, _):
-            rng, obs, env_state = carry
-            rng, rng_act = jax.random.split(rng)
-            if eval_config.random_agent:
-                action = env.action_space(env_params).sample(rng_act)
-            else:
-                action = network.apply(network_params, obs)[0].sample(seed=rng_act)
-
-            rng_step = jax.random.split(rng, eval_config.n_eval_envs)
-            obs, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
-                rng_step, env_state, action, env_params
-            )
-            return (rng, obs, env_state), (env_state, reward, done, info)
-
-        print('Scanning episode steps:')
-        _, (states, rewards, dones, infos) = jax.lax.scan(
-            step_env, (rng, obs, env_state), None,
-            length=eval_config.n_eps*env.max_steps)
-
-        return _, (states, rewards, dones, infos)
-
-    def _eval(env_params):
-        _, (states, reward, dones, infos) = eval(env_params)
-
-        return states, reward, dones
 
     stats_name = \
         "stats" + \
@@ -97,9 +43,62 @@ def main_eval(eval_config: EvalConfig):
         f".json"
     json_path = os.path.join(exp_dir, stats_name)
 
-    # For each bin, evaluate the change pct. at the center of the bin
-    
     if eval_config.reevaluate or not os.path.exists(json_path):
+        if not eval_config.random_agent:
+            print(f'Attempting to load checkpoint from {exp_dir}')
+            checkpoint_manager, restored_ckpt = init_checkpointer(eval_config)
+            network_params = restored_ckpt['runner_state'].train_state.params
+        elif not os.path.exists(exp_dir):
+            network_params = network.init(rng, init_x)
+            os.makedirs(exp_dir)
+
+        # Preserve the config as it was during training (minus `eval_` hyperparams), for future reference
+        train_config = copy.deepcopy(eval_config)
+        eval_config = init_config_for_eval(eval_config)
+        env, env_params = gymnax_pcgrl_make(eval_config.env_name, config=eval_config)
+        env = LossLogWrapper(env)
+        env.prob.init_graphics()
+        network = init_network(env, env_params, eval_config)
+        rng = jax.random.PRNGKey(eval_config.eval_seed)
+
+        init_x = env.gen_dummy_obs(env_params)
+        # init_x = env.observation_space(env_params).sample(_rng)[None]
+        # model_summary = network.subnet.tabulate(rng, init_x.map_obs, init_x.flat_obs)
+        n_parameters = sum(np.prod(p.shape) for p in jax.tree.leaves(network_params) if isinstance(p, jnp.ndarray))
+
+        reset_rng = jax.random.split(rng, eval_config.n_eval_envs)
+
+        def eval(env_params):
+            queued_state = gen_dummy_queued_state(env)
+            obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(
+                reset_rng, env_params, queued_state)
+
+            def step_env(carry, _):
+                rng, obs, env_state = carry
+                rng, rng_act = jax.random.split(rng)
+                if eval_config.random_agent:
+                    action = env.action_space(env_params).sample(rng_act)
+                else:
+                    action = network.apply(network_params, obs)[0].sample(seed=rng_act)
+
+                rng_step = jax.random.split(rng, eval_config.n_eval_envs)
+                obs, env_state, reward, done, info = jax.vmap(env.step, in_axes=(0, 0, 0, None))(
+                    rng_step, env_state, action, env_params
+                )
+                return (rng, obs, env_state), (env_state, reward, done, info)
+
+            print('Scanning episode steps:')
+            _, (states, rewards, dones, infos) = jax.lax.scan(
+                step_env, (rng, obs, env_state), None,
+                length=eval_config.n_eps*env.max_steps)
+
+            return _, (states, rewards, dones, infos)
+
+        def _eval(env_params):
+            _, (states, reward, dones, infos) = eval(env_params)
+
+            return states, reward, dones
+
         states, rewards, dones = _eval(env_params)
 
         stats = get_eval_stats(states, dones)

@@ -265,7 +265,7 @@ def sweep_main(cfg: SweepConfig):
                     cpus_per_task=1,
                     slurm_gres='gpu:1',
                     timeout_min=60,
-                    slurm_account='pr_174_general',
+                    slurm_account='pr_174_advanced',
             )
             return executor.submit(seq_main, main_fn, sweep_configs)
 

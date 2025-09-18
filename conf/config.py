@@ -230,6 +230,7 @@ class SweepConfig(EnjoyConfig, EvalConfig):
     mode: str = 'train'
     slurm: bool = True
     overwrite: bool = False
+    n_eval_envs: int = 10
 
 @dataclass
 class GetTracesConfig(EnjoyConfig):
