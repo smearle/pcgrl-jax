@@ -105,7 +105,7 @@ class TrainConfig(Config):
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e7)
     # Render after this many update steps
-    render_freq: int = 1000
+    render_freq: int = 20
     n_render_eps: int = 3
 
     # eval the model on pre-made eval freezie maps to see how it's doing
@@ -113,6 +113,12 @@ class TrainConfig(Config):
     n_eval_maps: int = 6
     eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
     # discount factor for regret value calculation is the same as GAMMA
+
+    # WandB Params
+    wandb_mode: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
+    wandb_entity: str = ''
+    wandb_project: str = 'smearle_pcgrl_mappo'
+
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     obs_size_hid_dims: int = -1
@@ -148,11 +154,6 @@ class MultiAgentConfig(TrainConfig):
     # Save a checkpoint after (at least) this many ***update*** steps
     ckpt_freq: int = 40
     render_freq: int = 20
-
-    # WandB Params
-    wandb_mode: str = 'run'  # one of: 'offline', 'run', 'dryrun', 'shared', 'disabled', 'online'
-    wandb_entity: str = ''
-    wandb_project: str = 'smearle_pcgrl_mappo'
 
     # NOTE: DO NOT MODIFY THESE. WILL BE SET AUTOMATICALLY AT RUNTIME. ########
     _num_actors: int = -1

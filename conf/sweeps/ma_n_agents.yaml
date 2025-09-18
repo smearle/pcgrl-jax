@@ -1,6 +1,6 @@
 NAME: ma_n_agents
 ckpt_freq:
-- 100
+- 500
 empty_start:
 - false
 eval_hypers:
@@ -15,7 +15,7 @@ eval_hypers:
 map_width:
 - 16
 max_board_scans:
-- 3.0
+- 1.0
 model:
 - conv2
 multiagent: true
@@ -23,9 +23,6 @@ n_agents:
 - 1
 - 2
 - 3
-- 5
-- 10
-- 20
 n_envs:
 - 400
 obs_size_hid_dims:
@@ -35,19 +32,14 @@ problem:
 randomize_map_shape:
 - false
 render_freq:
-- 100
+- -1
 representation:
 - turtle
 seed:
-- 0
-- 1
-- 2
-- 3
-- 4
-- 5
-- 6
-- 7
-- 8
-- 9
+- 15
+- 16
+- 17
+- 18
+- 19
 total_timesteps:
-- 1000000000
+- 2000000000

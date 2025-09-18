@@ -183,7 +183,7 @@ class DungeonProblem(Problem):
                 src=DungeonTiles.PLAYER, trg=DungeonTiles.KEY),
             lambda: (0.0, jnp.zeros(env_map.shape, dtype=jnp.float32), jnp.full(2, dtype=jnp.int32, fill_value=-1))
         )
-        kd_passable_tiles = jnp.concatenate((self.passable_tiles, jnp.array([DungeonTiles.DOOR])))
+        kd_passable_tiles = jnp.concatenate((jnp.array(self.passable_tiles), jnp.array([DungeonTiles.DOOR])))
         kd_path_length, kd_flood_count, d_xy = jax.lax.cond(
             is_playable,
             lambda: calc_path_length(
@@ -201,7 +201,7 @@ class DungeonProblem(Problem):
             DungeonTiles.BAT, env_map)
 
         # Get path length from player to nearest enemy
-        pe_passable_tiles = jnp.concatenate((self.passable_tiles, jnp.array([DungeonTiles.BAT])))
+        pe_passable_tiles = jnp.concatenate((jnp.array(self.passable_tiles), jnp.array([DungeonTiles.BAT])))
         pe_path_length, pe_flood_count, e_xy = jax.lax.cond(
             is_playable,
             lambda: calc_path_length(

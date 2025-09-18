@@ -29,6 +29,7 @@ per_agent_reward_freq:
 - 1
 - 5
 - 10
+- -1
 problem:
 - binary
 randomize_map_shape:
