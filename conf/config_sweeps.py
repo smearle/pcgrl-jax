@@ -206,22 +206,69 @@
 # ]
 
 
+# hypers = [
+#     {
+#         'NAME': 'obss_hiddims_binary',
+#         'problem': ['binary'],
+#         'representation': ['turtle'],
+#         'obs_size_hid_dims': [5, 8],
+#         'model': ['conv2'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(5)),
+#         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#         'wandb_project': ['reasonPCG'],
+#     },
+# ]
+
+# hypers = [
+#     {
+#         'NAME': 'obs_binary',
+#         'problem': ['binary'],
+#         'representation': ['turtle'],
+#         'obs_size': [8, 16, -1],
+#         'model': ['conv2'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(5)),
+#         'n_envs': [600],
+#         'max_board_scans': [5],
+#         'total_timesteps': [1_000_000_000],
+#         'wandb_project': ['reasonPCG'],
+#     },
+# ]
+
 hypers = [
     {
-        'NAME': 'obss_hiddims_binary',
+        'NAME': 'obs_binary',
         'problem': ['binary'],
         'representation': ['turtle'],
-        'obs_size_hid_dims': [5, 8],
+        'obs_size': [3, 8, 16, -1],
         'model': ['conv2'],
         'change_pct': [-1.0],
         'seed': list(range(5)),
         'n_envs': [600],
-        'max_board_scans': [5],
+        'max_board_scans': [3],
         'total_timesteps': [1_000_000_000],
         'wandb_project': ['reasonPCG'],
     },
 ]
 
+# hypers = [
+#     {
+#         'NAME': 'obs_dungeon',
+#         'problem': ['dungeon'],
+#         'representation': ['turtle'],
+#         'obs_size': [8, 16, -1],
+#         'model': ['conv2'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(5)),
+#         'n_envs': [400],
+#         'max_board_scans': [3],
+#         'total_timesteps': [1_000_000_000],
+#         'wandb_project': ['reasonPCG'],
+#     },
+# ]
 
 # hypers = [
 #     {

@@ -56,7 +56,7 @@ def cross_eval_main(cfg: SweepConfig):
 
 def get_sweep_configs(default_cfg, grid_hypers, _eval_hypers, mode):
     sweep_configs = get_sweep_cfgs(default_cfg, grid_hypers, mode=mode, eval_hypers=_eval_hypers)
-    sweep_configs = [OmegaConf.create(sc) for sc in sweep_configs]
+    # sweep_configs = [OmegaConf.create(sc) for sc in sweep_configs]
     sweep_configs = [init_config(sc) for sc in sweep_configs]
 
     for sc in sweep_configs:

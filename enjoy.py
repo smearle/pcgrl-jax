@@ -29,7 +29,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
         if not os.path.exists(exp_dir):
             exit(f"Experiment directory {exp_dir} does not exist")
         print(f'Loading checkpoint from {exp_dir}')
-        checkpoint_manager, restored_ckpt = init_checkpointer(enjoy_config)
+        checkpoint_manager, restored_ckpt, wandb_run_id = init_checkpointer(enjoy_config)
         runner_state = restored_ckpt['runner_state']
         network_params = runner_state.train_state.params
         steps_prev_complete = restored_ckpt['steps_prev_complete'] 

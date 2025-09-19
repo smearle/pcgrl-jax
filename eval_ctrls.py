@@ -29,7 +29,7 @@ def main_eval_ctrls(config: EvalConfig):
 
     exp_dir = config.exp_dir
     if not config.random_agent:
-        checkpoint_manager, restored_ckpt = init_checkpointer(config)
+        checkpoint_manager, restored_ckpt, wandb_run_id = init_checkpointer(config)
         network_params = restored_ckpt['runner_state'].train_state.params
     elif not os.path.exists(exp_dir):
         os.makedirs(exp_dir)

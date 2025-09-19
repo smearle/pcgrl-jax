@@ -50,44 +50,61 @@ def log_callback(metric, i, steps_prev_complete, config: Config, train_start_tim
     timesteps = metric["timestep"][metric["returned_episode"]] * config.n_envs
     return_values = metric["returned_episode_returns"][metric["returned_episode"]]
 
-    # if len(timesteps) > 0:
-        # env_step = timesteps[-1].item()
-    env_step = i * config.num_steps * config.n_envs
-    # env_step = int(metric["update_steps"] * config.num_steps * config.n_envs)
-    ep_return_mean = return_values.mean()
-    # ep_return_max = return_values.max()
-    # ep_return_min = return_values.min()
-    fps = (env_step - steps_prev_complete) / (timer() - train_start_time)
-    jax.debug.print(
-        ("global step={env_step}; episodic return mean: {ep_return_mean} "
-        # f"max: {ep_return_max}, "
-        # "min: {ep_return_min}"
-        "fps: {fps}"
-        ), 
-        env_step=env_step,
-        ep_return_mean=ep_return_mean,
-        # ep_return_max=ep_return_max,
-        # ep_return_min=ep_return_min,
-        fps=fps)
-    ep_length = (metric["returned_episode_lengths"]
-                    [metric["returned_episode"]].mean())
+    if len(timesteps) > 0:
+        env_step = timesteps[-1].item()
+        # env_step = i * config.num_steps * config.n_envs
+        # env_step = int(metric["update_steps"] * config.num_steps * config.n_envs)
+        ep_return_mean = return_values.mean()
+        ep_return_max = return_values.max()
+        ep_return_min = return_values.min()
+        fps = (env_step - steps_prev_complete) / (timer() - train_start_time)
+        ep_length = (metric["returned_episode_lengths"]
+                        [metric["returned_episode"]].mean())
 
-    # Add a row to csv with ep_return
-    with open(os.path.join(get_exp_dir(config),
-                            "progress.csv"), "a") as f:
-        f.write(f"{env_step},{ep_return_mean}\n")
+        # This if block is just for backward compat when reloading runs from before when this was implemented.
+        if 'prob_stats' in metric:
+            prob_stats = metric['prob_stats']
+            prob_stats_mean_dict = {}
+            for k, v in prob_stats.items():
+                v = v[metric["returned_episode"]]
+                breakpoint()
+                prob_stats_mean_dict[k] = v.mean().item()
+            prob_stats_str = ", ".join([f"{k}: {v:,.2f}" for k, v in prob_stats_mean_dict.items()])
+        else:
+            prob_stats_mean_dict = {}
+            prob_stats_str = ""
 
-    wandb.log({
-        "ep_return": ep_return_mean,
-        # "ep_return_max": ep_return_max,
-        # "ep_return_min": ep_return_min,
-        "ep_length": ep_length,
-        "fps": fps,
-        "global_step": env_step,
-    }, step=env_step)
+        jax.debug.print(
+            ("global step={env_step:,}; episodic return mean: {ep_return_mean:,} "
+            "max: {ep_return_max:,}, "
+            "min: {ep_return_min:,}, "
+            "ep. length: {ep_length:,}, "
+            "fps: {fps:,.2f} "
+            "{prob_stats_str}"
+            ), 
+            env_step=env_step,
+            ep_return_mean=ep_return_mean,
+            ep_return_max=ep_return_max,
+            ep_return_min=ep_return_min,
+            ep_length=ep_length,
+            fps=fps,
+            prob_stats_str=prob_stats_str)
 
-    # for k, v in zip(env.prob.metric_names, env.prob.stats):
-    #     writer.add_scalar(k, v, t)
+        # Add a row to csv with ep_return
+        with open(os.path.join(get_exp_dir(config),
+                                "progress.csv"), "a") as f:
+            f.write(f"{env_step},{ep_return_mean}\n")
+
+        wandb.log({
+            "ep_return": ep_return_mean,
+            # "ep_return_max": ep_return_max,
+            # "ep_return_min": ep_return_min,
+            "ep_length": ep_length,
+            "fps": fps,
+            "global_step": env_step,
+            **prob_stats_mean_dict
+        }, step=env_step)
+
 
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
@@ -210,7 +227,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         def render_frames(frames, i):
             env_step = int(i * config.num_steps * config.n_envs)
-            jax.debug.print("Rendering episode gifs at update {i}", i=i)
+            jax.debug.print("Rendering episode gifs at update {i}, in {exp_dir}", i=i, exp_dir=config.exp_dir)
             assert len(frames) == config.n_render_eps * 1 * env.max_steps,\
                 "Not enough frames collected"
 
@@ -649,38 +666,10 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     return checkpoint_manager, restored_ckpt, wandb_run_id
 
     
-def main_chunk(config, rng, exp_dir):
+def main_chunk(config, rng, restored_ckpt=None, checkpoint_manager=None):
     """When jax jits the training loop, it pre-allocates an array with size equal to number of training steps. So, when training for a very long time, we sometimes need to break training up into multiple
     chunks to save on VRAM.
     """
-    checkpoint_manager, restored_ckpt, wandb_run_id = init_checkpointer(config)
-
-    os.makedirs(exp_dir, exist_ok=True)
-
-    # Initialize wandb run
-    run = wandb.init(
-        project=getattr(config, "wandb_project", "pcgrl-jax"),
-        config=OmegaConf.to_container(config),
-        mode=getattr(config, "wandb_mode", "online"),
-        dir=exp_dir,
-        id=wandb_run_id,
-        resume=None,
-    )
-    wandb_run_id = run.id
-    with open(os.path.join(exp_dir, "wandb_run_id.txt"), "w") as f:
-        f.write(wandb_run_id)
-
-    # if restored_ckpt is not None:
-    #     ep_returns = restored_ckpt['runner_state'].ep_returns
-    #     plot_ep_returns(ep_returns, config)
-    # else:
-    if restored_ckpt is None:
-        progress_csv_path = os.path.join(exp_dir, "progress.csv")
-        assert not os.path.exists(progress_csv_path), "Progress csv already exists, but have no checkpoint to restore " +\
-            "from. Run with `overwrite=True` to delete the progress csv."
-        # Create csv for logging progress
-        with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
-            f.write("timestep,ep_return\n")
 
     train_jit = jax.jit(make_train(config, restored_ckpt, checkpoint_manager))
     out = train_jit(rng)
@@ -704,14 +693,49 @@ def main(config: TrainConfig):
     if config.overwrite and os.path.exists(exp_dir):
         shutil.rmtree(exp_dir)
 
+    checkpoint_manager, restored_ckpt, wandb_run_id = init_checkpointer(config)
+    if restored_ckpt is not None:
+        steps_prev_complete = restored_ckpt['steps_prev_complete']
+    else:
+        steps_prev_complete = 0
+
+    os.makedirs(exp_dir, exist_ok=True)
+
+    # Initialize wandb run
+    run = wandb.init(
+        project=getattr(config, "wandb_project", "pcgrl-jax"),
+        config=OmegaConf.to_container(config),
+        mode=getattr(config, "wandb_mode", "online"),
+        dir=exp_dir,
+        id=wandb_run_id,
+        resume=None,
+    )
+    wandb_run_id = run.id
+    with open(os.path.join(exp_dir, "wandb_run_id.txt"), "w") as f:
+        f.write(wandb_run_id)
+
+    # if restored_ckpt is not None:
+    #     ep_returns = restored_ckpt['runner_state'].ep_returns
+    #     plot_ep_returns(ep_returns, config)
+    # else:
+    if restored_ckpt is None:
+        progress_csv_path = os.path.join(exp_dir, "progress.csv")
+        if os.path.exists(progress_csv_path):
+            print("Progress csv already exists, but have no checkpoint to restore " +\
+                "from. Overwriting it.")
+        # Create csv for logging progress
+        with open(os.path.join(exp_dir, "progress.csv"), "w") as f:
+            f.write("timestep,ep_return\n")
+
     if config.timestep_chunk_size != -1:
         n_chunks = config.total_timesteps // config.timestep_chunk_size
-        for i in range(n_chunks):
+        n_chunks_complete = steps_prev_complete // config.timestep_chunk_size
+        for i in range(n_chunks_complete, n_chunks):
             config.total_timesteps = config.timestep_chunk_size + (i * config.timestep_chunk_size)
             print(f"Running chunk {i+1}/{n_chunks}")
-            out = main_chunk(config, rng, exp_dir)
+            out = main_chunk(config, rng, restored_ckpt, checkpoint_manager)
     else:
-        out = main_chunk(config, rng, exp_dir)
+        out = main_chunk(config, rng, restored_ckpt, checkpoint_manager)
 
 #   ep_returns = out["runner_state"].ep_returns
 

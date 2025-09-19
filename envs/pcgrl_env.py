@@ -385,13 +385,17 @@ class PCGRLEnv(Environment):
             env_map=env_map, static_map=env_state.static_map,
             rep_state=rep_state, done=done, reward=reward,
             prob_state=prob_state, step_idx=step_idx, pct_changed=pct_changed, queued_state=env_state.queued_state)
-
+        prob_stats_dict = {name: env_state.prob_state.stats[i] for i, name in enumerate(self.prob.metric_names)}
+        info = {
+            "discount": self.discount(env_state, env_params),
+            "prob_stats": prob_stats_dict,
+            }
         return (
             jax.lax.stop_gradient(obs),
             jax.lax.stop_gradient(env_state),
             reward,
             done,
-            {"discount": self.discount(env_state, env_params)},
+            info,
         )
 
     def compute_reward(self, env_state, env_params, last_prob_state, last_rewarded_env_map, new_env_map):

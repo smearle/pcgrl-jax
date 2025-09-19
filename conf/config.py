@@ -17,7 +17,7 @@ class Config:
     # How many steps do I take in all of my batched environments before doing a gradient update
     num_steps: int = 128
     total_timesteps: int = int(5e7)
-    timestep_chunk_size: int = -1
+    timestep_chunk_size: int = int(5e7)
     update_epochs: int = 10
     NUM_MINIBATCHES: int = 4
     GAMMA: float = 0.99
@@ -105,7 +105,7 @@ class TrainConfig(Config):
     # Save a checkpoint after (at least) this many timesteps
     ckpt_freq: int = int(1e7)
     # Render after this many update steps
-    render_freq: int = 20
+    render_freq: int = 50
     n_render_eps: int = 3
 
     # eval the model on pre-made eval freezie maps to see how it's doing

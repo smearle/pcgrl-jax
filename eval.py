@@ -46,7 +46,7 @@ def main_eval(eval_config: EvalConfig):
     if eval_config.reevaluate or not os.path.exists(json_path):
         if not eval_config.random_agent:
             print(f'Attempting to load checkpoint from {exp_dir}')
-            checkpoint_manager, restored_ckpt = init_checkpointer(eval_config)
+            checkpoint_manager, restored_ckpt, wandb_run_id = init_checkpointer(eval_config)
             network_params = restored_ckpt['runner_state'].train_state.params
         elif not os.path.exists(exp_dir):
             network_params = network.init(rng, init_x)

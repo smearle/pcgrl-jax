@@ -33,7 +33,7 @@ def main_get_traces(get_traces_config: GetTracesConfig):
             print(f"Experiment directory {exp_dir} does not exist")
             return
         print(f'Loading checkpoint from {exp_dir}')
-        checkpoint_manager, restored_ckpt = init_checkpointer(get_traces_config)
+        checkpoint_manager, restored_ckpt, wandb_run_id = init_checkpointer(get_traces_config)
         runner_state = restored_ckpt['runner_state']
         network_params = runner_state.train_state.params
         steps_prev_complete = restored_ckpt['steps_prev_complete']
