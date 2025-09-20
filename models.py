@@ -234,59 +234,59 @@ class NCA(nn.Module):
     representation: str
     tile_action_dim: Sequence[int]
     activation: str = "relu"
+    latent_dim: int = 0
+    mask_keep_prob: float = 1.0
 
     @nn.compact
-    def __call__(self, map_x, flat_x):
+    def __call__(self, map_x, flat_x, latent=None, rng=None):
         if self.activation == "relu":
             activation = nn.relu
         else:
             activation = nn.tanh
 
-        # Tile the flat observations to match the map dimensions
-        flat_x = jnp.tile(flat_x[:, None, None, :], (1, map_x.shape[1], map_x.shape[2], 1))
+        flat_tiled = jnp.tile(flat_x[:, None, None, :], (1, map_x.shape[1], map_x.shape[2], 1))
+        inputs = [map_x, flat_tiled]
+        if self.latent_dim > 0 and latent is not None:
+            inputs.append(latent)
+        x = jnp.concatenate(inputs, axis=-1)
 
-        # Concatenate the map and flat observations along the channel dimension
-        x = jnp.concatenate((map_x, flat_x), axis=-1)
+        h = nn.Conv(features=256, kernel_size=(5, 5), padding="SAME")(x)
+        h = activation(h)
+        h = nn.Conv(features=256, kernel_size=(5, 5), padding="SAME")(h)
+        h = activation(h)
 
-        x = nn.Conv(features=256, kernel_size=(5, 5), padding="SAME")(x)
-        x = activation(x)
-        x = nn.Conv(features=256, kernel_size=(5, 5), padding="SAME")(x)
-        x = activation(x)
-        x = nn.Conv(features=self.tile_action_dim,
-                      kernel_size=(3, 3), padding="SAME")(x)
+        logits = nn.Conv(features=self.tile_action_dim,
+                         kernel_size=(3, 3), padding="SAME")(h)
+
+        if self.representation == 'nca' and self.mask_keep_prob < 1.0:
+            mask = jax.random.bernoulli(
+                rng,
+                p=self.mask_keep_prob,
+                shape=map_x.shape[:3]
+            )
+            # where logits are off, replace with original map tiles
+            # off_value = map_x[..., 1:] # excluding border tiles as per Tiles class
+            off_value = map_x[..., :self.tile_action_dim] # why is this correct instead of the above?
+            # multiply this by a large number to ensure these pre-existing map tiles indeed get selected
+            off_value = off_value * 1e6
+            logits = jnp.where(mask[..., None], logits, off_value)
+
+        latent_out = None
+        if self.representation == 'nca' and self.latent_dim > 0:
+            latent_out = nn.Conv(features=self.latent_dim,
+                                 kernel_size=(1, 1), padding="SAME")(h)
+            latent_out = activation(latent_out)
 
         if self.representation == 'wide':
-            act = x.reshape((x.shape[0], -1))
-
+            act = logits.reshape((logits.shape[0], -1))
         elif self.representation == 'nca':
-            act = x
-
+            act = logits
         else:
             raise NotImplementedError(f"Representation {self.representation} not implemented for NCA model.")
 
-        # Generate random binary mask
-        # mask = jax.random.uniform(rng[0], shape=actor_mean.shape) > 0.9
-        # Apply mask to logits
-        # actor_mean = actor_mean * mask
-        # actor_mean = (actor_mean + x) / 2
-
-        # actor_mean *= 10
-        # actor_mean = nn.softmax(actor_mean, axis=-1)
-
-        # critic = nn.Conv(features=256, kernel_size=(3,3), padding="SAME")(x)
-        # critic = activation(critic)
-        # # actor_mean = nn.Conv(
-        #       features=256, kernel_size=(3,3), padding="SAME")(actor_mean)
-        # # actor_mean = activation(actor_mean)
-        # critic = nn.Conv(
-        #       features=1, kernel_size=(1,1), padding="SAME")(critic)
-
-        # return act, critic
-
-        critic = activation(x)
-        critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(x)
+        critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(h)
         critic = activation(critic)
-        critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(x)
+        critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(critic)
         critic = activation(critic)
         critic = critic.reshape((critic.shape[0], -1))
         critic = activation(critic)
@@ -298,7 +298,12 @@ class NCA(nn.Module):
             1, kernel_init=orthogonal(1.0), bias_init=constant(0.0)
         )(critic)
 
-        return act, jnp.squeeze(critic, axis=-1)
+        value = jnp.squeeze(critic, axis=-1)
+
+        if latent is not None:
+            return act, value, latent_out
+        else:
+            return act, value
 
 
 class AutoEncoder(nn.Module):
@@ -369,14 +374,33 @@ class ActorCriticPCGRL(nn.Module):
         # x = x.reshape((n_gpu * n_envs, *x_shape)) 
 
         act, val = self.subnet(map_obs, ctrl_obs)
-
         act = act.reshape((act.shape[0], self.n_agents, *self.act_shape, -1))
-        # val = val.reshape((n_gpu, n_envs))
-        # act = act.reshape((n_gpu, n_envs, self.n_agents, *self.act_shape, -1))
-
         pi = distrax.Categorical(logits=act)
-
         return pi, val
+
+
+class ActorCriticPCGRLLatent(nn.Module):
+    subnet: nn.Module
+    act_shape: Tuple[int, int]
+    n_agents: int
+    n_ctrl_metrics: int
+
+    @nn.compact
+    def __call__(self, x: PCGRLObs, latent, rng):
+        map_obs = x.map_obs
+        ctrl_obs = x.flat_obs
+        ctrl_obs = ctrl_obs[:, :self.n_ctrl_metrics]
+
+        if latent is None:
+            latent_dim = getattr(self.subnet, 'latent_dim', 0)
+            latent_shape = map_obs.shape[:-1] + (latent_dim,)
+            latent = jnp.zeros(latent_shape, dtype=map_obs.dtype)
+
+        logits, value, new_latent = self.subnet(map_obs, ctrl_obs, latent, rng)
+
+        logits = logits.reshape((logits.shape[0], self.n_agents, *self.act_shape, -1))
+
+        return logits, value, new_latent
 
 
 class ActorCriticPlayPCGRL(nn.Module):

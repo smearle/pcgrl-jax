@@ -1,28 +1,24 @@
-NAME: obss_hiddims_dungeon
+NAME: obs_binary
 change_pct:
 - -1.0
 eval_hypers:
   eval_map_width:
-  - 8
   - 16
-  - 24
-  - 32
   eval_randomize_map_shape:
-  - true
   - false
 max_board_scans:
-- 5
+- 3
 model:
 - conv2
 n_envs:
 - 600
-obs_size_hid_dims:
-- 5
+obs_size:
+- 3
 - 8
 - 16
 - -1
 problem:
-- dungeon
+- binary
 representation:
 - turtle
 seed:

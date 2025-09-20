@@ -14,7 +14,9 @@ from envs.probs.binary import BinaryProblem
 from envs.probs.problem import Problem
 from marl.model import ActorRNN, ActorCategorical
 from marl.wrappers.baselines import MultiAgentWrapper
-from models import ActorCritic, ActorCriticPCGRL, ActorCriticPlayPCGRL, AutoEncoder, ConvForward, ConvForward2, Dense, NCA, SeqNCA
+from models import (ActorCritic, ActorCriticPCGRL, ActorCriticPCGRLLatent,
+                    ActorCriticPlayPCGRL, AutoEncoder, ConvForward,
+                    ConvForward2, Dense, NCA, SeqNCA)
 
 
 def get_exp_dir_evo_map(config: EvoMapConfig):
@@ -193,7 +195,19 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
                 representation=config.representation,
                 tile_action_dim=env.rep.tile_action_dim,
                 activation=config.activation,
+                latent_dim=config.nca_latent_dim,
+                mask_keep_prob=config.nca_mask_keep_prob,
             )
+            if config.representation == "nca":
+                network = ActorCriticPCGRLLatent(
+                    subnet=network,
+                    act_shape=config.act_shape,
+                    n_agents=config.n_agents,
+                    n_ctrl_metrics=len(config.ctrl_metrics),
+                )
+            else:
+                network = ActorCriticPCGRL(network, act_shape=config.act_shape,
+                    n_agents=config.n_agents, n_ctrl_metrics=len(config.ctrl_metrics))
         elif config.model == "autoencoder":
             network = AutoEncoder(
                 representation=config.representation,
@@ -203,12 +217,12 @@ def init_network(env: PCGRLEnv, env_params: PCGRLEnvParams, config: Config):
     else:
         raise Exception(f"Unknown model {config.model}")
     # if config.env_name == 'PCGRL':
-    if 'PCGRL' in config.env_name:
+    if 'PCGRL' in config.env_name and config.model != "nca":
         network = ActorCriticPCGRL(network, act_shape=config.act_shape,
                             n_agents=config.n_agents, n_ctrl_metrics=len(config.ctrl_metrics))
     # elif config.env_name == 'PlayPCGRL':
     #     network = ActorCriticPlayPCGRL(network)
-    else:
+    elif config.model != "nca":
         network = ActorCritic(network)
     return network
 
@@ -318,4 +332,3 @@ def load_sweep_hypers(cfg: SweepConfig):
     else:
         raise FileNotFoundError(f"Could not find sweep config file {sweep_conf_path}")
     return hypers, eval_hypers
-

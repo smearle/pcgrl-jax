@@ -1,4 +1,4 @@
-NAME: obss_hiddims_dungeon
+NAME: obss_hiddims_binary
 change_pct:
 - -1.0
 eval_hypers:
@@ -19,10 +19,8 @@ n_envs:
 obs_size_hid_dims:
 - 5
 - 8
-- 16
-- -1
 problem:
-- dungeon
+- binary
 representation:
 - turtle
 seed:

@@ -74,6 +74,8 @@ class Config:
     pinpoints: bool = False
 
     hidden_dims: Tuple[int] = (256, 512)
+    nca_latent_dim: int = 128
+    nca_mask_keep_prob: float = 0.01
 
     # A toggle, will add `n_envs` to the experiment name if we are profiling training FPS, so that we can distinguish 
     # results.

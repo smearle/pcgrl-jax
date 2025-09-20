@@ -8,6 +8,7 @@ import jax
 from jax import numpy as jnp
 import numpy as np
 from PIL import Image
+import distrax
 from conf.config import EnjoyConfig
 from envs.pcgrl_env import PCGRLEnv, gen_dummy_queued_state
 from envs.probs.problem import Problem
@@ -65,6 +66,8 @@ class PCGRLWebApp():
         # queued_state = env.queue_frz_map(queued_state, frz_map)
 
         self.obs, self.env_state = env.reset(self.rng, self.env_params)
+        self.latent = jnp.zeros(self.obs.map_obs.shape[:-1] + (enjoy_config.nca_latent_dim,), dtype=jnp.float32) if enjoy_config.model == "nca" else jnp.zeros((1,), dtype=jnp.float32)
+        self.use_mask = enjoy_config.model == "nca" and enjoy_config.representation == "nca" and enjoy_config.nca_mask_keep_prob < 1.0
         # obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(
         #     rng_reset, env_params, queued_state
         # )
@@ -72,17 +75,32 @@ class PCGRLWebApp():
     def reset(self):
         self.rng = jax.random.split(self.rng)[0]
         self.obs, self.env_state = self.env.reset(self.rng, self.env_params)
+        self.latent = jnp.zeros(self.obs.map_obs.shape[:-1] + (self.enjoy_config.nca_latent_dim,), dtype=jnp.float32) if self.enjoy_config.model == "nca" else jnp.zeros((1,), dtype=jnp.float32)
 
     def tick(self):
-        self.rng = jax.random.split(self.rng)[0]
+        self.rng, rng_apply, rng_action, rng_step = jax.random.split(self.rng, 4)
         if enjoy_config.random_agent:
-            action = self.env.action_space(self.env_params).sample(self.rng)[None, None, None]
+            action = self.env.action_space(self.env_params).sample(rng_action)[None, None, None]
         else:
             obs = jax.tree_util.tree_map(lambda x: x[None], self.obs)
-            action = self.network.apply(self.network_params, obs)[0].sample(seed=self.rng)[0]
-            self.rng, _ = jax.random.split(self.rng)
-        
-        self.obs, self.env_state, reward, done, info = self.env.step(self.rng, self.env_state, action, self.env_params)
+            if self.enjoy_config.model == "nca":
+                if self.use_mask:
+                    logits, _, self.latent = self.network.apply(
+                        self.network_params, obs, self.latent, rngs={'nca_mask': rng_apply}
+                    )
+                else:
+                    logits, _, self.latent = self.network.apply(
+                        self.network_params, obs, self.latent
+                    )
+                pi = distrax.Categorical(logits=logits)
+                action = pi.sample(seed=rng_action)[0]
+            else:
+                action = self.network.apply(self.network_params, obs)[0].sample(seed=rng_action)[0]
+
+        self.obs, self.env_state, reward, done, info = self.env.step(rng_step, self.env_state, action, self.env_params)
+        if self.enjoy_config.model == "nca":
+            reset_mask = jnp.reshape(jnp.asarray(done), (1,) + (1,) * (self.latent.ndim - 1))
+            self.latent = jnp.where(reset_mask, jnp.zeros_like(self.latent), self.latent)
 
     def update_stats(self):
         env_map = self.env_state.log_env_state.env_state.env_map

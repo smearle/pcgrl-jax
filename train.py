@@ -4,6 +4,7 @@ import shutil
 from timeit import default_timer as timer
 from typing import Any, NamedTuple, Tuple
 
+import distrax
 import hydra
 import jax
 import jax.numpy as jnp
@@ -29,6 +30,7 @@ class RunnerState(struct.PyTreeNode):
     train_state: TrainState
     env_state: jnp.ndarray
     last_obs: jnp.ndarray
+    latent_state: jnp.ndarray
     # rng_act: jnp.ndarray
 #   ep_returns: jnp.ndarray
     rng: jnp.ndarray
@@ -105,6 +107,9 @@ def log_callback(metric, i, steps_prev_complete, config: Config, train_start_tim
         }, step=env_step)
 
 
+def get_using_latent(config: TrainConfig):
+    return config.model == "nca" and config.representation == "nca"
+
 
 def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
     config._num_updates = (
@@ -138,10 +143,16 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         rng, _rng = jax.random.split(rng)
         init_x = env.gen_dummy_obs(env_params)
         # init_x = env.observation_space(env_params).sample(_rng)[None]
-        network_params = network.init(_rng, init_x)
+        use_latent = get_using_latent(config)
+        if use_latent:
+            init_latent = jnp.zeros(init_x.map_obs.shape[:-1] + (config.nca_latent_dim,), dtype=jnp.float32)
+            network_params = network.init(_rng, init_x, latent=init_latent, rng=_rng)
+            print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs, init_latent, _rng))
+        else:
+            network_params = network.init(_rng, init_x)
+            print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
 
         # Print network architecture and number of learnable parameters
-        print(network.subnet.tabulate(_rng, init_x.map_obs, init_x.flat_obs))
         # print(network.subnet.tabulate(_rng, init_x, jnp.zeros((init_x.shape[0], 0))))
 
         if config.ANNEAL_LR:
@@ -194,8 +205,19 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 #       ep_returns = jnp.full(shape=1,
 #                             fill_value=jnp.nan, dtype=jnp.float32)
         steps_prev_complete = 0
+
+        if use_latent:
+            latent_render_zero = jnp.zeros(obsv_r.map_obs.shape[:-1] + (config.nca_latent_dim,), dtype=jnp.float32) if use_latent else jnp.zeros((1,), dtype=jnp.float32)
+            latent_shape = obsv.map_obs.shape[:-1] + (config.nca_latent_dim,)
+            latent_init = jnp.zeros(latent_shape, dtype=jnp.float32)
+            latent_zero = latent_init if use_latent else jnp.zeros((1,), dtype=jnp.float32)
+            latent_state = latent_zero
+        else:
+            latent_state = None
+            latent_render_zero = None
+
         runner_state = RunnerState(
-            train_state, env_state, obsv, rng,
+            train_state, env_state, obsv, latent_state, rng,
             update_i=0)
 
         # exp_dir = get_exp_dir(config)
@@ -244,34 +266,43 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             print(f"Done rendering episode gifs at update {i}")
 
         def render_episodes(network_params):
+            init_carry = (rng_r, obsv_r, env_state_r, network_params, latent_render_zero)
             _, (states, rewards, dones, infos, frames) = jax.lax.scan(
-                step_env_render, (rng_r, obsv_r, env_state_r, network_params),
+                step_env_render, init_carry,
                 None, 1*env.max_steps)
 
             frames = jnp.concatenate(jnp.stack(frames, 1))
             return frames, states
 
         def step_env_render(carry, _):
-            rng_r, obs_r, env_state_r, network_params = carry
-            rng_r, _rng_r = jax.random.split(rng_r)
+            rng_r, obs_r, env_state_r, network_params, latent_r = carry
+            rng_r, rng_apply, rng_action, rng_env = jax.random.split(rng_r, 4)
+            if use_latent:
+                logits_r, _, new_latent = network.apply(network_params, obs_r, latent_r, rng=rng_apply)
+                pi = distrax.Categorical(logits=logits_r)
+                action_r = pi.sample(seed=rng_action)
+            else:
+                pi, _ = network.apply(network_params, obs_r)
+                action_r = pi.sample(seed=rng_action)
+                new_latent = latent_r
 
-            pi, value = network.apply(network_params, obs_r)
-            action_r = pi.sample(seed=rng_r)
-
-            rng_step = jax.random.split(_rng_r, config.n_render_eps)
+            rng_step = jax.random.split(rng_env, config.n_render_eps)
 
             # rng_step_r = rng_step_r.reshape((config.n_gpus, -1) + rng_step_r.shape[1:])
             vmap_step_fn = jax.vmap(env_r.step, in_axes=(0, 0, 0, None))
             # pmap_step_fn = jax.pmap(vmap_step_fn, in_axes=(0, 0, 0, None))
-            obs_r, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
+            obs_next, env_state_r, reward_r, done_r, info_r = vmap_step_fn(
                             rng_step, env_state_r, action_r,
                             env_params)
+            if use_latent:
+                reset_mask = done_r[:, None, None, None]
+                new_latent = jnp.where(reset_mask, latent_render_zero, new_latent)
             vmap_render_fn = jax.vmap(env_r.render, in_axes=(0,))
             # pmap_render_fn = jax.pmap(vmap_render_fn, in_axes=(0,))
             frames = vmap_render_fn(env_state_r)
             # Get rid of the gpu dimension
             # frames = jnp.concatenate(jnp.stack(frames, 1))
-            return (rng_r, obs_r, env_state_r, network_params),\
+            return (rng_r, obs_next, env_state_r, network_params, new_latent),\
                 (env_state_r, reward_r, done_r, info_r, frames)
 
         def save_checkpoint(runner_state, info, steps_prev_complete):
@@ -304,22 +335,31 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         def _update_step(runner_state, unused):
             # COLLECT TRAJECTORIES
             def _env_step(runner_state: RunnerState, unused):
-                train_state, env_state, last_obs, rng, update_i = (
+                train_state, env_state, last_obs, latent_state, rng, update_i = (
                     runner_state.train_state, runner_state.env_state,
-                    runner_state.last_obs,
+                    runner_state.last_obs, runner_state.latent_state,
                     runner_state.rng, runner_state.update_i,
                 )
 
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
                 # Squash the gpu dimension (network only takes one batch dimension)
-                pi, value = network.apply(train_state.params, last_obs)
+                if use_latent:
+                    logits, value, new_latent = network.apply(
+                        train_state.params, last_obs, latent_state, _rng
+                    )
+                    rng, _rng = jax.random.split(rng) 
+                    pi = distrax.Categorical(logits=logits)
+                else:
+                    pi, value = network.apply(train_state.params, last_obs)
+                    new_latent = latent_state
                 action = pi.sample(seed=_rng)
+                rng, _rng = jax.random.split(rng)
                 log_prob = pi.log_prob(action)
 
                 # STEP ENV
-                rng, _rng = jax.random.split(rng)
                 rng_step = jax.random.split(_rng, config.n_envs)
+                rng, _rng = jax.random.split(rng)
 
                 # rng_step = rng_step.reshape((config.n_gpus, -1) + rng_step.shape[1:])
                 vmap_step_fn = jax.vmap(env.step, in_axes=(0, 0, 0, None))
@@ -327,25 +367,40 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 obsv, env_state, reward, done, info = vmap_step_fn(
                     rng_step, env_state, action, env_params
                 )
+                if use_latent:
+                    reset_mask = done[:, None, None, None]
+                    new_latent = jnp.where(reset_mask, latent_zero, new_latent)
                 transition = Transition(
                     done, action, value, reward, log_prob, last_obs, info
                 )
                 runner_state = RunnerState(
-                    train_state, env_state, obsv, rng,
+                    train_state, env_state, obsv, new_latent, rng,
                     update_i=update_i)
                 return runner_state, transition
 
             # DO ROLLOUTS
+            initial_latent = runner_state.latent_state
             runner_state, traj_batch = jax.lax.scan(
                 _env_step, runner_state, None, config.num_steps
             )
 
             # CALCULATE ADVANTAGE
-            train_state, env_state, last_obs, rng = runner_state.train_state, runner_state.env_state, \
-                runner_state.last_obs, runner_state.rng
-            
-            _, last_val = network.apply(train_state.params, last_obs)
+            train_state, env_state, last_obs, latent_state, rng = (
+                runner_state.train_state,
+                runner_state.env_state,
+                runner_state.last_obs,
+                runner_state.latent_state,
+                runner_state.rng,
+            )
 
+            if use_latent:
+                rng, rng_apply = jax.random.split(rng)
+                _, last_val, _ = network.apply(
+                    train_state.params, last_obs, latent_state, rng_apply
+                )
+            else:
+                _, last_val = network.apply(train_state.params, last_obs)
+            
             def _calculate_gae(traj_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
                     gae, next_value = gae_and_next_value
@@ -373,10 +428,85 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
             advantages, targets = _calculate_gae(traj_batch, last_val)
 
+            use_mask = use_latent and config.nca_mask_keep_prob < 1.0
+            _apply_latent_network = partial(
+                apply_latent_network, network=network, use_mask=use_mask)
+
             # UPDATE NETWORK
             def _update_epoch(update_state, unused):
+                train_state, init_latent, traj_batch, advantages, targets, rng = update_state
+                if use_latent:
+                    def _loss_fn(params, init_latent, traj_batch, gae, targets, rng):
+                        def _scan_step(carry, inputs):
+                            latent, rng = carry
+                            obs_step, done_step = inputs
+                            rng, rng_apply = jax.random.split(rng)
+                            logits, value, latent_next = _apply_latent_network(
+                                params=params, obs=obs_step, latent=latent, rng_mask=rng_apply
+                            )
+                            reset_mask = done_step[:, None, None, None]
+                            latent_next = jnp.where(
+                                reset_mask,
+                                jnp.zeros_like(latent_next),
+                                latent_next,
+                            )
+                            return (latent_next, rng), (logits, value)
+
+                        scan_inputs = (traj_batch.obs, traj_batch.done)
+                        init_carry = (init_latent, rng)
+                        (_, _), (logits_seq, value_seq) = jax.lax.scan(
+                            _scan_step, init_carry, scan_inputs
+                        )
+                        pi = distrax.Categorical(logits=logits_seq)
+                        log_prob = pi.log_prob(traj_batch.action)
+
+                        value_pred_clipped = traj_batch.value + (
+                            value_seq - traj_batch.value
+                        ).clip(-config.CLIP_EPS, config.CLIP_EPS)
+                        value_losses = jnp.square(value_seq - targets)
+                        value_losses_clipped = jnp.square(
+                            value_pred_clipped - targets)
+                        value_loss = (
+                            0.5 * jnp.maximum(value_losses,
+                                              value_losses_clipped).mean()
+                        )
+
+                        ratio = jnp.exp(log_prob - traj_batch.log_prob)
+                        gae = (gae - gae.mean()) / (gae.std() + 1e-8)
+                        gae = gae[..., None, None, None]
+
+                        loss_actor1 = ratio * gae
+                        loss_actor2 = (
+                            jnp.clip(
+                                ratio,
+                                1.0 - config.CLIP_EPS,
+                                1.0 + config.CLIP_EPS,
+                            )
+                            * gae
+                        )
+                        loss_actor = -jnp.minimum(loss_actor1, loss_actor2)
+                        loss_actor = loss_actor.mean()
+                        entropy = pi.entropy().mean()
+
+                        total_loss = (
+                            loss_actor
+                            + config.VF_COEF * value_loss
+                            - config.ENT_COEF * entropy
+                        )
+                        return total_loss, (value_loss, loss_actor, entropy)
+
+                    rng, rng_loss = jax.random.split(rng)
+                    grad_fn = jax.value_and_grad(_loss_fn, has_aux=True)
+                    total_loss, grads = grad_fn(
+                        train_state.params, init_latent, traj_batch, advantages, targets, rng_loss
+                    )
+                    train_state = train_state.apply_gradients(grads=grads)
+
+                    return (train_state, init_latent, traj_batch,
+                            advantages, targets, rng), total_loss
+
                 def _update_minbatch(train_state, batch_info):
-                    traj_batch, advantages, targets = batch_info
+                    traj_batch_mb, advantages_mb, targets_mb = batch_info
 
                     def _loss_fn(params, traj_batch, gae, targets):
                         # RERUN NETWORK
@@ -426,13 +556,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
                     grad_fn = jax.value_and_grad(_loss_fn, has_aux=True)
                     total_loss, grads = grad_fn(
-                        train_state.params, traj_batch, advantages, targets
+                        train_state.params, traj_batch_mb, advantages_mb, targets_mb
                     )
                     train_state = train_state.apply_gradients(grads=grads)
                     return train_state, total_loss
 
-                train_state, traj_batch, advantages, targets, rng = \
-                    update_state
                 rng, _rng = jax.random.split(rng)
                 batch_size = config._minibatch_size * config.NUM_MINIBATCHES
                 assert (
@@ -456,11 +584,10 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 train_state, total_loss = jax.lax.scan(
                     _update_minbatch, train_state, minibatches
                 )
-                update_state = (train_state, traj_batch,
+                update_state = (train_state, init_latent, traj_batch,
                                 advantages, targets, rng)
                 return update_state, total_loss
-
-            update_state = (train_state, traj_batch, advantages, targets, rng)
+            update_state = (train_state, initial_latent, traj_batch, advantages, targets, rng)
             update_state, loss_info = jax.lax.scan(
                 _update_epoch, update_state, None, config.update_epochs
             )
@@ -495,7 +622,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
             jax.debug.callback(_log_callback, metric, runner_state.update_i)
 
             runner_state = RunnerState(
-                train_state, env_state, last_obs, rng,
+                train_state, env_state, last_obs, latent_state, rng,
                 update_i=runner_state.update_i+1)
 
             return runner_state, metric
@@ -524,6 +651,11 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 #     plt.title(f"Episodic Return vs. Timesteps ({config.ENV_NAME})")
 #     plt.savefig(os.path.join(get_exp_dir(config), "ep_returns.png"))
 
+def apply_latent_network(network, use_mask, params, obs, latent, rng_mask):
+    if use_mask:
+        return network.apply(params, obs, latent, rng=rng_mask)
+    return network.apply(params, obs, latent)
+
 
 def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     # This will not affect training, just for initializing dummy env etc. to load checkpoint.
@@ -539,16 +671,7 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
     network = init_network(env, env_params, config)
     init_x = env.gen_dummy_obs(env_params)
     # init_x = env.observation_space(env_params).sample(_rng)[None, ]
-    network_params = network.init(_rng, x=init_x)
-    tx = optax.chain(
-        optax.clip_by_global_norm(config.MAX_GRAD_NORM),
-        optax.adam(config.lr, eps=1e-5),
-    )
-    train_state = TrainState.create(
-        apply_fn=network.apply,
-        params=network_params,
-        tx=tx,
-    )
+
     rng, _rng = jax.random.split(rng)
     reset_rng = jax.random.split(_rng, config.n_envs)
 
@@ -560,7 +683,33 @@ def init_checkpointer(config: Config) -> Tuple[Any, dict]:
         env_params, 
         gen_dummy_queued_state(env)
     )
+
+    use_latent = get_using_latent(config)
+    if use_latent:
+        latent_shape = init_x.map_obs.shape[:-1] + (config.nca_latent_dim,)
+        latent_state = jnp.zeros(latent_shape, dtype=jnp.float32)
+        network_params = network.init(_rng, x=init_x, latent=latent_state, rng=_rng)
+    else:
+        network_params = network.init(_rng, x=init_x)
+        latent_state = None
+
+    tx = optax.chain(
+        optax.clip_by_global_norm(config.MAX_GRAD_NORM),
+        optax.adam(config.lr, eps=1e-5),
+    )
+
+    use_mask = use_latent and config.nca_mask_keep_prob < 1.0
+    _apply_latent_network = partial(
+        apply_latent_network, network=network, use_mask=use_mask)
+    network_apply_fn = _apply_latent_network if use_latent else network.apply
+
+    train_state = TrainState.create(
+        apply_fn=network_apply_fn,
+        params=network_params,
+        tx=tx,
+    )
     runner_state = RunnerState(train_state=train_state, env_state=env_state, last_obs=obsv,
+                               latent_state=latent_state,
                                # ep_returns=jnp.full(config.num_envs, jnp.nan), 
                                rng=rng, update_i=0)
     target = {'runner_state': runner_state, 'step_i': 0}

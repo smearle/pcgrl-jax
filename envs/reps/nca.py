@@ -26,6 +26,8 @@ class NCARepresentation(Representation):
         super().__init__(tile_enum=tile_enum, rf_shape=rf_shape,
                          act_shape=act_shape, pinpoints=pinpoints, tile_nums=tile_nums)
         self.env_map_shape = tuple(np.array(env_map.shape))
+        # the idea being that this is enough time for activation to flow from any point on the map to the next
+        # (assuming the NCA is allowed to change all cells at each step...)
         self.max_steps = np.uint32((env_map.shape[0] + env_map.shape[1]) * max_board_scans)
         self.num_tiles = np.uint32(len(tile_enum))
         self.tiles_enum = tile_enum

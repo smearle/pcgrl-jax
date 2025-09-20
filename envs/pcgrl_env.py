@@ -116,6 +116,7 @@ class PCGRLEnvParams:
     pinpoints: bool = False
     flatten_obs: bool = False
     per_agent_reward_freq: int = -1
+    nca_latent_dim: int = 16
 
 
 def gen_static_tiles(rng, static_tile_prob, n_freezies, map_shape):

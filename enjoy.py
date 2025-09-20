@@ -5,6 +5,7 @@ import hydra
 import imageio
 import jax
 from jax import numpy as jnp
+import distrax
 import numpy as np
 
 from conf.config import EnjoyConfig
@@ -66,17 +67,29 @@ def main_enjoy(enjoy_config: EnjoyConfig):
     obs, env_state = jax.vmap(env.reset, in_axes=(0, None, None))(
         rng_reset, env_params, queued_state
     )
+    latent = jnp.zeros(obs.map_obs.shape[:-1] + (enjoy_config.nca_latent_dim,), dtype=jnp.float32) if enjoy_config.model == "nca" else jnp.zeros((1,), dtype=jnp.float32)
+    use_mask = enjoy_config.model == "nca" and enjoy_config.representation == "nca" and enjoy_config.nca_mask_keep_prob < 1.0
+
+    def apply_latent_network(params, obs, latent_state, rng_mask):
+        if use_mask:
+            return network.apply(params, obs, latent_state, rngs={'nca_mask': rng_mask})
+        return network.apply(params, obs, latent_state)
 
     def step_env(carry, _):
-        rng, obs, env_state = carry
-        rng, rng_act = jax.random.split(rng)
+        rng, obs, env_state, latent_state = carry
+        rng, rng_apply, rng_act, rng_env = jax.random.split(rng, 4)
         if enjoy_config.random_agent:
             action = env.action_space(env_params).sample(rng_act)[None, None, None, None]
         else:
             # obs = jax.tree_map(lambda x: x[None, ...], obs)
-            action = network.apply(network_params, obs)[
-                0].sample(seed=rng_act)
-        rng_step = jax.random.split(rng, enjoy_config.n_enjoy_envs)
+            if enjoy_config.model == "nca":
+                logits, _, latent_state = apply_latent_network(network_params, obs, latent_state, rng_apply)
+                pi = distrax.Categorical(logits=logits)
+                action = pi.sample(seed=rng_act)
+            else:
+                action = network.apply(network_params, obs)[
+                    0].sample(seed=rng_act)
+        rng_step = jax.random.split(rng_env, enjoy_config.n_enjoy_envs)
         # obs, env_state, reward, done, info = env.step(
         #     rng_step, env_state, action[..., 0], env_params
         # )
@@ -84,18 +97,20 @@ def main_enjoy(enjoy_config: EnjoyConfig):
             rng_step, env_state, action, env_params
 
         )
+        if enjoy_config.model == "nca":
+            reset_mask = done[..., None, None, None]
+            latent_state = jnp.where(reset_mask, jnp.zeros_like(latent_state), latent_state)
         frames = jax.vmap(env.render, in_axes=(0))(env_state.log_env_state.env_state)
         # frame = env.render(env_state)
-        rng = jax.random.split(rng)[0]
         # Can't concretize these values inside jitted function (?)
         # So we add the stats on cpu later (below)
         # frame = render_stats(env, env_state, frame)
-        return (rng, obs, env_state), (env_state, reward, done, info, frames)
+        return (rng, obs, env_state, latent_state), (env_state, reward, done, info, frames)
 
     step_env = jax.jit(step_env)
     print('Scanning episode steps:')
     _, (states, rewards, dones, infos, frames) = jax.lax.scan(
-        step_env, (rng, obs, env_state), None,
+        step_env, (rng, obs, env_state, latent), None,
         length=enjoy_config.n_eps*env.max_steps)  # *at least* this many eps (maybe more if change percentage or whatnot)
     
     min_ep_losses = states.min_episode_losses

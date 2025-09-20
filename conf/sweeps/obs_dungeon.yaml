@@ -1,4 +1,4 @@
-NAME: obss_hiddims_dungeon
+NAME: obs_dungeon
 change_pct:
 - -1.0
 eval_hypers:
@@ -11,13 +11,13 @@ eval_hypers:
   - true
   - false
 max_board_scans:
-- 5
+- 3
 model:
 - conv2
 n_envs:
 - 600
-obs_size_hid_dims:
-- 5
+obs_size:
+- 3
 - 8
 - 16
 - -1
@@ -34,4 +34,4 @@ seed:
 total_timesteps:
 - 1000000000
 wandb_project:
-- reasonPCG
+- reasonPCG_dungeon

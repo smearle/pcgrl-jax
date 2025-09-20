@@ -3,6 +3,8 @@ import os
 import hydra
 import imageio
 import jax
+import jax.numpy as jnp
+import distrax
 
 from conf.config import EnjoyConfig
 from envs.pcgrl_env import PCGRLEnvState, render_stats
@@ -29,22 +31,36 @@ def main_enjoy_cpu(config: EnjoyConfig):
 
     env_state: PCGRLEnvState
     obs, env_state = env.reset(rng, env_params)
+    latent = jnp.zeros(obs.map_obs.shape[:-1] + (config.nca_latent_dim,), dtype=jnp.float32) if config.model == "nca" else jnp.zeros((1,), dtype=jnp.float32)
+    use_mask = config.model == "nca" and config.representation == "nca" and config.nca_mask_keep_prob < 1.0
+
+    def apply_latent_network(params, obs, latent_state, rng_mask):
+        if use_mask:
+            return network.apply(params, obs, latent_state, rngs={'nca_mask': rng_mask})
+        return network.apply(params, obs, latent_state)
     frames = [env.render(env_state)]
     ep_i = 0
 
     while True:
-        rng, rng_act, rng_step = jax.random.split(rng, 3)
+        rng, rng_apply, rng_act, rng_step = jax.random.split(rng, 4)
         if config.random_agent:
             action = env.action_space(env_params).sample(rng_act)
         else:
             # Apply tree map to obs so that all leaves have a batch of size 1
             obs = jax.tree_map(lambda x: x[None, ...], obs) 
-
-            action = network.apply(network_params, obs)[
-                0].sample(seed=rng_act)
+            if config.model == "nca":
+                logits, _, latent = apply_latent_network(network_params, obs, latent, rng_apply)
+                pi = distrax.Categorical(logits=logits)
+                action = pi.sample(seed=rng_act)[0]
+            else:
+                action = network.apply(network_params, obs)[
+                    0].sample(seed=rng_act)
         obs, env_state, reward, done, info = env.step(
             rng_step, env_state, action, env_params
         )
+        if config.model == "nca":
+            reset_mask = jnp.reshape(jnp.asarray(done), (1,) + (1,) * (latent.ndim - 1))
+            latent = jnp.where(reset_mask, jnp.zeros_like(latent), latent)
         frame = env.render(env_state)
         frame = render_stats(env, env_state, frame)
 
