@@ -26,7 +26,6 @@ def main_get_traces(get_traces_config: GetTracesConfig):
     exp_dir = get_traces_config.exp_dir
     if get_traces_config.random_agent:
         # Save the gif of random agent behavior here. For debugging.
-        os.makedirs(exp_dir)
         steps_prev_complete = 0
     else:
         if not os.path.exists(exp_dir):
@@ -38,7 +37,9 @@ def main_get_traces(get_traces_config: GetTracesConfig):
         network_params = runner_state.train_state.params
         steps_prev_complete = restored_ckpt['steps_prev_complete']
 
-    traces_dir = os.path.join(exp_dir, 'traces')
+    traces_dir = os.path.join(exp_dir, 'traces' + \
+                    ("_randomAgent" if get_traces_config.random_agent else "")
+                )
 
     if get_traces_config.overwrite_traces:
         print(f"Overwriting traces in {exp_dir}")
@@ -89,33 +90,25 @@ def main_get_traces(get_traces_config: GetTracesConfig):
             rng_step, env_state, action, env_params
 
         )
-        frames = jax.vmap(env.render, in_axes=(0))(env_state.log_env_state.env_state)
         # frame = env.render(env_state)
         rng = jax.random.split(rng)[0]
         # Can't concretize these values inside jitted function (?)
         # So we add the stats on cpu later (below)
         # frame = render_stats(env, env_state, frame)
-        return (rng, obs, env_state), (env_state, reward, done, info, frames)
+        return (rng, obs, env_state), (env_state, reward, done, info)
 
     step_env = jax.jit(step_env)
     print('Scanning episode steps:')
-    _, (states, rewards, dones, infos, frames) = jax.lax.scan(
+    _, (states, rewards, dones, infos) = jax.lax.scan(
         step_env, (rng, obs, env_state), None,
         length=get_traces_config.n_eps*env.max_steps)  # *at least* this many eps (maybe more if change percentage or whatnot)
     
-    min_ep_losses = states.min_episode_losses
-    # Mask out so we only have the final step of each episode
-    min_ep_losses = jnp.where(dones, min_ep_losses, jnp.nan)
 
-    # FIXME: get best frame index for *each* episode
-    min_ep_loss_frame_idx = jnp.nanargmin(min_ep_losses, axis=0)
+    assert rewards.shape[1] == get_traces_config.n_enjoy_envs and rewards.shape[0] == get_traces_config.n_eps * env.max_steps, \
+        "`rewards` has wrong shape"
 
-    # frames = frames.reshape((config.n_eps*env.max_steps, *frames.shape[2:]))
-
-    # assert len(frames) == config.n_eps * env.max_steps, \
-    #     "Not enough frames collected"
-    assert frames.shape[1] == get_traces_config.n_enjoy_envs and frames.shape[0] == get_traces_config.n_eps * env.max_steps, \
-        "`frames` has wrong shape"
+    # Put states on the CPU
+    states = jax.tree_util.tree_map(lambda x: np.array(x), states)
 
     # Save gifs.
     print('Adding stats to json:')
@@ -161,13 +154,15 @@ def main_get_traces(get_traces_config: GetTracesConfig):
                 # env_state_i = asdict(env_state_i)
                 # env_state_i = convert_arrays(env_state_i)
 
-                json_path = f"{traces_dir}/trace_{env_idx}-{net_ep_idx}/stats_ep-{net_ep_idx}_step-{i}.json"
-               
+                ep_step_i = i - (ep_idx * env.max_steps)
+
+                json_path = f"{traces_dir}/trace_{env_idx}-{net_ep_idx}/stats_ep-{net_ep_idx}_step-{ep_step_i}_.json"
+                
                 # print(f"Saving stats to {json_path}")
                 os.makedirs(os.path.dirname(json_path), exist_ok=True)
                 json.dump(final_stats, 
-                          open(json_path, 'w'), 
-                          indent=4) 
+                            open(json_path, 'w'), 
+                            indent=4) 
     print(f"Done saving traces to {traces_dir}")
 
     return 

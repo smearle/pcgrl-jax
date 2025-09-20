@@ -29,11 +29,15 @@ class EvalData:
     mean_min_ep_loss: chex.Array
     min_min_ep_loss: chex.Array
     n_eval_eps: int
+    prob_stats: dict
     n_parameters: Optional[int] = None
 
 @hydra.main(version_base="1.3", config_path='./conf', config_name='eval_pcgrl')
 def main_eval(eval_config: EvalConfig):
     eval_config = init_config(eval_config)
+
+    # Preserve the config as it was during training (minus `eval_` hyperparams), for future reference
+    train_config = copy.deepcopy(eval_config)
 
     exp_dir = eval_config.exp_dir
 
@@ -52,8 +56,6 @@ def main_eval(eval_config: EvalConfig):
             network_params = network.init(rng, init_x)
             os.makedirs(exp_dir)
 
-        # Preserve the config as it was during training (minus `eval_` hyperparams), for future reference
-        train_config = copy.deepcopy(eval_config)
         eval_config = init_config_for_eval(eval_config)
         env, env_params = gymnax_pcgrl_make(eval_config.env_name, config=eval_config)
         env = LossLogWrapper(env)
@@ -97,24 +99,33 @@ def main_eval(eval_config: EvalConfig):
         def _eval(env_params):
             _, (states, reward, dones, infos) = eval(env_params)
 
-            return states, reward, dones
+            return states, reward, dones, infos
 
-        states, rewards, dones = _eval(env_params)
+        states, rewards, dones, infos = _eval(env_params)
 
-        stats = get_eval_stats(states, dones)
+        stats = get_eval_stats(states, dones, infos)
         stats = stats.replace(
-            n_parameters=n_parameters,
+            n_parameters=int(n_parameters),
         )
 
         with open(json_path, 'w') as f:
-            json_stats = {k: v.tolist() for k, v in stats.__dict__.items() if isinstance(v, jnp.ndarray)}
+            json_stats = {}
+            for k, v in stats.__dict__.items():
+                if isinstance(v, jnp.ndarray):
+                    json_stats[k] = v.tolist()
+                elif isinstance(v, dict):
+                    json_stats[k] = jax.tree.map(lambda x: x.tolist() if isinstance(x, jnp.ndarray) else x, v)
+                else:
+                    json_stats[k] = v
             json.dump(json_stats, f, indent=4)
+            print(f'Saved eval stats to {json_path}')
     else:
         with open(json_path, 'r') as f:
             stats = json.load(f)
             stats = EvalData(**stats)
 
-def get_eval_stats(states, dones):
+
+def get_eval_stats(states, dones, infos):
     # Everything has size (n_bins, n_steps, n_envs)
     # Mask out so we only have the final step of each episode
     ep_rews = states.log_env_state.returned_episode_returns * dones
@@ -122,6 +133,11 @@ def get_eval_stats(states, dones):
     ep_rews = jnp.sum(ep_rews)
     n_eval_eps = jnp.sum(dones)
     mean_ep_rew = ep_rews / n_eval_eps
+    
+    prob_stats = infos['prob_stats']
+    final_prob_stats = jax.tree.map(lambda x: x[dones], prob_stats)
+    for k in final_prob_stats:
+        final_prob_stats[k] = jnp.mean(final_prob_stats[k])
 
     # Get the average min. episode loss
     min_ep_losses = states.min_episode_losses
@@ -137,6 +153,7 @@ def get_eval_stats(states, dones):
         mean_min_ep_loss=mean_min_ep_loss,
         min_min_ep_loss=min_min_ep_loss,
         n_eval_eps=n_eval_eps,
+        prob_stats=final_prob_stats,
     )
     return stats
 

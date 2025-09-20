@@ -40,7 +40,9 @@ def get_exp_dir(config: Config):
         ctrl_str = '_ctrl_' + '_'.join(config.ctrl_metrics) if len(config.ctrl_metrics) > 0 else '' 
         exp_dir = os.path.join(
             config.save_dir,
-            f'{config.problem}{ctrl_str}_{config.representation}_{config.model}-' +
+            f'{config.problem}{ctrl_str}_{config.representation}_' + \
+            ('randCoords_' if config.representation == 'narrow' and config.rand_narrow_coords else "") + \
+            f'{config.model}-' + \
             f'{config.activation}_w-{config.map_width}_' + \
             ('random-shape_' if config.randomize_map_shape else '') + \
             f'vrf-{config.vrf_size}_' + \
@@ -229,6 +231,7 @@ def get_env_params_from_config(config: Config):
     env_params = PCGRLEnvParams(
         problem=problem,
         representation=int(RepEnum[config.representation.upper()]),
+        rand_narrow_coords=config.rand_narrow_coords,
         map_shape=map_shape,
         rf_shape=rf_shape,
         act_shape=act_shape,

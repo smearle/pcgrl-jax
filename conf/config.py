@@ -35,6 +35,7 @@ class Config:
 
     problem: str = "binary"
     representation: str = "narrow"
+    rand_narrow_coords: bool = False
     model: str = "conv"
 
     map_width: int = 16
@@ -43,6 +44,7 @@ class Config:
     # ctrl_metrics: Tuple[str] = ('diameter', 'n_regions')
     ctrl_metrics: Tuple[str] = ()
     # Size of the receptive field to be fed to the action subnetwork.
+    obs_size: int = -1
     vrf_size: Optional[int] = -1  # -1 means 2 * map_width - 1, i.e. full observation, 31 if map_width=16
     # Size of the receptive field to be fed to the value subnetwork.
     arf_size: Optional[int] = -1  # -1 means 2 * map_width - 1, i.e. full observation, 31 if map_width=16
@@ -109,6 +111,7 @@ class TrainConfig(Config):
     n_render_eps: int = 3
 
     # eval the model on pre-made eval freezie maps to see how it's doing
+    n_eval_envs: int = 10
     eval_freq: int = 100
     n_eval_maps: int = 6
     eval_map_path: str = "user_defined_freezies/binary_eval_maps.json"
@@ -145,7 +148,6 @@ class MultiAgentConfig(TrainConfig):
     representation: str = "turtle"
     n_agents: int = 2
     n_envs: int = 400
-    n_eval_envs: int = 10
     scale_clip_eps: bool = False
     # hidden_dims: Tuple[int] = (512, 256)
     a_freezer: bool = False
@@ -179,7 +181,7 @@ class EvalConfig(TrainConfig):
     random_agent: bool = False
     # In how many bins to divide up each metric being evaluated
     n_bins: int = 10
-    n_eps: int = 5
+    n_eps: int = 1
     eval_map_width: Optional[int] = None
     eval_max_board_scans: Optional[float] = None
     eval_randomize_map_shape: Optional[bool] = None
@@ -231,7 +233,7 @@ class SweepConfig(EnjoyConfig, EvalConfig):
     mode: str = 'train'
     slurm: bool = True
     overwrite: bool = False
-    n_eval_envs: int = 10
+    n_eval_envs: int = 50
 
 @dataclass
 class GetTracesConfig(EnjoyConfig):

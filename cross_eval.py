@@ -56,7 +56,7 @@ def cross_eval_main(cfg: SweepConfig):
 
 def get_sweep_configs(default_cfg, grid_hypers, _eval_hypers, mode):
     sweep_configs = get_sweep_cfgs(default_cfg, grid_hypers, mode=mode, eval_hypers=_eval_hypers)
-    # sweep_configs = [OmegaConf.create(sc) for sc in sweep_configs]
+    sweep_configs = [OmegaConf.create(sc) for sc in sweep_configs]
     sweep_configs = [init_config(sc) for sc in sweep_configs]
 
     for sc in sweep_configs:
@@ -99,7 +99,7 @@ def sweep_grid(cfg: SweepConfig, grid_hypers, _eval_hypers):
                         eval_config=eval_config, hypers=grid_hypers, eval_hypers=_eval_hypers)
         
         if name.startswith('cp_'):
-            cross_eval_cp(sweep_name=name, sweep_configs=sweep_configs,
+            cross_eval_cp(sweep_name=name, sweep_configs=train_sweep_configs,
                         eval_config=eval_config)
 
 
@@ -262,6 +262,9 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
             sc_stats = json.load(open(
                 os.path.join(f'{sc.exp_dir}', 
                             'stats' + get_eval_name(sec, sc) + '.json')))
+            if 'prob_stats' in sc_stats:
+                prob_stats = sc_stats.pop('prob_stats')
+                sc_stats.update(prob_stats)
             for k, v in sc_stats.items():
                 col_tpl = copy.deepcopy(sec_col_tpl)
                 col_tpl.insert(METRIC_COL_TPL_IDX, k)
@@ -492,10 +495,9 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
     row_indices = []
     row_vals = []
 
-    # Create a list of lists to show curves of metrics (e.g. reward) over the 
-    # course of training (i.e. as would be logged by tensorboard)
-    row_vals_curves = []
-    all_timesteps = []
+    # For plotting curves, collect ALL numeric metrics from wandb for each run, aligned by timesteps.
+    # metric_data: metric_name -> { 'series': [pd.Series], 'timesteps': [pd.Series], 'row_index': [tuple] }
+    metric_data = {}
 
     wandb_api = wandb.Api()
 
@@ -512,49 +514,48 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
         if not (os.path.isfile(csv_path) or os.path.isfile(wandb_path)):
             print(f"Skipping {exp_dir} as it does not have a progress.csv or wandb-run-id.txt file.")
             continue
-        if not os.path.isfile(csv_path):
-            print(f"Loading wandb run for {sc.exp_dir}...")
-            with open(wandb_path, 'r') as f:
-                wandb_run_id = f.read()
-            try:
-                sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.wandb_project}/{wandb_run_id}')
-            except wandb.errors.CommError:
-                wandb_run_dirs = os.listdir(os.path.join(exp_dir, 'wandb'))
-                for d in wandb_run_dirs:
-                    if d.startswith(f'run-{wandb_run_id}'):
-                        os.system(f'wandb sync {os.path.join(exp_dir, "wandb", d)}')
+        # Load wandb history
+        print(f"Loading wandb run for {sc.exp_dir}...")
+        with open(wandb_path, 'r') as f:
+            wandb_run_id = f.read()
+        try:
+            sc_run = wandb_api.run(f'/{sc.wandb_project}/{wandb_run_id}')
+        except wandb.errors.CommError:
+            wandb_run_dirs = os.listdir(os.path.join(exp_dir, 'wandb'))
+            for d in wandb_run_dirs:
+                if d.startswith(f'run-{wandb_run_id}'):
+                    os.system(f'wandb sync {os.path.join(exp_dir, "wandb", d)}')
 
-            train_metrics = sc_run.history()
-            if '_step' not in train_metrics:
-                continue
-                breakpoint()
-            train_metrics = train_metrics.sort_values(by='_step', ascending=True)
-            sc_timesteps = train_metrics['_step'] * sc.n_envs * sc.num_steps
-            max_timestep = sc_timesteps.max()
-            if 'returns' not in train_metrics:
-                continue
-                breakpoint()
-            ep_returns = train_metrics['returns']
-        else:
-            train_metrics = pd.read_csv(csv_path)
-            train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
+        train_metrics = sc_run.history()
+        timestep_key = 'timestep' if 'timestep' in train_metrics else '_step'
+        if timestep_key not in train_metrics:
+            print(f"Skipping {exp_dir} as it does not have _step or timestep in wandb history.")
+            continue
+        # Determine the x-axis for alignment
+        train_metrics = train_metrics.sort_values(by=timestep_key, ascending=True)
+        sc_timesteps = train_metrics[timestep_key]
+        max_timestep = sc_timesteps.max()
 
-            # misc_stats_path = os.path.join(exp_dir, 'misc_stats.json')
-            # if os.path.exists(misc_stats_path):
-            #     sc_stats = json.load(open(f'{exp_dir}/misc_stats.json'))
-            # else:
-            max_timestep = train_metrics['timestep'].max()
+        # Identify numeric metric columns to plot (exclude internal step/time columns)
+        numeric_cols = train_metrics.select_dtypes(include=[np.number]).columns.tolist()
+        exclude_cols = set(['_step', '_timestamp', '_runtime', 'timestep'])
+        metric_cols = [c for c in numeric_cols if c not in exclude_cols]
 
-            ep_returns = train_metrics['ep_return']
-            sc_timesteps = train_metrics['timestep']
-
-        row_vals_curves.append(ep_returns)
-        all_timesteps.append(sc_timesteps)
-
-        sc_stats = {'n_timesteps_trained': max_timestep}
-
+        # Record per-metric series and associated row index for grouping
         row_tpl = tuple(getattr(sc, k) for k in row_headers)
         row_tpl = tuple(tuple(v) if isinstance(v, list) else v for v in row_tpl)
+        for m in metric_cols:
+            series_vals = train_metrics[m]
+            # Skip all-NaN columns
+            if pd.Series(series_vals).dropna().empty:
+                continue
+            if m not in metric_data:
+                metric_data[m] = {'series': [], 'timesteps': [], 'row_index': []}
+            metric_data[m]['series'].append(series_vals)
+            metric_data[m]['timesteps'].append(sc_timesteps)
+            metric_data[m]['row_index'].append(row_tpl)
+
+        sc_stats = {'n_timesteps_trained': max_timestep}
         row_indices.append(row_tpl)
         
         vals = {}
@@ -623,139 +624,92 @@ def cross_eval_misc(name: str, sweep_configs: Iterable[TrainConfig],
         f.write(styled_misc_stats_concise_df.to_latex())
 
 
-    def interpolate_returns(ep_returns, timesteps, all_timesteps):
-        # Group by timesteps and take the mean for duplicate values
-        ep_returns = pd.Series(ep_returns).groupby(timesteps).mean()
-        timesteps = np.unique(timesteps)
-        timesteps = timesteps[~np.isnan(timesteps)]
-        
-        # Create a Series with the index set to the unique timesteps of the ep_returns
-        indexed_returns = pd.Series(ep_returns.values, index=timesteps)
-        
-        # Reindex the series to include all timesteps, introducing NaNs for missing values
-        indexed_returns = indexed_returns.reindex(all_timesteps)
-        
-        # Interpolate missing values, ensuring forward fill to handle right edge
-        interpolated_returns = indexed_returns.interpolate(method='linear', limit_direction='backward', axis=0)
-        
-        return interpolated_returns
+    def _sanitize_metric_name(m: str) -> str:
+        return str(m).replace('/', '_').replace(' ', '_')
 
-    all_timesteps = np.sort(np.unique(np.concatenate(all_timesteps)))
+    def _interpolate_series(values, timesteps, all_timesteps):
+        # Group by timesteps and take the mean for duplicate values (rare)
+        s = pd.Series(values).groupby(timesteps).mean()
+        unique_ts = np.unique(timesteps)
+        unique_ts = unique_ts[~np.isnan(unique_ts)]
+        indexed = pd.Series(s.values, index=unique_ts)
+        # Align to the union grid and interpolate
+        indexed = indexed.reindex(all_timesteps)
+        interpolated = indexed.interpolate(method='linear', limit_direction='backward', axis=0)
+        return interpolated
 
-    row_vals_curves = []
-    for i, sc in enumerate(sweep_configs):
-        if hasattr(sc, "obs_size"):
-            if sc.obs_size == -1:
-                if eval_config.eval_map_width is not None:
-                    mw = eval_config.eval_map_width
-                else:
-                    mw = eval_config.map_width
-                # Why exactly is this necessary? And should we really be inheriting from *eval* map width?
-                sc.obs_size = mw * 2 - 1
-        exp_dir = sc.exp_dir
-        csv_path = os.path.join(exp_dir, 'progress.csv')
-        wandb_path = os.path.join(exp_dir, 'wandb_run_id.txt')
-        if not (os.path.isfile(csv_path) or os.path.isfile(wandb_path)):
-            print(f"Skipping {sc.exp_dir} because it has no progress.csv or wandb_run_id.txt.")
+    # Generate per-metric plots
+    os.makedirs(os.path.join(CROSS_EVAL_DIR, name), exist_ok=True)
+    for metric_name, payload in metric_data.items():
+        series_list = payload['series']
+        ts_list = payload['timesteps']
+        idx_list = payload['row_index']
+        if len(series_list) == 0:
             continue
-        if not os.path.isfile(csv_path):
-            with open(wandb_path, 'r') as f:
-                wandb_run_id = f.read()
-            try:
-                sc_run = wandb_api.run(f'/{EvalMultiAgentConfig.wandb_project}/{wandb_run_id}')
-            except wandb.errors.CommError:
-                wandb_run_dirs = os.listdir(os.path.join(exp_dir, 'wandb'))
-                for d in wandb_run_dirs:
-                    os.system(f'wandb sync {os.path.join(exp_dir, "wandb", d)}')
-            train_metrics = sc_run.history()
-            train_metrics = train_metrics.sort_values(by='_step', ascending=True)
-            sc_timesteps = train_metrics['_step'] * sc.n_envs * sc.num_steps
-            ep_returns = train_metrics['returns']
 
-        else:
-            train_metrics = pd.read_csv(csv_path)
-            train_metrics = train_metrics.sort_values(by='timestep', ascending=True)
-            
-            ep_returns = train_metrics['ep_return']
-            sc_timesteps = train_metrics['timestep']
-        if sc_timesteps.shape[0] == 0:
-            print(f"Skipping {sc.exp_dir} because it has no timesteps.")
+        # Build a global timestep grid for this metric
+        all_ts = np.sort(np.unique(np.concatenate([np.array(ts) for ts in ts_list])))
+        interp_rows = []
+        for vals, ts in zip(series_list, ts_list):
+            interp_rows.append(_interpolate_series(vals, ts, all_ts))
+
+        # Assemble DataFrame for this metric
+        metric_df = pd.DataFrame({i: vals for i, vals in enumerate(interp_rows)}).T
+        metric_df.columns = all_ts
+        metric_df.index = pd.MultiIndex.from_tuples(idx_list, names=row_headers)
+
+        metric_mean = metric_df.groupby(group_row_indices).mean().droplevel(levels_to_drop)
+        metric_std = metric_df.groupby(group_row_indices).std().droplevel(levels_to_drop)
+
+        if metric_mean.empty:
             continue
-        interpolated_returns = interpolate_returns(ep_returns, sc_timesteps, all_timesteps)
-        row_vals_curves.append(interpolated_returns)
 
-    # Now, each element in row_vals_curves is a Series of interpolated returns
-    metric_curves_df = pd.DataFrame({i: vals for i, vals in enumerate(row_vals_curves)}).T
-    metric_curves_df.columns = all_timesteps
-    metric_curves_df.index = row_index
-    metric_curves_mean = metric_curves_df.groupby(group_row_indices).mean()
-    metric_curves_mean = metric_curves_mean.droplevel(levels_to_drop)
-    metric_curves_std = metric_curves_df.groupby(group_row_indices).std()
-    metric_curves_std = metric_curves_std.droplevel(levels_to_drop)
+        # Smooth and trim edges to reduce convolution artifacts/outliers
+        # If too few columns, skip trimming safely
+        trim_n = 0 if metric_mean.shape[1] > 50 else 0
+        if trim_n > 0:
+            metric_mean = metric_mean.drop(columns=metric_mean.columns[:trim_n])
+            metric_mean = metric_mean.drop(columns=metric_mean.columns[-trim_n:])
+            metric_std = metric_std.drop(columns=metric_std.columns[:trim_n])
+            metric_std = metric_std.drop(columns=metric_std.columns[-trim_n:])
 
-    # Create a line plot of the metric curves w.r.t. timesteps. Each row in the
-    # column corresponds to a different line
-    plt.savefig(os.path.join(CROSS_EVAL_DIR, name, f"metric_curves.png"))
+        columns = copy.deepcopy(metric_mean.columns)
 
-    fig, ax = plt.subplots()
-    ax.set_xlabel('Timesteps')
-    ax.set_ylabel('Return')
-    # cut off the first and last 100 timesteps to remove outliers
-    metric_curves_mean = metric_curves_mean.drop(columns=metric_curves_mean.columns[:25])
-    metric_curves_mean = metric_curves_mean.drop(columns=metric_curves_mean.columns[-25:])
-    metric_curves_std = metric_curves_std.drop(columns=metric_curves_std.columns[:25])
-    metric_curves_std = metric_curves_std.drop(columns=metric_curves_std.columns[-25:])
+        fig, ax = plt.subplots()
+        ax.set_xlabel('Timesteps')
+        ax.set_ylabel(metric_name.replace('_', ' '))
 
-    columns = copy.deepcopy(metric_curves_mean.columns)
-    # columns = columns[100:-100]
-    for ((i, row), (_, row_std)) in zip(metric_curves_mean.iterrows(), metric_curves_std.iterrows()):
+        for ((i, row), (_, row_std)) in zip(metric_mean.iterrows(), metric_std.iterrows()):
+            if len(row) == 0:
+                continue
+            # Smooth with simple moving average
+            n_smooth = 1
+            row = np.convolve(row, np.ones(n_smooth), 'same') / n_smooth
+            row_std = np.convolve(row_std, np.ones(n_smooth), 'same') / n_smooth
+            row = pd.Series(row, index=columns)
+            if row.index.shape[0] > 2 * trim_n and trim_n > 0:
+                row = row.drop(row.index[:trim_n])
+                row = row.drop(row.index[-trim_n:])
+                row_std = row_std.drop(row_std.index[:trim_n])
+                row_std = row_std.drop(row_std.index[-trim_n:])
+            ax.plot(row, label=str(i))
+            ax.fill_between(
+                row.index,
+                row - row_std,
+                row + row_std,
+                alpha=0.2,
+                color=ax.get_lines()[-1].get_color(),
+                linewidth=0.5,
+                linestyle='--',
+            )
 
-        if len(row) == 0:
-            continue
-        # Apply a convolution to smooth the curve
-        row = np.convolve(row, np.ones(10), 'same') / 10
-        # row = row[100:-100]
-        # row = np.convolve(row, np.ones(10), 'valid') / 10
-        # turn it back into a pandas series
-        row = pd.Series(row, index=columns)
-        
-        # drop the first 100 timesteps to remove outliers caused by conv
-        if row.index.shape[0] > 100:
-            row = row.drop(row.index[:25])
-            row = row.drop(row.index[-25:])
-            row_std = row_std.drop(row_std.index[:25])
-            row_std = row_std.drop(row_std.index[-25:])
-        ax.plot(row, label=str(i))
-        ax.fill_between(
-            row.index,
-            row - row_std,
-            row + row_std,
-            alpha=0.2,
-            color=ax.get_lines()[-1].get_color(),
-            linewidth=0.5,
-            linestyle='--',
-        )
+        legend_title = ', '.join(levels_to_keep).replace('_', ' ')
+        ax.legend(title=legend_title)
+        out_name = f"{name}_curves_mean_{_sanitize_metric_name(metric_name)}.png"
+        plt.savefig(os.path.join(CROSS_EVAL_DIR, name, out_name))
+        plt.close(fig)
 
-    # ax.set_ylim(bottom=30, top=(metric_curves_mean + metric_curves_std).max().max())
-
-    metric_curves_mean.columns = columns
-    ax.set_xlabel('Timesteps')
-    ax.set_ylabel('Return')
-
-    # To get the ymin, drop the first timesteps where there tend to be outliers
-    if metric_curves_mean.shape[1] > 100:
-        ymin = metric_curves_mean.drop(columns=metric_curves_mean.columns[:100]).min().min()
-    else:
-        ymin = metric_curves_mean.drop(columns=metric_curves_mean.columns).min().min()
-
-    # Can manually set these bounds to tweak the visualization
-    # ax.set_ylim(ymin, 1.1 * np.nanmax(metric_curves_mean))
-
-    legend_title = ', '.join(levels_to_keep).replace('_', ' ')
-    ax.legend(title=legend_title)
-    plt.savefig(os.path.join(CROSS_EVAL_DIR, name, f"{name}_metric_curves_mean.png"))
-
-    print(f"Misc stats for {name} saved to {CROSS_EVAL_DIR}/{name}.")
+    print(f"Misc stats and metric curves for {name} saved to {CROSS_EVAL_DIR}/{name}.")
 
 
 def cross_eval_cp(sweep_name: str, sweep_configs: Iterable[SweepConfig],

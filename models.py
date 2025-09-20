@@ -248,7 +248,7 @@ class NCA(nn.Module):
         # Concatenate the map and flat observations along the channel dimension
         x = jnp.concatenate((map_x, flat_x), axis=-1)
 
-        x = nn.Conv(features=256, kernel_size=(9, 9), padding="SAME")(x)
+        x = nn.Conv(features=256, kernel_size=(5, 5), padding="SAME")(x)
         x = activation(x)
         x = nn.Conv(features=256, kernel_size=(5, 5), padding="SAME")(x)
         x = activation(x)

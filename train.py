@@ -67,7 +67,6 @@ def log_callback(metric, i, steps_prev_complete, config: Config, train_start_tim
             prob_stats_mean_dict = {}
             for k, v in prob_stats.items():
                 v = v[metric["returned_episode"]]
-                breakpoint()
                 prob_stats_mean_dict[k] = v.mean().item()
             prob_stats_str = ", ".join([f"{k}: {v:,.2f}" for k, v in prob_stats_mean_dict.items()])
         else:
@@ -75,12 +74,12 @@ def log_callback(metric, i, steps_prev_complete, config: Config, train_start_tim
             prob_stats_str = ""
 
         jax.debug.print(
-            ("global step={env_step:,}; episodic return mean: {ep_return_mean:,} "
-            "max: {ep_return_max:,}, "
-            "min: {ep_return_min:,}, "
-            "ep. length: {ep_length:,}, "
-            "fps: {fps:,.2f} "
-            "{prob_stats_str}"
+            ("global step={env_step:,}; episodic return mean: {ep_return_mean:,.2f} "
+            "max: {ep_return_max:,.2f}, "
+            "min: {ep_return_min:,.2f}, "
+            "ep. length: {ep_length:,.2f}, "
+            "fps: {fps:,.2f}, "
+            "{prob_stats_str},"
             ), 
             env_step=env_step,
             ep_return_mean=ep_return_mean,
@@ -97,8 +96,8 @@ def log_callback(metric, i, steps_prev_complete, config: Config, train_start_tim
 
         wandb.log({
             "ep_return": ep_return_mean,
-            # "ep_return_max": ep_return_max,
-            # "ep_return_min": ep_return_min,
+            "ep_return_max": ep_return_max,
+            "ep_return_min": ep_return_min,
             "ep_length": ep_length,
             "fps": fps,
             "global_step": env_step,
@@ -212,18 +211,6 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
         def _log_callback(metric, i):
             log_callback(metric, i, steps_prev_complete, config, train_start_time)
 
-        # FIXME: Temporary hack for reloading binary after change to 
-        #   agent_coords generation.
-        if config.representation == 'narrow':
-            runner_state = runner_state.replace(
-                env_state=runner_state.env_state.replace(
-                    env_state=runner_state.env_state.env_state.replace(
-                        rep_state=runner_state.env_state.env_state.rep_state.replace(
-                            agent_coords=runner_state.env_state.env_state.rep_state.agent_coords[:, :config.map_width**2]
-                        )
-                    )
-                )
-            )
 
         def render_frames(frames, i):
             env_step = int(i * config.num_steps * config.n_envs)
@@ -247,7 +234,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                     imageio.v3.imwrite(
                         gif_name,
                         ep_frames,
-                        duration=config.gif_frame_duration
+                        duration=config.gif_frame_duration,
+                        loop=0,
                     )
                     wandb.log({"video": wandb.Video(gif_name, format="gif")}, step=env_step)
                 except jax.errors.TracerArrayConversionError:
@@ -296,7 +284,7 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
                 latest_ckpt_step = checkpoint_manager.latest_step()
                 if (latest_ckpt_step is None or
                         t - latest_ckpt_step >= config.ckpt_freq):
-                    print(f"Saving checkpoint at step {t}")
+                    print(f"Saving checkpoint at step {t:,.2f}")
                     ckpt = {'runner_state': runner_state,
                             # 'config': OmegaConf.to_container(config),
                             'step_i': t}
@@ -524,6 +512,8 @@ def make_train(config: TrainConfig, restored_ckpt, checkpoint_manager):
 
         return {"runner_state": runner_state, "metrics": metric}
 
+
+
     return lambda rng: train(rng, config)
 
 
@@ -731,9 +721,18 @@ def main(config: TrainConfig):
         n_chunks = config.total_timesteps // config.timestep_chunk_size
         n_chunks_complete = steps_prev_complete // config.timestep_chunk_size
         for i in range(n_chunks_complete, n_chunks):
+            if i > 0:
+                # In case we called the overall function with `overwrite=True`, we need to make sure we don't mess things up moving forward.
+                # (In particular, not doing this will cause the step index to go back to 0 at the beginning of each new chunk... and overwrite the checkpoints?)
+                # (Ultimately we should make this chunk function less lazy in its approach. Move more initialization outside of it. But for now, anyway.)
+                config.overwrite = False
             config.total_timesteps = config.timestep_chunk_size + (i * config.timestep_chunk_size)
             print(f"Running chunk {i+1}/{n_chunks}")
             out = main_chunk(config, rng, restored_ckpt, checkpoint_manager)
+            runer_state = out["runner_state"]
+            steps_prev_complete = (i + 1) * config.timestep_chunk_size
+            # A bit of a hack
+            restored_ckpt = {'runner_state': runer_state, 'steps_prev_complete': steps_prev_complete}
     else:
         out = main_chunk(config, rng, restored_ckpt, checkpoint_manager)
 

@@ -98,6 +98,7 @@ class PCGRLEnvParams:
     multiagent: bool = False
     problem: int = ProbEnum.BINARY
     representation: int = RepEnum.NARROW
+    rand_narrow_coords: bool = False
     map_shape: Tuple[int, int] = (16, 16)
     act_shape: Tuple[int, int] = (1, 1)
     rf_shape: Tuple[int, int] = (31, 31)
@@ -225,6 +226,7 @@ class PCGRLEnv(Environment):
                                             max_board_scans=env_params.max_board_scans,
                                             pinpoints=self.pinpoints,
                                             tile_nums=self.prob.tile_nums,
+                                            rand_coords=env_params.rand_narrow_coords,
             )
         elif representation == RepEnum.NCA:
             self.rep = NCARepresentation(env_map=env_map, rf_shape=rf_shape,

@@ -259,14 +259,14 @@ hypers = [
 #         'NAME': 'obs_dungeon',
 #         'problem': ['dungeon'],
 #         'representation': ['turtle'],
-#         'obs_size': [8, 16, -1],
+#         'obs_size': [3, 8, 16, -1],
 #         'model': ['conv2'],
 #         'change_pct': [-1.0],
 #         'seed': list(range(5)),
-#         'n_envs': [400],
+#         'n_envs': [600],
 #         'max_board_scans': [3],
 #         'total_timesteps': [1_000_000_000],
-#         'wandb_project': ['reasonPCG'],
+#         'wandb_project': ['reasonPCG_dungeon'],
 #     },
 # ]
 
@@ -1541,9 +1541,10 @@ hypers = [
 # ]
 
 eval_hypers = {
-    'eval_randomize_map_shape': [True, False],
-    # 'eval_randomize_map_shape': [True],
-    'eval_map_width': [8, 16, 24, 32],
+    'eval_randomize_map_shape': [False],
+    'eval_map_width': [16],
+    # 'eval_randomize_map_shape': [True, False],
+    # 'eval_map_width': [8, 16, 24, 32],
     # 'eval_max_board_scans': [10],
 }
 
