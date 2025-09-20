@@ -284,9 +284,9 @@ class NCA(nn.Module):
         # return act, critic
 
         critic = activation(x)
-        critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(x)
+        critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(critic)
         critic = activation(critic)
-        critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(x)
+        critic = nn.Conv(features=64, kernel_size=(5, 5), strides=(2, 2), padding="SAME")(critic)
         critic = activation(critic)
         critic = critic.reshape((critic.shape[0], -1))
         critic = activation(critic)
