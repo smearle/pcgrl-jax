@@ -238,21 +238,37 @@
 #     },
 # ]
 
-hypers = [
-    {
-        'NAME': 'obs_binary',
-        'problem': ['binary'],
-        'representation': ['turtle'],
-        'obs_size': [3, 8, 16, -1],
-        'model': ['conv2'],
-        'change_pct': [-1.0],
-        'seed': list(range(5)),
-        'n_envs': [600],
-        'max_board_scans': [3],
-        'total_timesteps': [1_000_000_000],
-        'wandb_project': ['reasonPCG'],
-    },
-]
+# hypers = [
+#     {
+#         'NAME': 'obs_binary',
+#         'problem': ['binary'],
+#         'representation': ['turtle'],
+#         'obs_size': [3, 8, 16, -1],
+#         'model': ['conv2'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(5)),
+#         'n_envs': [600],
+#         'max_board_scans': [3],
+#         'total_timesteps': [1_000_000_000],
+#         'wandb_project': ['reasonPCG'],
+#     },
+# ]
+
+# hypers = [
+#     {
+#         'NAME': 'binary_wide_rewardfreq',
+#         'problem': ['binary'],
+#         'representation': ['wide'],
+#         'model': ['nca'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(5)),
+#         'n_envs': [200],
+#         'reward_freq': [1, 5, 10],
+#         'max_board_scans': [3],
+#         'total_timesteps': [1_000_000_000],
+#         'wandb_project': ['reasonPCG'],
+#     },
+# ]
 
 # hypers = [
 #     {
@@ -269,6 +285,22 @@ hypers = [
 #         'wandb_project': ['reasonPCG_dungeon'],
 #     },
 # ]
+
+hypers = [
+    {
+        'NAME': 'dungeon_wide_rewardfreq',
+        'problem': ['dungeon'],
+        'representation': ['wide'],
+        'model': ['nca'],
+        'change_pct': [-1.0],
+        'seed': list(range(5)),
+        'n_envs': [200],
+        'reward_freq': [1, 5, 10],
+        'max_board_scans': [3],
+        'total_timesteps': [1_000_000_000],
+        'wandb_project': ['reasonPCG_dungeon'],
+    },
+]
 
 # hypers = [
 #     {

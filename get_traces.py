@@ -164,6 +164,10 @@ def main_get_traces(get_traces_config: GetTracesConfig):
                             open(json_path, 'w'), 
                             indent=4) 
     print(f"Done saving traces to {traces_dir}")
+    # Now zip the directory
+    traces_dir_zip = traces_dir + '.zip'
+    shutil.make_archive(traces_dir_zip, 'zip', traces_dir)
+    print(f"Zipped directory to: {traces_dir_zip}")
 
     return 
 
