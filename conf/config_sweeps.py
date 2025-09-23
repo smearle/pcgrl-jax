@@ -299,6 +299,7 @@ hypers = [
         'max_board_scans': [3],
         'total_timesteps': [1_000_000_000],
         'wandb_project': ['reasonPCG_dungeon'],
+        'timestep_chunk_size': [int(1e7)],
     },
 ]
 

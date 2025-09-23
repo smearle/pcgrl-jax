@@ -165,8 +165,10 @@ def main_get_traces(get_traces_config: GetTracesConfig):
                             indent=4) 
     print(f"Done saving traces to {traces_dir}")
     # Now zip the directory
-    traces_dir_zip = traces_dir + '.zip'
+    traces_dir_zip = traces_dir
     shutil.make_archive(traces_dir_zip, 'zip', traces_dir)
+    # And remove the unzipped directory to save space
+    shutil.rmtree(traces_dir)
     print(f"Zipped directory to: {traces_dir_zip}")
 
     return 

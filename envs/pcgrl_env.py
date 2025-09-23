@@ -494,6 +494,24 @@ class PCGRLEnv(Environment):
             prob_state=env_state.prob_state)
         return render_map(self, env_state, path_coords_tpl)
 
+    def render_obs(self, obs: PCGRLObs):
+        obs_map = obs.map_obs[..., :len(self.prob.tile_probs)]
+        obs_map = obs_map.argmax(-1)
+        full_height = len(obs_map)
+        full_width = len(obs_map[0])
+        tile_size = self.tile_size
+        lvl_img = jnp.zeros(
+            (full_height*tile_size, full_width*tile_size, 4), dtype=jnp.uint8)
+        lvl_img = lvl_img.at[:].set((0, 0, 0, 255))
+
+        # Map tiles
+        for y in range(len(obs_map)):
+            for x in range(len(obs_map[y])):
+                tile_img = self.prob.graphics[obs_map[y, x]]
+                lvl_img = lvl_img.at[y*tile_size: (y+1)*tile_size,
+                                    x*tile_size: (x+1)*tile_size, :].set(tile_img)
+        return lvl_img
+
     @property
     def default_params(self) -> PCGRLEnvParams:
         return PCGRLEnvParams(map_shape=(16, 16))

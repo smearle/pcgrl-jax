@@ -23,7 +23,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
     exp_dir = enjoy_config.exp_dir
     if enjoy_config.random_agent:
         # Save the gif of random agent behavior here. For debugging.
-        os.makedirs(exp_dir)
+        os.makedirs(exp_dir, exist_ok=True)
         steps_prev_complete = 0
     else:
         if not os.path.exists(exp_dir):
@@ -85,6 +85,28 @@ def main_enjoy(enjoy_config: EnjoyConfig):
 
         )
         frames = jax.vmap(env.render, in_axes=(0))(env_state.log_env_state.env_state)
+
+        if enjoy_config.render_obs:
+            # Also render the observation (with stats if applicable)
+            obs_frames = jax.vmap(env.render_obs, in_axes=(0,))(obs)
+            # Pad the frames to be the same size
+            def pad_to_size(frame, target_shape):
+                # Pad so that map is in center
+                pad_w = target_shape[0] - frame.shape[0]
+                pad_h = target_shape[1] - frame.shape[1]
+                pad_top = pad_w // 2
+                pad_bottom = pad_w - pad_top
+                pad_left = pad_h // 2
+                pad_right = pad_h - pad_left
+                padded = jnp.pad(frame, ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)), mode='constant', constant_values=0)
+                return padded
+            max_w = max(frames.shape[1], obs_frames.shape[1])
+            max_h = max(frames.shape[2], obs_frames.shape[2])
+            frames = jax.vmap(pad_to_size, in_axes=(0, None))(frames, (max_w, max_h))
+            obs_frames = jax.vmap(pad_to_size, in_axes=(0, None))(obs_frames, (max_w, max_h))
+            # Combine side by side
+            frames = jnp.concatenate([frames, obs_frames], axis=2)
+
         # frame = env.render(env_state)
         rng = jax.random.split(rng)[0]
         # Can't concretize these values inside jitted function (?)
@@ -113,7 +135,7 @@ def main_enjoy(enjoy_config: EnjoyConfig):
         "`frames` has wrong shape"
 
     # Save gifs.
-    print('Saving gifs.')
+    print(f'Saving gifs to {exp_dir}.')
     if enjoy_config.render_stats:
         print('(Also adding stats to frames.)')
     for env_idx in range(enjoy_config.n_enjoy_envs):

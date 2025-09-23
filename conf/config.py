@@ -214,6 +214,7 @@ class EnjoyConfig(EvalConfig):
     n_enjoy_envs: int = 1
     render_ims: bool = False
     a_freezer: bool = False
+    render_obs: bool = False
 
 
 @dataclass
