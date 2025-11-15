@@ -438,13 +438,14 @@ def cross_eval_basic(name: str, sweep_configs: Iterable[SweepConfig],
                 })
         return pd.DataFrame(results)
 
+    # Include eval sweep name to disambiguate different eval settings
+    eval_sweep_name = ('eval_' + '_'.join(k.strip('eval_') for k, v in eval_hypers.items() if len(v) > 1 and k != 'metrics_to_keep') if 
+                        len(eval_hypers) > 0 else '')
+
     pvals_df = compute_pairwise_mannwhitney_pvalues(basic_stats_df)
     if not pvals_df.empty:
         pvals_df['significant_0.05'] = pvals_df['pvalue'] <= 0.05
         os.makedirs(os.path.join(CROSS_EVAL_DIR, name), exist_ok=True)
-        # Include eval sweep name to disambiguate different eval settings
-        eval_sweep_name = ('eval_' + '_'.join(k.strip('eval_') for k, v in eval_hypers.items() if len(v) > 1 and k != 'metrics_to_keep') if 
-                            len(eval_hypers) > 0 else '')
         csv_path = os.path.join(CROSS_EVAL_DIR, name, f"{eval_sweep_name}_pairwise_pvalues.csv")
         md_path = os.path.join(CROSS_EVAL_DIR, name, f"{eval_sweep_name}_pairwise_pvalues.md")
         pvals_df.to_csv(csv_path, index=False)

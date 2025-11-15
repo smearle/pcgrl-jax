@@ -16,12 +16,5 @@ setup(name='pcgrl-jax',
           "License :: OSI Approved :: MIT License",
           "Operating System :: OS Independent",
       ],
-      # packages=['control_pcgrl'],
-      packages=find_namespace_packages(include=["purejaxrl"]),
-      scripts=[
-          # 'bin/train_pcgrl',
-          # 'bin/enjoy_pcgrl',
-          # 'bin/eval_pcgrl',
-          # 'bin/cross_eval_pcgrl',
-      ],
+      packages=find_namespace_packages(include=["purejaxrl", "marl"]),
       )

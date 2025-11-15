@@ -206,21 +206,22 @@
 # ]
 
 
-# hypers = [
-#     {
-#         'NAME': 'obss_hiddims_binary',
-#         'problem': ['binary'],
-#         'representation': ['turtle'],
-#         'obs_size_hid_dims': [5, 8],
-#         'model': ['conv2'],
-#         'change_pct': [-1.0],
-#         'seed': list(range(5)),
-#         'n_envs': [600],
-#         'max_board_scans': [5],
-#         'total_timesteps': [1_000_000_000],
-#         'wandb_project': ['reasonPCG'],
-#     },
-# ]
+hypers = [
+    {
+        'NAME': 'LeveLM_basic',
+        'problem': ['binary', 'dungeon'],
+        'representation': ['turtle', 'narrow'],
+        'obs_size_hid_dims': [3, 5, 8],
+        'model': ['conv2'],
+        'change_pct': [-1.0],
+        'seed': list(range(5)),
+        'map_width': [15],
+        'n_envs': [600],
+        'max_board_scans': [5],
+        'total_timesteps': [1_000_000_000],
+        'wandb_project': ['reasonPCG'],
+    },
+]
 
 # hypers = [
 #     {
@@ -267,6 +268,7 @@
 #         'max_board_scans': [3],
 #         'total_timesteps': [1_000_000_000],
 #         'wandb_project': ['reasonPCG'],
+#         'timestep_chunk_size': [int(1e7)],
 #     },
 # ]
 
@@ -286,22 +288,38 @@
 #     },
 # ]
 
-hypers = [
-    {
-        'NAME': 'dungeon_wide_rewardfreq',
-        'problem': ['dungeon'],
-        'representation': ['wide'],
-        'model': ['nca'],
-        'change_pct': [-1.0],
-        'seed': list(range(5)),
-        'n_envs': [200],
-        'reward_freq': [1, 5, 10],
-        'max_board_scans': [3],
-        'total_timesteps': [1_000_000_000],
-        'wandb_project': ['reasonPCG_dungeon'],
-        'timestep_chunk_size': [int(1e7)],
-    },
-]
+# hypers = [
+#     {
+#         'NAME': 'obs_dungeon_narrow',
+#         'problem': ['dungeon'],
+#         'representation': ['narrow'],
+#         'obs_size': [3, 8, 16, -1],
+#         'model': ['conv2'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(5)),
+#         'n_envs': [600],
+#         'max_board_scans': [3],
+#         'total_timesteps': [1_000_000_000],
+#         'wandb_project': ['reasonPCG_dungeon'],
+#     },
+# ]
+
+# hypers = [
+#     {
+#         'NAME': 'dungeon_wide_rewardfreq',
+#         'problem': ['dungeon'],
+#         'representation': ['wide'],
+#         'model': ['nca'],
+#         'change_pct': [-1.0],
+#         'seed': list(range(5)),
+#         'n_envs': [200],
+#         'reward_freq': [1, 5, 10],
+#         'max_board_scans': [3],
+#         'total_timesteps': [1_000_000_000],
+#         'wandb_project': ['reasonPCG_dungeon'],
+#         'timestep_chunk_size': [int(1e7)],
+#     },
+# ]
 
 # hypers = [
 #     {
@@ -1574,10 +1592,10 @@ hypers = [
 # ]
 
 eval_hypers = {
-    'eval_randomize_map_shape': [False],
-    'eval_map_width': [16],
-    # 'eval_randomize_map_shape': [True, False],
-    # 'eval_map_width': [8, 16, 24, 32],
+    # 'eval_randomize_map_shape': [False],
+    # 'eval_map_width': [16],
+    'eval_randomize_map_shape': [True, False],
+    'eval_map_width': [8, 16, 24, 32],
     # 'eval_max_board_scans': [10],
 }
 

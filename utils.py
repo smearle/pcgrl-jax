@@ -36,10 +36,13 @@ def is_default_hiddims(config: Config):
 
 
 def get_exp_dir(config: Config):
+    save_dir = config.save_dir
+    if config.sweep_name is not None:
+        save_dir = os.path.join(save_dir, config.sweep_name)
     if config.env_name == 'PCGRL':
         ctrl_str = '_ctrl_' + '_'.join(config.ctrl_metrics) if len(config.ctrl_metrics) > 0 else '' 
         exp_dir = os.path.join(
-            config.save_dir,
+            save_dir,
             f'{config.problem}{ctrl_str}_{config.representation}_' + \
             ('randCoords_' if config.representation == 'narrow' and config.rand_narrow_coords else "") + \
             f'{config.model}-' + \

@@ -74,6 +74,9 @@ def get_grid_cfgs(base_config, hypers, mode, eval_hypers={}):
         items.append(('obs_size_hid_dims', obs_size_hid_dims))
 
     subconfigs = [copy.deepcopy(base_config)]
+
+    [setattr(sc, 'sweep_name', hypers.get('NAME', 'default_sweep')) for sc in subconfigs]
+
     # Name of hyper, list of values
     hid_dims_dicts = {}
     for k, v in items:
@@ -123,7 +126,6 @@ def get_grid_cfgs(base_config, hypers, mode, eval_hypers={}):
                         hidden_dims = hid_dims_dict[obs_size_d]
                     except:
                         print(f"obs_size {obs_size} not found in hid_dims_dict, try launching gen_hid_params_per_model_obs_size.py with corect problem, representation and model.")
-                        breakpoint()
                     # print(f"hidden_dims {hidden_dims}")
 
                     nsc = copy.deepcopy(sc)

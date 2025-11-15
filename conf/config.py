@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
+    sweep_name: Optional[str] = None
     save_dir: str = "saves"
     lr: float = 1.0e-4
     n_envs: int = 400
