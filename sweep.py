@@ -4,6 +4,7 @@ import json
 import os
 import pprint
 
+from dotenv import load_dotenv
 import hydra
 from omegaconf import OmegaConf
 import submitit
@@ -178,6 +179,8 @@ def seq_main(main_fn, sweep_configs):
 def sweep_main(cfg: SweepConfig):
     # if cfg.mode == 'plot' or not am_on_hpc():
     #     cfg.slurm = False
+    load_dotenv()
+    slurm_account = os.getenv("SLURM_ACCOUNT")
 
     if cfg.name is not None:
         _hypers, _eval_hypers = load_sweep_hypers(cfg)
@@ -253,7 +256,7 @@ def sweep_main(cfg: SweepConfig):
                     cpus_per_task=1,
                     slurm_gres='gpu:1',
                     timeout_min=60,
-                    slurm_account='pr_174_tandon_advanced',
+                    slurm_account=slurm_account,
             )
             # return executor.submit(seq_main, main_fn, sweep_configs)
             return executor.map_array(main_fn, sweep_configs)
@@ -267,7 +270,7 @@ def sweep_main(cfg: SweepConfig):
                     cpus_per_task=1,
                     slurm_gres='gpu:1',
                     timeout_min=60,
-                    slurm_account='pr_174_advanced',
+                    slurm_account=slurm_account,
             )
             return executor.submit(seq_main, main_fn, sweep_configs)
 
@@ -281,7 +284,7 @@ def sweep_main(cfg: SweepConfig):
                     cpus_per_task=1,
                     timeout_min=120,
                     slurm_gres='gpu:1',
-                    slurm_account='pr_174_tandon_advanced',
+                    slurm_account=slurm_account,
                 )
             pprint.pprint(sweep_configs)
             return executor.map_array(main_fn, sweep_configs)
@@ -297,7 +300,7 @@ def sweep_main(cfg: SweepConfig):
                     timeout_min=1440,
                     slurm_gres='gpu:1',
                     # partition='rtx8000',
-                    slurm_account='pr_174_tandon_advanced',
+                    slurm_account=slurm_account,
                 )
             # Pretty print all configs to be executed
             pprint.pprint(sweep_configs)
