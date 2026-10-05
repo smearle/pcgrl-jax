@@ -1,0 +1,40 @@
+NAME: ma_repro_dungeon
+ckpt_freq:
+- 100
+empty_start:
+- false
+eval_hypers:
+  eval_map_width:
+  - 8
+  - 16
+  - 24
+  - 32
+  eval_randomize_map_shape:
+  - true
+  - false
+map_width:
+- 16
+max_board_scans:
+- 1.0
+model:
+- conv2
+multiagent: true
+n_agents:
+- 1
+- 3
+n_envs:
+- 400
+obs_size_hid_dims:
+- 3
+problem:
+- dungeon
+randomize_map_shape:
+- false
+render_freq:
+- 100
+representation:
+- turtle
+seed:
+- 0
+total_timesteps:
+- 900000000

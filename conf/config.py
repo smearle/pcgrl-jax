@@ -145,7 +145,7 @@ class MultiAgentConfig(TrainConfig):
     # vf_coef: float = 0.5
     # max_grad_norm: float = 0.25
 
-    model: str = 'rnn'
+    model: str = 'conv2'
     representation: str = "turtle"
     n_agents: int = 2
     n_envs: int = 400
@@ -186,6 +186,8 @@ class EvalConfig(TrainConfig):
     eval_map_width: Optional[int] = None
     eval_max_board_scans: Optional[float] = None
     eval_randomize_map_shape: Optional[bool] = None
+    # Start eval episodes from an all-wall map (overrides `full_start` at eval/render time only)
+    eval_full_start: Optional[bool] = None
     eval_seed: int = 0
 
     # Which eval metric to keep in our generated table if sweeping over eval hyperparams (in which case we want to 

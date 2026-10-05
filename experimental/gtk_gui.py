@@ -11,7 +11,7 @@ from gi.repository import Gtk, Gdk, GdkPixbuf, GLib
 import numpy as np
 
 
-@hydra.main(config_path="conf", config_name="config")
+@hydra.main(config_path="../conf", config_name="config")
 def gtk_main(config):
     config = init_config(config)
 

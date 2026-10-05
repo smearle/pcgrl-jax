@@ -17,7 +17,7 @@ from envs.utils import Tiles
 __location__ = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__)))
 
 class BinaryTiles(IntEnum):
-    BORDER = 0, "x"
+    BORDER = 0, "#"
     EMPTY = 1, "."
     WALL = 2, "#"
 

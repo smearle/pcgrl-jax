@@ -17,6 +17,7 @@ import orbax.checkpoint as ocp
 from conf.config import TrainConfig, EvalMultiAgentConfig
 from envs.pcgrl_env import PCGRLEnv, gen_dummy_queued_state
 from envs.probs.problem import ProblemState, get_loss
+from envs.utils import Tiles
 from utils_ma import batchify, ma_init_config, init_run, restore_run, unbatchify
 from marl.model import ScannedRNN
 from marl.wrappers.baselines import MALossLogWrapper, MultiAgentWrapper
@@ -53,7 +54,7 @@ def main_eval_ma(eval_config: EvalMultiAgentConfig, render=False):
         f".json"
     json_path = os.path.join(exp_dir, stats_name)
 
-    if eval_config.reevaluate or not os.path.exists(json_path):
+    if render or eval_config.reevaluate or not os.path.exists(json_path):
         options = ocp.CheckpointManagerOptions(
             max_to_keep=2, create=True)
         ckpt_manager = ocp.CheckpointManager(
@@ -181,21 +182,24 @@ def main_eval_ma(eval_config: EvalMultiAgentConfig, render=False):
             _, frames = jax.lax.scan(
                 lambda _, e: (None, jax.vmap(env.render)(e)), init=None, xs=states.log_env_state.env_state)
 
-            for i in range(frames.shape[1]):
-                frames_i = jax.tree.map(lambda x: x[:, i], frames)
+            env_frames = crop_frames_to_map(
+                np.array(frames), np.array(states.log_env_state.env_state.env_map))
+            for i, frames_i in enumerate(env_frames):
                 gif_path = os.path.join(vid_dir, f"{i}.gif")
-                imageio.mimsave(gif_path, np.array(frames_i), fps=20, loop=0)
+                imageio.mimsave(gif_path, frames_i, fps=20, loop=0)
             print(f"Saved eval video to {vid_dir}")
 
             best_frame_path = os.path.join(vid_dir, "best.png")
-            best_state_idxs = jnp.array(jnp.where(states.loss == states.loss.min())).T[0]
-            best_frame = frames[tuple(best_state_idxs)]
-            imageio.imsave(best_frame_path, np.array(best_frame))
+            best_t, best_i = np.array(jnp.where(states.loss == states.loss.min())).T[0]
+            imageio.imsave(best_frame_path, env_frames[best_i][best_t])
 
-        if not render:  # Otherwise we've already done this
-            start_time = time.time()
-            states, rewards, dones = _jitted_eval()
-            end_time = time.time()
+            # Render runs use only a few envs (n_eval_envs of the enjoy config), and the stats file name doesn't
+            # encode n_eval_envs, so writing stats here would clobber those of the full eval run.
+            return
+
+        start_time = time.time()
+        states, rewards, dones = _jitted_eval()
+        end_time = time.time()
 
         total_steps = eval_config.n_eps * env.max_steps * eval_config._num_eval_actors
         mean_fps = total_steps / (end_time - start_time)
@@ -211,6 +215,21 @@ def main_eval_ma(eval_config: EvalMultiAgentConfig, render=False):
             json.dump(json_stats, f, indent=4)
         print(f"Eval stats saved to {json_path}")
     
+
+def crop_frames_to_map(frames, env_maps):
+    """Split rendered frames (steps, envs, H, W, C) into one array per env, cropped to that env's map plus the
+    1-tile border drawn by `render_map`. With randomize_map_shape the map sits in the top-left corner and the
+    rest of the canvas is BORDER. The shape is fixed within an episode, so it is read from the first step (the
+    trailing auto-reset frame, which may have a different shape, is cropped the same way)."""
+    tile_size = frames.shape[2] // (env_maps.shape[2] + 2)
+    env_frames = []
+    for i in range(frames.shape[1]):
+        playable = env_maps[0, i] != Tiles.BORDER
+        h = playable.any(axis=1).nonzero()[0].max() + 1
+        w = playable.any(axis=0).nonzero()[0].max() + 1
+        env_frames.append(frames[:, i, :(h + 2) * tile_size, :(w + 2) * tile_size])
+    return env_frames
+
 
 def get_eval_stats(states, dones) -> EvalData:
     # Everything has size (n_bins, n_steps, n_envs)
@@ -244,6 +263,8 @@ def init_config_for_eval(config):
         config.max_board_scans = config.eval_max_board_scans
     if config.eval_randomize_map_shape is not None:
         config.randomize_map_shape = config.eval_randomize_map_shape
+    if config.eval_full_start is not None:
+        config.full_start = config.eval_full_start
     return config
 
 
@@ -262,6 +283,7 @@ def get_eval_name(eval_config: EvalMultiAgentConfig, train_config: TrainConfig):
          else "") + \
         (f"_w-{eval_config.eval_map_width}" if eval_config.eval_map_width is not None else "") + \
         (f"_bs-{eval_config.eval_max_board_scans}" if eval_config.eval_max_board_scans is not None else "") + \
+        ("_full-start" if eval_config.eval_full_start else "") + \
         (f"_seed-{eval_config.eval_seed}" if eval_config.eval_seed is not None else "")
     return eval_name
 

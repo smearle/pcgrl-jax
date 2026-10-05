@@ -34,7 +34,7 @@ class NCA(nn.Module):
         return x
 
 
-@hydra.main(config_path="conf", config_name="config", version_base="1.3")
+@hydra.main(config_path="../conf", config_name="config", version_base="1.3")
 def main(cfg: Config):
     init_config(cfg)
     env, env_params = gymnax_pcgrl_make("PCGRL", config=cfg)

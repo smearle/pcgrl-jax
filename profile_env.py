@@ -1,4 +1,6 @@
 """Profile environment speed while taking random actions."""
+import os
+
 import hydra
 import jax
 import json
@@ -16,6 +18,8 @@ problems = [
 ]
 
 n_envss= [1, 10, 50, 100, 200, 400, 600]
+
+PROFILE_DIR = os.path.join('results', 'profile')
 
 
 @hydra.main(version_base="1.3", config_path='./', config_name='profile_pcgrl')
@@ -77,12 +81,13 @@ def profile(config: ProfileEnvConfig):
                 problem_n_envs_to_fps[problem][n_envs] = fps
 
         # Save as json
-        with open(f'n_envs_to_fps.json', 'w') as f:
+        os.makedirs(PROFILE_DIR, exist_ok=True)
+        with open(os.path.join(PROFILE_DIR, 'n_envs_to_fps.json'), 'w') as f:
             json.dump(problem_n_envs_to_fps, f)
 
     else:
         # Load from json
-        with open(f'n_envs_to_fps.json', 'r') as f:
+        with open(os.path.join(PROFILE_DIR, 'n_envs_to_fps.json'), 'r') as f:
             problem_n_envs_to_fps = json.load(f)
 
     # Turn into a dataframe, where rows are problems and columns are different n_envs
@@ -93,10 +98,10 @@ def profile(config: ProfileEnvConfig):
     fps_df = fps_df.round(2)
     print(fps_df)
     # Save as markdown
-    fps_df.to_markdown(f'n_envs_to_fps.md')
+    fps_df.to_markdown(os.path.join(PROFILE_DIR, 'n_envs_to_fps.md'))
     # latex format 2 decimal places
     styled_fps_df = fps_df.style.format("{:.2f}")
-    with open(f'n_envs_to_fps.tex', 'w') as f:
+    with open(os.path.join(PROFILE_DIR, 'n_envs_to_fps.tex'), 'w') as f:
         f.write(styled_fps_df.to_latex())
 
 if __name__ == '__main__':
